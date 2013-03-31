@@ -1,0 +1,92 @@
+#!/usr/bin/python
+""" Usage: call with <filename>
+"""
+
+import sys
+import os
+import re
+
+keywords = [
+"class",
+"int",
+"public",
+"return",
+"static",
+"virtual",
+"void",
+]
+
+class FIN(Exception):
+    pass
+
+def proc_file(fn):
+    global LOC_ANCHOR_PREFIX
+    global LOC_SPAN_PREFIX
+    global OUT_DIR
+    line_no = 1
+    fi = open(fn, 'r')
+    for line in fi.readlines():
+        line_len = len(line)
+        idx = 0
+        while idx < line_len-1:
+            val = ""
+            try:
+                # snip space
+                m = re.search("^\s+", line[idx:line_len-1])
+                if m:
+                    val = m.group()
+                    raise FIN
+                # find num
+                m = re.search("^0x[0-9a-fA-F]+", line[idx:line_len-1])
+                if m:
+                    val = m.group()
+                    raise FIN
+                # find num
+                m = re.search("^0[0-7]+", line[idx:line_len-1])
+                if m:
+                    val = m.group()
+                    raise FIN
+                # find num
+                m = re.search("^[0-9]+", line[idx:line_len-1])
+                if m:
+                    val = m.group()
+                    raise FIN
+                # find word
+                m = re.search("^[~]?[a-zA-Z_][a-zA-Z0-9_]*", line[idx:line_len-1])
+                if m:
+                    val = m.group()
+                    if val not in keywords:
+                        print "\"select * from ref where line=%d and col=%d and file_name=\\\"\"+cur_dir+\"/%s\\\"\", #%s"%(line_no, idx+1, sys.argv[1], val)
+                    raise FIN
+                # find string
+                m = re.search("^\"[^\"]+\"", line[idx:line_len-1])
+                if m:
+                    val = m.group()
+                    raise FIN
+                # find char
+                m = re.search("^\'[^\']+\'", line[idx:line_len-1])
+                if m:
+                    val = m.group()
+                    raise FIN
+                # find pp line
+                m = re.search("^#.+$", line[idx:line_len-1])
+                if m:
+                    val = m.group()
+                    raise FIN
+                # find special chars
+                m = re.search("^[{}!%&\(\)=~^|+-/\*<>:;]", line[idx:line_len-1])
+                if m:
+                    val = m.group()
+                    raise FIN
+                # other
+                m = re.search("^.", line[idx:line_len-1])
+                if m:
+                    val = m.group()
+                    raise FIN
+            except FIN:
+                idx += len(val)
+        line_no += 1
+
+### main ###
+file_name = sys.argv[1]
+proc_file(file_name)

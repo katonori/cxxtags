@@ -1,0 +1,82 @@
+#!/usr/bin/python
+
+import sys
+import os
+import re
+import string
+import time
+
+excep_list = ""
+in_file = ""
+out_file = ""
+time_list = []
+
+def usage():
+    print "usage: cxxtags [-e exception_list] [-o out_file] input_file [compiler_arguments]"
+
+# parse arguments.
+def parse_args(argv):
+    global excep_list
+    global in_file
+    global out_file
+    i = 0
+    while 1:
+        if i >= len(argv):
+            break
+        if argv[i] == "-e":
+            excep_list = argv[i+1]
+            del argv[i:i+2]
+        elif argv[i] == "-o":
+            out_file = argv[i+1]
+            #print "-o: "+out_file
+            del argv[i:i+2]
+        elif argv[i] == "-I":
+            # ignore "-I path" options
+            # "-Ipath" format is treated as another option.
+            i += 2
+        elif argv[i] == "-x":
+            # ignore "-x language" options
+            i += 2
+        elif re.search("^[^-]", argv[i]):
+            if in_file != "":
+                return None
+            in_file = argv[i]
+            #print "infile: "+in_file
+            del argv[i]
+        else:
+            i+=1
+    if in_file == "":
+        return None
+    if out_file == "":
+        out_file = os.path.basename(in_file) + ".db"
+    return argv
+
+########################################################
+exe_dir = os.path.dirname(sys.argv[0])
+
+# process args
+argv = parse_args(sys.argv[1:])
+if argv == None:
+    usage()
+    exit(1)
+
+if not os.path.exists(in_file):
+    print "ERROR: file not found: %s\n"%(in_file)
+    exit(1)
+
+# get current directory
+cur_dir = os.getcwd()
+if cur_dir == "":
+    cur_dir = "."
+cur_dir = os.path.abspath(cur_dir) + "/"
+
+if excep_list != "":
+    excep_list = "-e " + excep_list
+cmd = "%s/cxxtags_core %s %s %s %s "%(exe_dir, excep_list, cur_dir, out_file, in_file)+string.join(argv)
+#print(cmd)
+time_list.append(time.time())
+os.system(cmd)
+time_list.append(time.time())
+
+#print "time:"
+#print "    proc0: ", time_list[1]-time_list[0]

@@ -1,0 +1,714 @@
+#!/usr/bin/python
+""" Usage: call with <db_file>
+"""
+
+import sys
+import os
+import re
+import string
+import shutil
+import sqlite3
+
+TXT_DELIM = '\0'
+
+KEYWORDS = [
+    "asm",
+    "auto",
+    "bool",
+    "break",
+    "case",
+    "catch",
+    "char",
+    "class",
+    "const",
+    "const_cast",
+    "continue",
+    "default",
+    "delete",
+    "do",
+    "double",
+    "dynamic_cast",
+    "else",
+    "enum",
+    "explicit",
+    "export",
+    "extern",
+    "false",
+    "float",
+    "for",
+    "friend",
+    "goto",
+    "if",
+    "inline",
+    "int",
+    "long",
+    "mutable",
+    "namespace",
+    "new",
+    "operator",
+    "private",
+    "protected",
+    "public",
+    "register",
+    "reinterpret_cast",
+    "return",
+    "short",
+    "signed",
+    "sizeof",
+    "static",
+    "static_cast",
+    "struct",
+    "switch",
+    "template",
+    "this",
+    "throw",
+    "true",
+    "try",
+    "typedef",
+    "typeid",
+    "typename",
+    "union",
+    "unsigned",
+    "using",
+    "virtual",
+    "void",
+    "volatile",
+    "wchar_t",
+    "while",
+]
+
+JS_FILE_NAME = "view.js"
+JS_SRC = u"""
+<!--
+var cur_loc = ""
+function change_on_load(){
+    var loc = location.hash; // temp
+    var loc_dst = document.links.hash;
+    //document.getElementById('dbg').value = loc;
+    var re = new RegExp("^#a_loc","g");
+    loc = loc.replace(re, "s_loc");
+    document.getElementById(loc).style.backgroundColor = "#FF0000";
+    cur_loc = loc
+    dump(document.getElementById(loc));
+}
+function change(loc){
+    if(cur_loc != "") {
+        document.getElementById(cur_loc).style.backgroundColor = "#FFFFFF";
+    }
+    document.getElementById(loc).style.backgroundColor = "#FF0000";
+    cur_loc = loc
+}
+
+window.onload = change_on_load;
+
+function clickListener (event) {
+    var x = event.clientX;
+    var y = event.clientY;
+    var elm = document.elementFromPoint(x, y);
+    var loc = elm.getAttribute("href");
+    // get hash
+    //window.alert(elm);
+    var re = new RegExp("^.*#a_loc","g");
+    loc = loc.replace(re, "s_loc");
+    document.getElementById('dbg').value = "AAA: " + loc;
+    change(loc);
+    return true;
+}
+
+if (document.addEventListener) {
+    document.addEventListener('mousedown', clickListener, false);
+} else if (document.attachEvent) {
+    document.attachEvent('mousedown', clickListener);
+}
+//-->
+"""
+
+file_dict = {}
+ref_file_dict = {}
+file_cnt = 0
+file_cnt_ref = 0
+OUT_DIR = "./html/"
+REF_DIR = "./ref"
+LOC_ANCHOR_PREFIX = "a_loc"
+LOC_SPAN_PREFIX = "s_loc"
+db = None
+
+# register html files to be generated.
+def add_html_file(path):
+    global file_dict
+    global file_cnt
+    global OUT_DIR
+    if path == None or path == "":
+        return
+    fn = ""
+    bn = os.path.basename(path)
+    if file_dict.has_key(path):
+        print "ERROR: %s is already registered.\n" % (path)
+    else:
+        fn = "%s.%d" % (bn, file_cnt)
+        file_cnt += 1
+        file_dict[path] = fn
+
+def get_info_file(usr):
+    global file_dict
+    if usr == None or usr == "":
+        return None
+    fn = None
+    if file_dict.has_key(usr):
+        fn = file_dict[usr]
+    return fn
+
+def add_info_file(usr):
+    global file_dict
+    global file_cnt_ref
+    if usr == None or usr == "":
+        return None
+    fn = re.sub("^c:", "", usr)
+    fn = re.sub("#", ".", fn)
+    # shorten file name
+    fn_len = len(fn)
+    if fn_len > 128:
+        fn = "_" + fn[fn_len-128:]
+    fn = "ref/%s.%d" % (fn, file_cnt_ref)
+    file_cnt_ref += 1
+    file_dict[usr] = fn
+    return fn
+
+# get file name by path.
+def get_file_name(path):
+    global file_dict
+    global file_cnt
+    global OUT_DIR
+    fn = ""
+    if not file_dict.has_key(path):
+        print "ERROR: output file for %s is not found.\n" % (path)
+    else:
+        fn = file_dict[path]
+    return fn
+
+def get_src_ref_line(file_name, line, col):
+    if not file_dict.has_key(file_name):
+        print "ERROR: fopen"
+        exit(1)
+    str = "<a href=\"../%s#a_loc_%d\">%s, %d, %d</a>\n" % (file_dict[file_name]+".html", line, file_name, line, col)
+    return str
+
+def get_link(file_name, word, line, col):
+    global file_dict
+    global file_cnt
+    global OUT_DIR
+    global LOC_ANCHOR_PREFIX
+    global db
+    #print "GET: %s, %d, %d, %s" %(word, line, col, file_name)
+    # ref
+    q = "select usr, ref_file_name, ref_line, ref_col from ref where file_name=\"%s\" and name=\"%s\" and line=%d and col=%d" % (file_name, word, line, col)
+    res = db.execute(q)
+    for ref_row in res.fetchall():
+        ref_usr = ref_row[0]
+        ref_file_name = ref_row[1]
+        ref_line = ref_row[2]
+        ref_col = ref_row[3]
+        if file_dict.has_key(ref_file_name):
+            link = "%s#%s_%d" % (file_dict[ref_file_name]+".html", LOC_ANCHOR_PREFIX, ref_line)
+            return link
+    # decl
+    q = "select usr from decl where file_name=\"%s\" and name=\"%s\" and line=%d and col=%d" % (file_name, word, line, col)
+    res = db.execute(q)
+    for decl_row in res.fetchall():
+        decl_usr = decl_row[0]
+        fn = get_info_file(decl_usr)
+        if fn:
+            fn += ".html"
+        #print "DECL: %s, %d, %d, %s" %(word, line, col, html_fn)
+        return fn
+    return None
+
+def q_str(q):
+    global db
+    db.execute(q)
+
+def replace_html_special_char(str):
+    str = re.sub(r"<", "&lt", str)
+    str = re.sub(r">", "&gt", str)
+    return str
+
+class FIN(Exception):
+    pass
+
+def proc_file(fn):
+    global LOC_ANCHOR_PREFIX
+    global LOC_SPAN_PREFIX
+    global OUT_DIR
+    fi = open(u"%s" % (fn), 'r')
+    line_no = 1
+    fo_name = OUT_DIR + get_file_name(fn)
+    fo = open(u"%s.html" % (fo_name), 'w')
+    #print "%s->%s" % (fn, fo_name)
+    fo.write("<?xml version=\"1.0\" encoding=\"shift_jis\"?>\n")
+    fo.write("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n")
+    fo.write("<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"ja\" lang=\"ja\">\n")
+    fo.write("<script src=\"view.js\"></script>\n")
+    fo.write("<link rel=\"stylesheet\" href=\"./style.css\">\n")
+    fo.write("<head>\n")
+    fo.write("</head>\n")
+    fo.write("<body id=\"main_body\">\n")
+    fo.write("<textarea style=\"display:none;\" value=\"\" id=\"dbg\"></textarea><br>\n")
+    fo.write("<h3>%s</h3>\n"%(fn))
+    fo.write("<pre>\n")
+    is_in_comment = 0
+    for line in fi.readlines():
+        line_len = len(line)
+        idx = 0
+        fo.write("<a name=\"%s_%d\" id=\"line_%d\"><span id=\"%s_%d\">%4d:</span> " % (LOC_ANCHOR_PREFIX, line_no, line_no, LOC_SPAN_PREFIX, line_no, line_no))
+        #fo.write("%d:" % (line_no))
+        while idx < line_len-1:
+            val = ""
+            try:
+                if is_in_comment == 1:
+                    # end of comment
+                    m = re.search(".*\*/", line[idx:line_len-1])
+                    if m:
+                        val = m.group()
+                        fo.write("<span class=\"cm\">%s</span>" % (val))
+                        is_in_comment = 0
+                        raise FIN
+                    val = line[idx:line_len-1]
+                    fo.write("<span class=\"cm\">%s</span>" % (val))
+                    raise FIN
+                # multi line comment
+                m = re.search("^/\*", line[idx:line_len-1])
+                if m:
+                    val = m.group()
+                    fo.write("<span class=\"cm\">%s</span>" % (val))
+                    is_in_comment = 1
+                    raise FIN
+                # snip space
+                m = re.search("^\s+", line[idx:line_len-1])
+                if m:
+                    val = m.group()
+                    fo.write("<span>%s</span>" % (val))
+                    raise FIN
+                # one line comment
+                m = re.search("^//.*$", line[idx:line_len-1])
+                if m:
+                    val = m.group()
+                    fo.write("<span class=\"cm\">%s</span>" % (val))
+                    raise FIN
+                # find num
+                m = re.search("^0x[0-9a-fA-F]+", line[idx:line_len-1])
+                if m:
+                    val = m.group()
+                    fo.write("<span>%s</span>" % (val))
+                    raise FIN
+                # find num
+                m = re.search("^0[0-7]+", line[idx:line_len-1])
+                if m:
+                    val = m.group()
+                    fo.write("<span>%s</span>" % (val))
+                    raise FIN
+                # find num
+                m = re.search("^[0-9]+", line[idx:line_len-1])
+                if m:
+                    val = m.group()
+                    fo.write("<span>%s</span>" % (val))
+                    raise FIN
+                # find word
+                m = re.search("^[~]?[a-zA-Z_][a-zA-Z0-9_]*", line[idx:line_len-1])
+                if m:
+                    val = m.group()
+                    if val in KEYWORDS:
+                        fo.write("<span class=\"kw\">%s</span>" % (val))
+                    else:
+                        link = get_link(fn, val, line_no, idx+1)
+                        if link:
+                            fo.write("<a href=\"%s\">%s</a>" % (link, val))
+                        else:
+                            fo.write("%s" % (val))
+                    raise FIN
+                # find string
+                m = re.search("^\"[^\"]+\"", line[idx:line_len-1])
+                if m:
+                    val = m.group()
+                    fo.write("<font color=\"red\">%s</font>" % (val))
+                    raise FIN
+                # find char
+                m = re.search("^\'[^\']+\'", line[idx:line_len-1])
+                if m:
+                    val = m.group()
+                    fo.write("<font color=\"red\">%s</font>" % (val))
+                    raise FIN
+                # find define directive
+                m = re.search("^#\s*define", line[idx:line_len-1])
+                if m:
+                    val = m.group()
+                    val = replace_html_special_char(val)
+                    fo.write("<span class=\"pp\">%s</span>" % (val))
+                    raise FIN
+                # find include directive
+                m = re.search("^#\s*include.+$", line[idx:line_len-1])
+                if m:
+                    val = m.group()
+                    val = replace_html_special_char(val)
+                    fo.write("<span class=\"pp\">%s</span>" % (val))
+                    raise FIN
+                # find special chars
+                m = re.search("^[{}!%&\(\)=~^|+-/\*<>:;]", line[idx:line_len-1])
+                if m:
+                    val = m.group()
+                    fo.write("<span class=\"spc\">%s</span>" % (val))
+                    raise FIN
+                # other
+                m = re.search("^.", line[idx:line_len-1])
+                if m:
+                    val = m.group()
+                    fo.write("<span>%s</span>" % (val))
+                    raise FIN
+            except FIN:
+                idx += len(val)
+        line_no += 1
+        fo.write("</a>\n")
+    fi.close()
+    fo.close()
+
+def gen_ref_info():
+    global OUT_DIR
+    q = "select usr, line, col, file_name, name, kind, ref_file_name, ref_line, ref_col from ref"
+    res = db.execute(q)
+    for i in res.fetchall():
+        ref_usr = i[0]
+        line = i[1]
+        col = i[2]
+        file_name = i[3]
+        name = i[4]
+        kind = i[5]
+        ref_file_name = i[6]
+        ref_line = i[7]
+        ref_col = i[8]
+        #print "REF_FILE: %s, %d, %d, %s, %s, %s, %s, %d, %d\n"%(ref_usr, line, col, file_name, name, kind, ref_file_name, ref_line, ref_col)
+        # add to reference list
+        if ref_usr != "" and file_name != "":
+            fn = get_info_file(ref_usr)
+            if fn == None:
+                fn = add_info_file(ref_usr)
+            if fn == None:
+                print "ERROR: REF_FILE\n"
+                exit(1)
+            fo_txt = open("%s/%s.txt"%(OUT_DIR, fn), 'a+')
+            fi = open(file_name, 'r')
+            all_lines = fi.readlines()
+            str_line = ""
+            if len(all_lines) < line:
+                print "ERROR: line: %s, %s, %d, %d\n"%(name, file_name, line, col)
+                exit(1)
+            else:
+                str_line = all_lines[line-1]
+            str_line = re.sub("\n", "", str_line)
+            fo_txt.write("refered: "+ref_usr+TXT_DELIM+file_name+TXT_DELIM+str(line)+TXT_DELIM+str(col)+TXT_DELIM+str_line+"\n")
+            fo_txt.close()
+
+def gen_decl_info():
+    global OUT_DIR
+    q = "select usr, line, col, file_name, name, kind, val, is_virtual, is_def from decl"
+    res = db.execute(q)
+    for i in res.fetchall():
+        usr = i[0]
+        line = i[1]
+        col = i[2]
+        file_name = i[3]
+        name = i[4]
+        kind = i[5]
+        val = i[6]
+        is_virtual = i[7]
+        is_def = i[8]
+        #print "REF_FILE: %s, %d, %d, %s, %s, %s, %s, %d, %d\n"%(ref_usr, line, col, file_name, name, kind, ref_file_name, ref_line, ref_col)
+        # add to reference list
+        if usr != "" and file_name != "":
+            fn = get_info_file(usr)
+            if fn == None:
+                fn = add_info_file(usr)
+            if fn == None:
+                print "ERROR: REF_FILE\n"
+                exit(1)
+            fo_txt = open("%s/%s.txt"%(OUT_DIR, fn), 'a+')
+            fi = open(file_name, 'r')
+            all_lines = fi.readlines()
+            str_line = ""
+            if len(all_lines) < line:
+                print "ERROR: line: %s, %s, %d, %d\n"%(name, file_name, line, col)
+                exit(1)
+            else:
+                str_line = all_lines[line-1]
+            str_line = re.sub("\n", "", str_line)
+            if is_def == 1:
+                fo_txt.write("defined: ")
+            else:
+                fo_txt.write("declared: ")
+            fo_txt.write(usr+TXT_DELIM+file_name+TXT_DELIM+str(line)+TXT_DELIM+str(col)+TXT_DELIM+str_line+"\n")
+            fo_txt.close()
+
+def gen_override_info():
+    global OUT_DIR
+    q = "select usr, name, file_name, line, col, kind, usr_overrider, is_def from overriden"
+    res = db.execute(q)
+    for row in res.fetchall():
+        usr = row[0]
+        name = row[1]
+        file_name = row[2]
+        line = row[3]
+        col = row[4]
+        kind = row[5]
+        usr_overrider = row[6]
+        is_def = row[7]
+        fn = get_info_file(usr)
+        if fn == None:
+            fn = add_info_file(usr)
+        fo = open(OUT_DIR+fn+".txt", "a")
+        fo.write("overriden: "+usr+TXT_DELIM+file_name+TXT_DELIM+str(line)+TXT_DELIM+str(col)+TXT_DELIM+usr_overrider+"\n")
+        fo.close()
+        fn = get_info_file(usr_overrider)
+        if fn == None:
+            fn = add_info_file(usr_overrider)
+        fo = open(OUT_DIR+fn+".txt", "a")
+        q = "select name, file_name, line, col, kind from decl where usr=\"%s\" order by is_def"%(usr_overrider)
+        res = db.execute(q)
+        all_rows = res.fetchall()
+        if all_rows:
+            row = all_rows[0]
+            name = row[0]
+            file_name = row[1]
+            line = row[2]
+            col = row[3]
+            kind = row[4]
+            fn = get_info_file(usr_overrider)
+            if fn == None:
+                fn = add_info_file(usr_overrider)
+            fo = open(OUT_DIR+fn+".txt", "a")
+            fo.write("override: "+usr_overrider+TXT_DELIM+file_name+TXT_DELIM+str(line)+TXT_DELIM+str(col)+TXT_DELIM+usr+"\n")
+        fo.close()
+
+def gen_override_info():
+    global OUT_DIR
+    q = "select usr, name, file_name, line, col, kind, usr_overrider, is_def from overriden"
+    res = db.execute(q)
+    for row in res.fetchall():
+        usr = row[0]
+        name = row[1]
+        file_name = row[2]
+        line = row[3]
+        col = row[4]
+        kind = row[5]
+        usr_overrider = row[6]
+        is_def = row[7]
+        fn = get_info_file(usr)
+        if fn == None:
+            fn = add_info_file(usr)
+        fo = open(OUT_DIR+fn+".txt", "a")
+        fo.write("overriden: "+usr+TXT_DELIM+file_name+TXT_DELIM+str(line)+TXT_DELIM+str(col)+TXT_DELIM+usr_overrider+"\n")
+        fo.close()
+        fn = get_info_file(usr_overrider)
+        if fn == None:
+            fn = add_info_file(usr_overrider)
+        fo = open(OUT_DIR+fn+".txt", "a")
+        q = "select name, file_name, line, col, kind from decl where usr=\"%s\" order by is_def"%(usr_overrider)
+        res = db.execute(q)
+        all_rows = res.fetchall()
+        if all_rows:
+            row = all_rows[0]
+            name = row[0]
+            file_name = row[1]
+            line = row[2]
+            col = row[3]
+            kind = row[4]
+            fn = get_info_file(usr_overrider)
+            if fn == None:
+                fn = add_info_file(usr_overrider)
+            fo = open(OUT_DIR+fn+".txt", "a")
+            fo.write("override: "+usr_overrider+TXT_DELIM+file_name+TXT_DELIM+str(line)+TXT_DELIM+str(col)+TXT_DELIM+usr+"\n")
+        fo.close()
+
+# generate formatted html file from txt file
+def gen_info_html():
+    global OUT_DIR
+    q = "select usr, line, col, file_name, name, kind from decl"
+    res = db.execute(q)
+    #for i in  file_dict.keys():
+    for i in res.fetchall():
+        ref_usr = i[0]
+        line = i[1]
+        col = i[2]
+        file_name = i[3]
+        name = i[4]
+        kind = i[5]
+        #print "REF_FILE: %s, %d, %d, %s, %s, %s\n"%(ref_usr, int(line), int(col), file_name, name, kind)
+        # add to reference list
+        if ref_usr != "" and file_name != "":
+            fn = get_info_file(ref_usr)
+            if fn == None:
+                continue
+            ref_list = []
+            override_list = []
+            overriden_list = []
+            declared_list = []
+            defined_list = []
+
+            txt_name = "%s/%s.txt"%(OUT_DIR, fn)
+            if os.path.exists(txt_name):
+                fi_txt = open("%s/%s.txt"%(OUT_DIR, fn), 'r')
+                for line in fi_txt.readlines():
+                    m = re.search("^refered: (.*)$", line)
+                    if m:
+                        ref_list.append(m.group(1))
+                    m = re.search("^override: (.*)$", line)
+                    if m:
+                        override_list.append(m.group(1))
+                    m = re.search("^overriden: (.*)$", line)
+                    if m:
+                        overriden_list.append(m.group(1))
+                    m = re.search("^declared: (.*)$", line)
+                    if m:
+                        declared_list.append(m.group(1))
+                    m = re.search("^defined: (.*)$", line)
+                    if m:
+                        defined_list.append(m.group(1))
+
+            fo_html = open("%s/%s.html"%(OUT_DIR, fn), 'w')
+            fo_html.write("<link rel=\"stylesheet\" href=\"../style.css\">\n")
+            fo_html.write("<body>\n")
+            fo_html.write("<h1>%s</h1>\n"%(name))
+            #fo_html.write("<a href=\"../%s.txt\">../%s.txt</a><BR>\n"%(fn, fn))
+            fo_html.write("<h3>USR</h3>\n")
+            fo_html.write("%s<BR>\n"%(ref_usr))
+            # declared
+            if len(declared_list) != 0:
+                fo_html.write("<h3>declared</h3>\n")
+                fo_html.write("<table class=\"loc\">\n")
+                for i in declared_list:
+                    col_list = i.split(TXT_DELIM)
+                    col_usr = col_list[0]
+                    col_file_name = col_list[1]
+                    col_line = col_list[2]
+                    col_col = col_list[3]
+                    col_str = string.join(col_list[4:],"")
+                    fo_html.write("<tr>\n")
+                    fo_html.write("<td aligh=\"left\">%s</td><td><pre>    </pre></td><td>%s</td>\n"%(get_src_ref_line(col_file_name, int(col_line), int(col_col)), col_str))
+                    fo_html.write("</tr>\n")
+                fo_html.write("</table>\n")
+            # defined
+            if len(defined_list) != 0:
+                fo_html.write("<h3>defined</h3>\n")
+                fo_html.write("<table class=\"loc\">\n")
+                for i in defined_list:
+                    col_list = i.split(TXT_DELIM)
+                    col_usr = col_list[0]
+                    col_file_name = col_list[1]
+                    col_line = col_list[2]
+                    col_col = col_list[3]
+                    col_str = string.join(col_list[4:],"")
+                    fo_html.write("<tr>\n")
+                    fo_html.write("<td aligh=\"left\">%s</td><td><pre>    </pre></td><td>%s</td>\n"%(get_src_ref_line(col_file_name, int(col_line), int(col_col)), col_str))
+                    fo_html.write("</tr>\n")
+                fo_html.write("</table>\n")
+            # refered
+            if len(ref_list) != 0:
+                fo_html.write("<h3>refered</h3>\n")
+                fo_html.write("<table class=\"loc\">\n")
+                for i in ref_list:
+                    col_list = i.split(TXT_DELIM)
+                    col_usr = col_list[0]
+                    col_file_name = col_list[1]
+                    col_line = col_list[2]
+                    col_col = col_list[3]
+                    col_str = string.join(col_list[4:],"")
+                    fo_html.write("<tr>\n")
+                    fo_html.write("<td aligh=\"left\">%s</td><td><pre>    </pre></td><td>%s</td>\n"%(get_src_ref_line(col_file_name, int(col_line), int(col_col)), col_str))
+                    fo_html.write("</tr>\n")
+                fo_html.write("</table>\n")
+            if len(override_list) != 0:
+                fo_html.write("<h3>oveerride</h3>")
+                for i in override_list:
+                    col_list = i.split(TXT_DELIM)
+                    col_usr = col_list[0]
+                    col_file_name = col_list[1]
+                    col_line = col_list[2]
+                    col_col = col_list[3]
+                    col_usr_overrider = col_list[4]
+                    fo_html.write("%s %s<BR>"%(get_src_ref_line(col_file_name, int(col_line), int(col_col)), col_usr_overrider))
+            if len(overriden_list) != 0:
+                fo_html.write("<h3>oveerriden</h3>")
+                for i in overriden_list:
+                    col_list = i.split(TXT_DELIM)
+                    col_usr = col_list[0]
+                    col_file_name = col_list[1]
+                    col_line = col_list[2]
+                    col_col = col_list[3]
+                    col_usr_overrider = col_list[4]
+                    fo_html.write("%s %s<BR>"%(get_src_ref_line(col_file_name, int(col_line), int(col_col)), col_usr_overrider))
+            fo_html.write("</body>\n")
+            fo_html.close()
+
+def gen_js():
+    global OUT_DIR
+    global JS_FILE_NAME
+    fo = open("%s/%s"%(OUT_DIR, JS_FILE_NAME), 'w')
+    fo.write(JS_SRC)
+    fo.close()
+
+def gen_css():
+    global OUT_DIR
+    fo = open(OUT_DIR+"style.css", "w")
+    fo.write("body { font-family: monospace; }\n")
+    fo.write(
+"""
+span.kw {
+    color: darkblue;
+    font-weight: bold; 
+    }
+span.spc { 
+    color: gray;
+    }
+span.cm { 
+    color: green;
+    }
+span.pp { 
+    color: maroon;
+    }
+"""
+)
+    #fo.write("table.loc td { font-family: monospace }\n")
+    fo.close()
+
+### main ###
+db_file_name = sys.argv[1]
+db = sqlite3.connect(db_file_name)
+
+q = "select file_name from ref where file_name != \"\""
+res = db.execute(q)
+file_list = res.fetchall()
+q = "select file_name from decl where file_name != \"\""
+res = db.execute(q)
+file_list.extend(res.fetchall())
+# remove duplications
+file_list = list(set(file_list))
+
+if os.path.exists(OUT_DIR):
+    shutil.rmtree(OUT_DIR)
+os.mkdir(OUT_DIR)
+os.mkdir("%s/%s" % (OUT_DIR, REF_DIR))
+
+# decide file name
+for f in file_list:
+    file_name = f[0]
+    add_html_file(file_name)
+
+gen_css()
+gen_js()
+gen_ref_info()
+gen_decl_info()
+gen_override_info()
+gen_info_html()
+
+for f in file_list:
+    file_name = f[0]
+    print "%s\n" % (file_name)
+    proc_file(file_name)
+

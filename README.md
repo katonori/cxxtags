@@ -18,6 +18,9 @@ below to run/build this command.
 * clang libs and headers
 * python with sqlite3 support(ver >=2.5)
 
+**cxxtags** is developped and tested on Mac OS X 10.8.2 and python-2.7.2.
+But it is expected to be able to run on other Unix-like systems.
+
 ### How to build
 * check out repository
 
@@ -114,4 +117,4 @@ Known problems
 * processing speed  
  cxxtags project is still in early development stage so processing speed of generating tags database is very
 slow. Especially, database merging process by **cxxtags_merger** is slow. If you aim to tagging large source
-package, you need to select the part you are interested the best. Improvement of the speed is future works. 
+package, you need to select the part you are interested the best. Improvement of the speed is a future work. 

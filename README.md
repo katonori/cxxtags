@@ -89,7 +89,8 @@ database is to use sqlite3 command. For example,
 
     $ sqlite3 your_database "SELECT * FROM ref"
 
-shows you all the contents in table "ref". The table definition is described in [[Table Definition]].
+shows you all the contents in table "ref". The table definition is described in
+[Table Definition](https://github.com/katonori/cxxtags/wiki/Table-definition "Table Definition").
 
 Example
 ------------------------

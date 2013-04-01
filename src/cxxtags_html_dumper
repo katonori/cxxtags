@@ -8,6 +8,8 @@ import re
 import string
 import shutil
 import sqlite3
+import time
+import fpformat
 
 TXT_DELIM = '\0'
 
@@ -679,7 +681,30 @@ span.pp {
 
 ### main ###
 db_file_name = sys.argv[1]
+
+# make output dir
+if os.path.exists(OUT_DIR):
+    shutil.rmtree(OUT_DIR)
+os.mkdir(OUT_DIR)
+os.mkdir("%s/%s" % (OUT_DIR, REF_DIR))
+
+# copy datababse file becase idexing db modifies db file.
+shutil.copy(db_file_name, OUT_DIR)
+db_file_name = OUT_DIR + "/" + os.path.basename(db_file_name)
+
+# connect to db
 db = sqlite3.connect(db_file_name)
+# create index
+st = time.time()
+q = "CREATE INDEX ref_index0 on ref(file_name, name, line, col)"
+res = db.execute(q)
+q = "CREATE INDEX decl_index0 on decl(file_name, name, line, col)"
+res = db.execute(q)
+q = "CREATE INDEX ref_index1 on ref(file_name)"
+res = db.execute(q)
+q = "CREATE INDEX decl_index1 on decl(file_name)"
+res = db.execute(q)
+#print "    CREATE_INDEX: " + str(time.time()-st)
 
 q = "select file_name from ref where file_name != \"\""
 res = db.execute(q)
@@ -690,11 +715,6 @@ file_list.extend(res.fetchall())
 # remove duplications
 file_list = list(set(file_list))
 
-if os.path.exists(OUT_DIR):
-    shutil.rmtree(OUT_DIR)
-os.mkdir(OUT_DIR)
-os.mkdir("%s/%s" % (OUT_DIR, REF_DIR))
-
 # decide file name
 for f in file_list:
     file_name = f[0]
@@ -702,10 +722,22 @@ for f in file_list:
 
 gen_css()
 gen_js()
+# ref
+st = time.time()
 gen_ref_info()
+#print "    GEN_REF = " + fpformat.fix(time.time()-st,3)
+# decl
+st = time.time()
 gen_decl_info()
+#print "    GEN_DECL = " + fpformat.fix(time.time()-st,3)
+# overriden
+st = time.time()
 gen_override_info()
+#print "    GEN_OVERRIDEN = " + fpformat.fix(time.time()-st,3)
+# info html
+st = time.time()
 gen_info_html()
+#print "    GEN_INFO_HTML = " + fpformat.fix(time.time()-st,3)
 
 for f in file_list:
     file_name = f[0]

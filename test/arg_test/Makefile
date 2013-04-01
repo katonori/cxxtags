@@ -1,3 +1,3 @@
 .PHONY: test
 test:
-	python test.py
+	./test.py

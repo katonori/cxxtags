@@ -18,7 +18,7 @@ below to run/build this command.
 * clang libs and headers
 * python with sqlite3 support(ver >=2.5)
 
-**cxxtags** is developped and tested on Mac OS X 10.8.2 and python-2.7.2.
+**cxxtags** is developped and tested on Mac OS X 10.8.2, python-2.7.2 and clang(LLVM)-3.2.
 But it is expected to be able to run on other Unix-like systems.
 
 ### How to build

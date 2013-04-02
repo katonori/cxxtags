@@ -40,9 +40,9 @@ void init(std::string file_name)
 void insert_ref_value(std::string usr, std::string name, std::string file_name, int32_t line, int32_t col, std::string kind, std::string ref_file_name, int ref_line, int ref_col)
 {
     std::ostringstream os;
-    os << "(\"" << usr << "\",\"" << name << "\", \"" << file_name
-        << "\", " << line << ", " << col << ", \"" << kind << "\", \"" << ref_file_name
-        << "\", " << ref_line << ", " << ref_col << ")";
+    os << "('" << usr << "','" << name << "', '" << file_name
+        << "', " << line << ", " << col << ", '" << kind << "', '" << ref_file_name
+        << "', " << ref_line << ", " << ref_col << ")";
     insert_list_ref.push_back(os.str());
     if(insert_list_ref.size() == INSERT_LIST_MAX) {
         insert_ref_value_core();
@@ -73,8 +73,8 @@ static void insert_ref_value_core(void)
 void insert_decl_value(std::string usr, std::string name, std::string file_name, int32_t line, int32_t col, std::string entity_kind, int val, int is_virtual, int is_def)
 {
     std::ostringstream os;
-    os << "(\"" << usr << "\",\"" << name << "\", \"" << file_name
-        << "\", " << line << ", " << col << ", \"" << entity_kind << "\", " << val << ", "
+    os << "('" << usr << "','" << name << "', '" << file_name
+        << "', " << line << ", " << col << ", '" << entity_kind << "', " << val << ", "
         << is_virtual << ", " << is_def << ")";
     insert_list_decl.push_back(os.str().c_str());
     if(insert_list_decl.size() == INSERT_LIST_MAX) {
@@ -106,9 +106,9 @@ static void insert_decl_value_core(void)
 void insert_overriden_value(std::string usr, std::string name, std::string file_name, int32_t line, int32_t col, std::string entity_kind, std::string usr_overrider, int is_def)
 {
     std::ostringstream os;
-    os << "(\"" << usr << "\",\"" << name << "\", \"" << file_name
-        << "\", " << line << ", " << col << ", \"" << entity_kind << "\", \"" << usr_overrider 
-        << "\", " << is_def << ")";
+    os << "('" << usr << "','" << name << "', '" << file_name
+        << "', " << line << ", " << col << ", '" << entity_kind << "', '" << usr_overrider 
+        << "', " << is_def << ")";
     insert_list_overriden.push_back(os.str().c_str());
     if(insert_list_overriden.size() == INSERT_LIST_MAX) {
         insert_overriden_value_core();

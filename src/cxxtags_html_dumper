@@ -151,6 +151,7 @@ def add_html_file(path):
         file_cnt += 1
         file_dict[path] = fn
 
+# get file name from usr
 def get_info_file(usr):
     global file_dict
     if usr == None or usr == "":
@@ -165,6 +166,7 @@ def add_info_file(usr):
     global file_cnt_ref
     if usr == None or usr == "":
         return None
+    # generate file name from usr
     fn = re.sub("^c:", "", usr)
     fn = re.sub("#", ".", fn)
     # shorten file name
@@ -203,7 +205,7 @@ def get_link(file_name, word, line, col):
     global db
     #print "GET: %s, %d, %d, %s" %(word, line, col, file_name)
     # ref
-    q = "select usr, ref_file_name, ref_line, ref_col from ref where file_name=\"%s\" and name=\"%s\" and line=%d and col=%d" % (file_name, word, line, col)
+    q = "select usr, ref_file_name, ref_line, ref_col from ref where file_name='%s' and name='%s' and line=%d and col=%d" % (file_name, word, line, col)
     res = db.execute(q)
     for ref_row in res.fetchall():
         ref_usr = ref_row[0]
@@ -214,15 +216,15 @@ def get_link(file_name, word, line, col):
             link = "%s#%s_%d" % (file_dict[ref_file_name]+".html", LOC_ANCHOR_PREFIX, ref_line)
             return link
     # decl
-    q = "select usr from decl where file_name=\"%s\" and name=\"%s\" and line=%d and col=%d" % (file_name, word, line, col)
+    q = "select usr from decl where file_name='%s' and name='%s' and line=%d and col=%d" % (file_name, word, line, col)
     res = db.execute(q)
     for decl_row in res.fetchall():
         decl_usr = decl_row[0]
         fn = get_info_file(decl_usr)
         if fn:
             fn += ".html"
-        #print "DECL: %s, %d, %d, %s" %(word, line, col, html_fn)
-        return fn
+            #print "DECL: %s, %d, %d, %s" %(word, line, col, html_fn)
+            return fn
     return None
 
 def q_str(q):
@@ -471,7 +473,7 @@ def gen_override_info():
         if fn == None:
             fn = add_info_file(usr_overrider)
         fo = open(OUT_DIR+fn+".txt", "a")
-        q = "select name, file_name, line, col, kind from decl where usr=\"%s\" order by is_def"%(usr_overrider)
+        q = "select name, file_name, line, col, kind from decl where usr='%s' order by is_def"%(usr_overrider)
         res = db.execute(q)
         all_rows = res.fetchall()
         if all_rows:
@@ -511,7 +513,7 @@ def gen_override_info():
         if fn == None:
             fn = add_info_file(usr_overrider)
         fo = open(OUT_DIR+fn+".txt", "a")
-        q = "select name, file_name, line, col, kind from decl where usr=\"%s\" order by is_def"%(usr_overrider)
+        q = "select name, file_name, line, col, kind from decl where usr='%s' order by is_def"%(usr_overrider)
         res = db.execute(q)
         all_rows = res.fetchall()
         if all_rows:
@@ -706,10 +708,10 @@ q = "CREATE INDEX decl_index1 on decl(file_name)"
 res = db.execute(q)
 #print "    CREATE_INDEX: " + str(time.time()-st)
 
-q = "select file_name from ref where file_name != \"\""
+q = "select file_name from ref where file_name != ''"
 res = db.execute(q)
 file_list = res.fetchall()
-q = "select file_name from decl where file_name != \"\""
+q = "select file_name from decl where file_name != ''"
 res = db.execute(q)
 file_list.extend(res.fetchall())
 # remove duplications

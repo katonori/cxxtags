@@ -118,11 +118,11 @@ Tips
 Making index of database table brings you large performance gain. But cxxtags doesn't make indices automatically because how cxxtags shold
 index the table is due to what indices you use. 
   
-If you use column _file\_name_, _name_, _line_ and _col_ as a key of access, this command makes your access to the database faster. 
+  If you use column _file\_name_, _name_, _line_ and _col_ as a key of access, this command makes your access to the database faster. 
 
-    $ sqlite3 your_database "CREATE INDEX ref_index on ref(file_name, name, line, col)"
+      $ sqlite3 your_database "CREATE INDEX ref_index on ref(file_name, name, line, col)"
 
-Notice that this sqlite3 command modifies your_database immediately. You can't roll-back the database.
+  Notice that this sqlite3 command modifies your_database immediately. You can't roll-back the database.
 
 Known problems
 ------------------------

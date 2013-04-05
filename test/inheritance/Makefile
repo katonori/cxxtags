@@ -4,9 +4,9 @@ DUMPER = ../../src/cxxtags_html_dumper
 .PHONY: dump clean
 
 index: inhe.cpp
-	env PYTHONPATH=/Users/norito/python_module/ $(CXXTAGS) inhe.cpp
+	$(CXXTAGS) inhe.cpp
 merge: inhe.cpp.db
-	env PYTHONPATH=/Users/norito/python_module/ $(MERGER) index.db inhe.cpp.db
+	$(MERGER) index.db inhe.cpp.db
 
 test: index merge
 	python test.py index.db

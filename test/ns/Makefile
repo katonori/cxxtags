@@ -3,11 +3,11 @@ MERGER = ../../src/cxxtags_merger
 DUMPER = ../../src/cxxtags_html_dumper
 .PHONY: clean dump
 index:
-	env PYTHONPATH=/Users/norito/python_module/ $(CXXTAGS) ns0.cpp -I./subdir
-	env PYTHONPATH=/Users/norito/python_module/ $(CXXTAGS) ./subdir/ns1.cpp -I.
-	env PYTHONPATH=/Users/norito/python_module/ $(CXXTAGS) main.cpp -I./subdir
+	$(CXXTAGS) ns0.cpp -I./subdir
+	$(CXXTAGS) ./subdir/ns1.cpp -I.
+	$(CXXTAGS) main.cpp -I./subdir
 merge: 
-	env PYTHONPATH=/Users/norito/python_module/ $(MERGER) index.db main.cpp.db ns0.cpp.db ns1.cpp.db
+	$(MERGER) index.db main.cpp.db ns0.cpp.db ns1.cpp.db
 
 check: index merge
 	sqlite3 ns0.cpp.db ".dump" > ns0.cpp.db.out

@@ -3,9 +3,9 @@ MERGER = ../../src/cxxtags_merger
 DUMPER = ../../src/cxxtags_html_dumper
 .PHONY: dump clean
 index:
-	env PYTHONPATH=/Users/norito/python_module/ $(CXXTAGS) main.cpp
+	$(CXXTAGS) main.cpp
 merge: 
-	env PYTHONPATH=/Users/norito/python_module/ $(MERGER) index.db main.cpp.db
+	$(MERGER) index.db main.cpp.db
 test: index merge
 	./test.py index.db
 html: index merge

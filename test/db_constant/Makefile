@@ -8,9 +8,9 @@ test: index merge
 	make html
 	diff -sq index.db index.db.back
 index:
-	env PYTHONPATH=/Users/norito/python_module/ $(CXXTAGS) ../enum/main.cpp
+	$(CXXTAGS) ../enum/main.cpp
 merge: 
-	env PYTHONPATH=/Users/norito/python_module/ $(MERGER) index.db main.cpp.db
+	$(MERGER) index.db main.cpp.db
 html: index merge
 	$(DUMPER) index.db
 dump:

@@ -16,7 +16,6 @@ static std::list<std::string > insert_list_overriden;
 void init(std::string file_name)
 {
     char *err=NULL;
-    remove(file_name.c_str());
     if(sqlite3_open(file_name.c_str(), &db ) != SQLITE_OK) {
         printf("ERROR: failt to open db");
         exit(1);

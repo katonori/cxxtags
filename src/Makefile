@@ -5,6 +5,6 @@ LIBS=-L${LLVM_HOME}/lib/ -L/usr/lib/ -lsqlite3 -lclang -lxml2 -lstdc++
 CFLAGS=-Wall
 
 all: cxxtags_core.cpp db.cpp
-	clang $(CFLAGS) cxxtags_core.cpp -c $(INCLUDES)
-	clang $(CFLAGS) db.cpp -c $(INCLUDES)
-	clang $(LIBS) cxxtags_core.o db.o -o cxxtags_core
+	$(CC) $(CFLAGS) cxxtags_core.cpp -c $(INCLUDES)
+	$(CC) $(CFLAGS) db.cpp -c $(INCLUDES)
+	$(CC) $(LIBS) cxxtags_core.o db.o -o cxxtags_core

@@ -58,12 +58,9 @@ static void insert_ref_value_core(void)
     for(std::list<std::string >::iterator itr = insert_list_ref.begin();
         itr != insert_list_ref.end();
         itr++) {
-        os_values << *itr << ",";
+        os << "insert into ref values " << *itr << ";";
+        //printf("INSERT_REF: %s\n", values.c_str());
     }
-    std::string values = os_values.str();
-    values = values.substr(0, values.size()-1); // erase last ','
-    os << "insert into ref values " << values << ";";
-    //printf("INSERT_REF: %s\n", values.c_str());
     sqlite3_exec(db, os.str().c_str(), NULL, NULL, &err);
     if(err != SQLITE_OK) {
         printf("ERROR: SQLITE3: %s\n", sqlite3_errmsg(db));
@@ -91,11 +88,8 @@ static void insert_decl_value_core(void)
     for(std::list<std::string >::iterator itr = insert_list_decl.begin();
         itr != insert_list_decl.end();
         itr++) {
-        os_values << *itr << ",";
+        os << "insert into decl values " << *itr << ";";
     }
-    std::string values = os_values.str();
-    values = values.substr(0, values.size()-1); // erase last ','
-    os << "insert into decl values " << values << ";";
     //printf("INSERT_DECL: %s\n", values.c_str());
     sqlite3_exec(db, os.str().c_str(), NULL, NULL, &err);
     if(err != SQLITE_OK) {
@@ -124,11 +118,8 @@ static void insert_overriden_value_core(void)
     for(std::list<std::string >::iterator itr = insert_list_overriden.begin();
         itr != insert_list_overriden.end();
         itr++) {
-        os_values << *itr << ",";
+        os << "insert into overriden values " << *itr << ";";
     }
-    std::string values = os_values.str();
-    values = values.substr(0, values.size()-1); // erase last ','
-    os << "insert into overriden values " << values << ";";
     //printf("INSERT_OVERRIDEN: %s\n", values.c_str());
     sqlite3_exec(db, os.str().c_str(), NULL, NULL, &err);
     if(err != SQLITE_OK) {

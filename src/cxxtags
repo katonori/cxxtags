@@ -72,7 +72,8 @@ cur_dir = os.path.abspath(cur_dir) + "/"
 
 if excep_list != "":
     excep_list = "-e " + excep_list
-os.remove(out_file)
+if os.path.exists(out_file):
+    os.remove(out_file)
 cmd = "%s/cxxtags_core %s %s %s %s "%(exe_dir, excep_list, cur_dir, out_file, in_file)+string.join(argv)
 #print(cmd)
 time_list.append(time.time())

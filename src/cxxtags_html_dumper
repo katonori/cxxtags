@@ -205,7 +205,7 @@ def get_link(file_name, word, line, col):
     global db
     #print "GET: %s, %d, %d, %s" %(word, line, col, file_name)
     # ref
-    q = "select usr, ref_file_name, ref_line, ref_col from ref where file_name='%s' and name='%s' and line=%d and col=%d" % (file_name, word, line, col)
+    q = "SELECT usr, ref_file_name, ref_line, ref_col FROM ref WHERE file_name='%s' AND name='%s' AND line=%d AND col=%d" % (file_name, word, line, col)
     res = db.execute(q)
     for ref_row in res.fetchall():
         ref_usr = ref_row[0]
@@ -216,7 +216,7 @@ def get_link(file_name, word, line, col):
             link = "%s#%s_%d" % (file_dict[ref_file_name]+".html", LOC_ANCHOR_PREFIX, ref_line)
             return link
     # decl
-    q = "select usr from decl where file_name='%s' and name='%s' and line=%d and col=%d" % (file_name, word, line, col)
+    q = "SELECT usr FROM decl WHERE file_name='%s' AND name='%s' AND line=%d AND col=%d" % (file_name, word, line, col)
     res = db.execute(q)
     for decl_row in res.fetchall():
         decl_usr = decl_row[0]
@@ -376,7 +376,7 @@ def proc_file(fn):
 
 def gen_ref_info():
     global OUT_DIR
-    q = "select usr, line, col, file_name, name, kind, ref_file_name, ref_line, ref_col from ref"
+    q = "SELECT usr, line, col, file_name, name, kind, ref_file_name, ref_line, ref_col FROM ref"
     res = db.execute(q)
     for i in res.fetchall():
         ref_usr = i[0]
@@ -412,7 +412,7 @@ def gen_ref_info():
 
 def gen_decl_info():
     global OUT_DIR
-    q = "select usr, line, col, file_name, name, kind, val, is_virtual, is_def from decl"
+    q = "SELECT usr, line, col, file_name, name, kind, val, is_virtual, is_def FROM decl"
     res = db.execute(q)
     for i in res.fetchall():
         usr = i[0]
@@ -452,7 +452,7 @@ def gen_decl_info():
 
 def gen_override_info():
     global OUT_DIR
-    q = "select usr, name, file_name, line, col, kind, usr_overrider, is_def from overriden"
+    q = "SELECT usr, name, file_name, line, col, kind, usr_overrider, is_def FROM overriden"
     res = db.execute(q)
     for row in res.fetchall():
         usr = row[0]
@@ -473,7 +473,7 @@ def gen_override_info():
         if fn == None:
             fn = add_info_file(usr_overrider)
         fo = open(OUT_DIR+fn+".txt", "a")
-        q = "select name, file_name, line, col, kind from decl where usr='%s' order by is_def"%(usr_overrider)
+        q = "SELECT name, file_name, line, col, kind FROM decl WHERE usr='%s' ORDER BY is_def"%(usr_overrider)
         res = db.execute(q)
         all_rows = res.fetchall()
         if all_rows:
@@ -492,7 +492,7 @@ def gen_override_info():
 
 def gen_override_info():
     global OUT_DIR
-    q = "select usr, name, file_name, line, col, kind, usr_overrider, is_def from overriden"
+    q = "SELECT usr, name, file_name, line, col, kind, usr_overrider, is_def FROM overriden"
     res = db.execute(q)
     for row in res.fetchall():
         usr = row[0]
@@ -513,7 +513,7 @@ def gen_override_info():
         if fn == None:
             fn = add_info_file(usr_overrider)
         fo = open(OUT_DIR+fn+".txt", "a")
-        q = "select name, file_name, line, col, kind from decl where usr='%s' order by is_def"%(usr_overrider)
+        q = "SELECT name, file_name, line, col, kind FROM decl WHERE usr='%s' ORDER BY is_def"%(usr_overrider)
         res = db.execute(q)
         all_rows = res.fetchall()
         if all_rows:
@@ -533,7 +533,7 @@ def gen_override_info():
 # generate formatted html file from txt file
 def gen_info_html():
     global OUT_DIR
-    q = "select usr, line, col, file_name, name, kind from decl"
+    q = "SELECT usr, line, col, file_name, name, kind FROM decl"
     res = db.execute(q)
     #for i in  file_dict.keys():
     for i in res.fetchall():
@@ -698,20 +698,20 @@ db_file_name = OUT_DIR + "/" + os.path.basename(db_file_name)
 db = sqlite3.connect(db_file_name)
 # create index
 st = time.time()
-q = "CREATE INDEX ref_index0 on ref(file_name, name, line, col)"
+q = "CREATE INDEX ref_index0 ON ref(file_name, name, line, col)"
 res = db.execute(q)
-q = "CREATE INDEX decl_index0 on decl(file_name, name, line, col)"
+q = "CREATE INDEX decl_index0 ON decl(file_name, name, line, col)"
 res = db.execute(q)
-q = "CREATE INDEX ref_index1 on ref(file_name)"
+q = "CREATE INDEX ref_index1 ON ref(file_name)"
 res = db.execute(q)
-q = "CREATE INDEX decl_index1 on decl(file_name)"
+q = "CREATE INDEX decl_index1 ON decl(file_name)"
 res = db.execute(q)
 #print "    CREATE_INDEX: " + str(time.time()-st)
 
-q = "select file_name from ref where file_name != ''"
+q = "SELECT file_name FROM ref WHERE file_name != ''"
 res = db.execute(q)
 file_list = res.fetchall()
-q = "select file_name from decl where file_name != ''"
+q = "SELECT file_name FROM decl WHERE file_name != ''"
 res = db.execute(q)
 file_list.extend(res.fetchall())
 # remove duplications

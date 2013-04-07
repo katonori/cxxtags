@@ -21,18 +21,18 @@ void init(std::string file_name)
         exit(1);
     }
     // begin transaction
-    sqlite3_exec(db, "begin transaction;", NULL, NULL, NULL);
+    sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
     // db_info
-    sqlite3_exec(db, "create table db_info(db_format integer);", NULL, NULL, &err);
+    sqlite3_exec(db, "CREATE TABLE db_info(db_format integer);", NULL, NULL, &err);
     // ref
-    sqlite3_exec(db, "create table ref(usr text,name text, file_name text, line integer, col integer, kind text, ref_file_name text, ref_line integer, ref_col integer);", NULL, NULL, &err);
+    sqlite3_exec(db, "CREATE TABLE ref(usr TEXT, name TEXT, file_name TEXT, line INTEGER, col INTEGER, kind TEXT, ref_file_name TEXT, ref_line INTEGER, ref_col INTEGER);", NULL, NULL, &err);
     // decl
-    sqlite3_exec(db, "create table decl(usr text,name text, file_name text, line integer, col integer, kind text, val integer, is_virtual integer, is_def integer);", NULL, NULL, &err);
+    sqlite3_exec(db, "CREATE TABLE decl(usr TEXT, name TEXT, file_name TEXT, line INTEGER, col INTEGER, kind TEXT, val INTEGER, is_virtual INTEGER, is_def INTEGER);", NULL, NULL, &err);
     // overriden
-    sqlite3_exec(db, "create table overriden(usr text,name text, file_name text, line integer, col integer, kind text, usr_overrider text, is_def integer);", NULL, NULL, &err);
+    sqlite3_exec(db, "CREATE TABLE overriden(usr TEXT, name TEXT, file_name TEXT, line INTEGER, col INTEGER, kind TEXT, usr_overrider TEXT, is_def INTEGER);", NULL, NULL, &err);
 
     std::ostringstream os;
-    os << "insert into db_info values(" << DB_VER << ");";
+    os << "INSERT INTO db_info VALUES(" << DB_VER << ");";
     sqlite3_exec(db, os.str().c_str(), NULL, NULL, &err);
 }
 
@@ -57,7 +57,7 @@ static void insert_ref_value_core(void)
     for(std::list<std::string >::iterator itr = insert_list_ref.begin();
         itr != insert_list_ref.end();
         itr++) {
-        os << "insert into ref values " << *itr << ";";
+        os << "INSERT INTO ref VALUES " << *itr << ";";
         //printf("INSERT_REF: %s\n", values.c_str());
     }
     sqlite3_exec(db, os.str().c_str(), NULL, NULL, &err);
@@ -87,7 +87,7 @@ static void insert_decl_value_core(void)
     for(std::list<std::string >::iterator itr = insert_list_decl.begin();
         itr != insert_list_decl.end();
         itr++) {
-        os << "insert into decl values " << *itr << ";";
+        os << "INSERT INTO decl VALUES " << *itr << ";";
     }
     //printf("INSERT_DECL: %s\n", values.c_str());
     sqlite3_exec(db, os.str().c_str(), NULL, NULL, &err);
@@ -117,7 +117,7 @@ static void insert_overriden_value_core(void)
     for(std::list<std::string >::iterator itr = insert_list_overriden.begin();
         itr != insert_list_overriden.end();
         itr++) {
-        os << "insert into overriden values " << *itr << ";";
+        os << "INSERT INTO overriden VALUES " << *itr << ";";
     }
     //printf("INSERT_OVERRIDEN: %s\n", values.c_str());
     sqlite3_exec(db, os.str().c_str(), NULL, NULL, &err);
@@ -139,7 +139,7 @@ void fin(void)
         insert_overriden_value_core();
     }
     // end transaction
-    sqlite3_exec(db, "end transaction;", NULL, NULL, NULL);
+    sqlite3_exec(db, "END TRANSACTION;", NULL, NULL, NULL);
     if(SQLITE_OK != sqlite3_close(db)) {
         fprintf(stderr, "ERROR: db couldn't close\n");
         fprintf(stderr, "%s\n", sqlite3_errmsg(db));

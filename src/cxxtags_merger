@@ -45,7 +45,7 @@ def merge_overriden_db(db_out, db_in_file):
 
 def get_db_ver(db):
     # get input db
-    q = "select db_format from db_info"
+    q = "SELECT db_format FROM db_info"
     db.execute(q)
     res = db.execute(q).fetchall()
     if len(res) != 1:
@@ -58,55 +58,55 @@ db_out = sqlite3.connect(fo.name)
 
 db_out.execute(
         u"""
-        create table db_info(
-            db_format integer
+        CREATE TABLE db_info(
+            db_format INTEGER
             );
         """
      )
 db_out.execute(
         u"""
-        create table ref(
-            usr text,
-            name text,
-            file_name text,
-            line integer,
-            col integer,
-            kind text,
-            ref_file_name text,
-            ref_line integer,
-            ref_col integer
+        CREATE TABLE ref(
+            usr TEXT,
+            name TEXT,
+            file_name TEXT,
+            line INTEGER,
+            col INTEGER,
+            kind TEXT,
+            ref_file_name TEXT,
+            ref_line INTEGER,
+            ref_col INTEGER
             );
         """
      )
 db_out.execute(
         u"""
-        create table decl(
-            usr text,
-            name text,
-            file_name text,
-            line integer,
-            col integer,
-            kind text,
-            val integer,
-            is_virtual integer,
-            is_def integer);
+        CREATE TABLE decl(
+            usr TEXT,
+            name TEXT,
+            file_name TEXT,
+            line INTEGER,
+            col INTEGER,
+            kind TEXT,
+            val INTEGER,
+            is_virtual INTEGER,
+            is_def INTEGER);
         """
      )
 db_out.execute(
         u"""
-        create table overriden(
-            usr text,
-            name text,
-            file_name text,
-            line integer,
-            col integer,
-            kind text,
-            usr_overrider text,
-            is_def integer
+        CREATE TABLE overriden(
+            usr TEXT,
+            name TEXT,
+            file_name TEXT,
+            line INTEGER,
+            col INTEGER,
+            kind TEXT,
+            usr_overrider TEXT,
+            is_def INTEGER
             );
         """
      )
-db_out.execute("insert into db_info values(%d);" % (DB_VER))
+db_out.execute("INSERT INTO db_info VALUES(%d);" % (DB_VER))
 
 end = len(sys.argv)
 for i in sys.argv[2:end]:

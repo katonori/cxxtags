@@ -25,18 +25,6 @@ static const char *curDir;
 /** \brief Return the default parsing options. */
 static unsigned getDefaultParsingOptions() {
   unsigned options = CXTranslationUnit_DetailedPreprocessingRecord;
-
-  if (getenv("CINDEXTEST_EDITING"))
-    options |= clang_defaultEditingTranslationUnitOptions();
-  if (getenv("CINDEXTEST_COMPLETION_CACHING"))
-    options |= CXTranslationUnit_CacheCompletionResults;
-  if (getenv("CINDEXTEST_COMPLETION_NO_CACHING"))
-    options &= ~CXTranslationUnit_CacheCompletionResults;
-  if (getenv("CINDEXTEST_SKIP_FUNCTION_BODIES"))
-    options |= CXTranslationUnit_SkipFunctionBodies;
-  if (getenv("CINDEXTEST_COMPLETION_BRIEF_COMMENTS"))
-    options |= CXTranslationUnit_IncludeBriefCommentsInCodeCompletion;
-  
   return options;
 }
 

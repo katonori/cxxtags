@@ -424,27 +424,6 @@ FUNC_END:
 }
 
 static int checkForErrors(CXTranslationUnit TU) {
-  unsigned Num, i;
-  CXDiagnostic Diag;
-  CXString DiagStr;
-
-  if (!getenv("CINDEXTEST_FAILONERROR"))
-    return 0;
-
-  Num = clang_getNumDiagnostics(TU);
-  for (i = 0; i != Num; ++i) {
-    Diag = clang_getDiagnostic(TU, i);
-    if (clang_getDiagnosticSeverity(Diag) >= CXDiagnostic_Error) {
-      DiagStr = clang_formatDiagnostic(Diag,
-                                       clang_defaultDiagnosticDisplayOptions());
-      fprintf(stderr, "%s\n", clang_getCString(DiagStr));
-      clang_disposeString(DiagStr);
-      clang_disposeDiagnostic(Diag);
-      return -1;
-    }
-    clang_disposeDiagnostic(Diag);
-  }
-
   return 0;
 }
 
@@ -499,38 +478,15 @@ int cindextest_main(int argc, const char **argv) {
 
 /***/
 
-/* We intentionally run in a separate thread to ensure we at least minimal
- * testing of a multithreaded environment (for example, having a reduced stack
- * size). */
-typedef struct thread_info {
-  int argc;
-  const char **argv;
-  int result;
-} thread_info;
-void thread_runner(void *client_data_v) {
-  thread_info *client_data = reinterpret_cast<thread_info* >(client_data_v);
-  client_data->result = cindextest_main(client_data->argc, client_data->argv);
-#ifdef __CYGWIN__
-  fflush(stdout);  /* stdout is not flushed on Cygwin. */
-#endif
-}
-
 #if 1
 int main(int argc, const char **argv) {
 #else
 int c_index_test(int argc, const char **argv) {
 #endif
-  thread_info client_data;
 
 #ifdef CLANG_HAVE_LIBXML
   LIBXML_TEST_VERSION
 #endif
 
-  if (getenv("CINDEXTEST_NOTHREADS"))
-    return cindextest_main(argc, argv);
-
-  client_data.argc = argc;
-  client_data.argv = argv;
-  clang_executeOnThread(thread_runner, &client_data, 0);
-  return client_data.result;
+  return cindextest_main(argc, argv);
 }

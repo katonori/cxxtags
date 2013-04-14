@@ -138,6 +138,11 @@ void fin(void)
     if(insert_list_overriden.size()) {
         insert_overriden_value_core();
     }
+    // create indices
+    sqlite3_exec(db, "CREATE INDEX ref_index0 ON ref(file_name, name, line, col);", NULL, NULL, NULL);
+    sqlite3_exec(db, "CREATE INDEX ref_index1 ON ref(file_name);", NULL, NULL, NULL);
+    sqlite3_exec(db, "CREATE INDEX decl_index0 ON decl(file_name, name, line, col);", NULL, NULL, NULL);
+    sqlite3_exec(db, "CREATE INDEX decl_index1 ON decl(file_name)", NULL, NULL, NULL);
     // end transaction
     sqlite3_exec(db, "END TRANSACTION;", NULL, NULL, NULL);
     if(SQLITE_OK != sqlite3_close(db)) {

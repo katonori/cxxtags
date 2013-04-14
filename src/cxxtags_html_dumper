@@ -10,7 +10,7 @@ import shutil
 import sqlite3
 import time
 import fpformat
-import traceback
+import cxxtags_util
 
 TXT_DELIM = '\1'
 FILE_INDEX_DB_NAME = "file_index.db"
@@ -131,13 +131,12 @@ g_html_file_dict = {}
 g_file_cnt = 0
 g_file_cnt_ref = 0
 OUT_DIR = "html"
-OUT_DB_DIR = "db"
 REF_DIR = "ref"
 LOC_ANCHOR_PREFIX = "a_loc"
 LOC_SPAN_PREFIX = "s_loc"
 db = None
 g_db_list = []
-g_db_file_dict = {}
+g_src_file_dict = {}
 
 # register html files to be generated to the dictionary.
 def add_html_file(path):
@@ -149,7 +148,7 @@ def add_html_file(path):
     fn = ""
     bn = os.path.basename(path)
     if g_html_file_dict.has_key(path):
-        my_exit(1, "ERROR: %s is already registered" % (path))
+        cxxtags_util.my_exit(1, "ERROR: %s is already registered" % (path))
     else:
         fn = "%s.%d" % (bn, g_file_cnt)
         g_file_cnt += 1
@@ -189,7 +188,7 @@ def get_file_name(path):
     global OUT_DIR
     fn = ""
     if not g_html_file_dict.has_key(path):
-        my_exit(1, "ERROR: output file for %s is not found" % (path))
+        cxxtags_util.my_exit(1, "ERROR: output file for %s is not found" % (path))
     else:
         fn = g_html_file_dict[path]
     return fn
@@ -197,7 +196,7 @@ def get_file_name(path):
 # generate link html to a file
 def gen_link_html(file_name, line, col):
     if not g_html_file_dict.has_key(file_name):
-        my_exit(1, "ERROR: fopen: " + file_name)
+        cxxtags_util.my_exit(1, "ERROR: fopen: " + file_name)
     str = "<a href=\"../%s#a_loc_%d\">%s, %d, %d</a>\n" % (g_html_file_dict[file_name]+".html", line, file_name, line, col)
     return str
 
@@ -256,7 +255,7 @@ def proc_file(fn):
     fo.write("<h3>%s</h3>\n"%(fn))
     fo.write("<pre>\n")
     is_in_comment = 0
-    db = my_db_connect(g_db_file_dict[fn])
+    db = cxxtags_util.my_db_connect(g_src_file_dict[fn])
     for line in fi.readlines():
         line_len = len(line)
         idx = 0
@@ -378,7 +377,7 @@ def get_line(fn, line_no):
     all_lines = fi.readlines()
     str_line = ""
     if len(all_lines) < line_no:
-        my_exit(1, "ERROR: line: %s, %s, %d, %d\n"%(name, fn, line_no, col))
+        cxxtags_util.my_exit(1, "ERROR: line: %s, %s, %d, %d\n"%(name, fn, line_no, col))
     else:
         str_line = all_lines[line_no-1]
     str_line = re.sub("\n", "", str_line)
@@ -391,7 +390,7 @@ def gen_ref_info_txt():
     done_dict = {}
     for db_fn in g_db_list:
         print "gen_ref: " + db_fn
-        db = my_db_connect(db_fn)
+        db = cxxtags_util.my_db_connect(db_fn)
         columns = "usr, line, col, file_name, name, kind, ref_file_name, ref_line, ref_col"
         res = db.execute("SELECT " + columns + " FROM ref")
         for i in res.fetchall():
@@ -410,7 +409,7 @@ def gen_ref_info_txt():
                 if fn == None:
                     fn = add_info_file(ref_usr)
                 if fn == None:
-                    my_exit(1, "ERROR: REF_FILE: " + ref_usr)
+                    cxxtags_util.my_exit(1, "ERROR: REF_FILE: " + ref_usr)
                 fo_txt = open("%s/%s.txt"%(OUT_DIR, fn), 'a+')
                 str_line = get_line(file_name, line)
                 fo_txt.write("refered: "+ref_info_str+str_line+"\n")
@@ -424,7 +423,7 @@ def gen_decl_info():
     done_dict = {}
     for db_fn in g_db_list:
         print "gen_decl: " + db_fn
-        db = my_db_connect(db_fn)
+        db = cxxtags_util.my_db_connect(db_fn)
         res = db.execute("SELECT usr, line, col, file_name, name, kind, val, is_virtual, is_def FROM decl")
         for i in res.fetchall():
             # get values from a query result
@@ -442,7 +441,7 @@ def gen_decl_info():
                 if fn == None:
                     fn = add_info_file(usr)
                 if fn == None:
-                    my_exit(1, "ERROR: REF_FILE: " + usr)
+                    cxxtags_util.my_exit(1, "ERROR: REF_FILE: " + usr)
                 fo_txt = open("%s/%s.txt"%(OUT_DIR, fn), 'a+')
                 str_line = get_line(file_name, line)
                 if is_def == 1:
@@ -460,7 +459,7 @@ def gen_override_info():
     done_dict = {}
     for db_fn in g_db_list:
         print "gen_overriden: " + db_fn
-        db = my_db_connect(db_fn)
+        db = cxxtags_util.my_db_connect(db_fn)
         res = db.execute("SELECT usr, name, file_name, line, col, kind, usr_overrider, is_def FROM overriden")
         for row in res.fetchall():
             # get values from a query result
@@ -515,7 +514,7 @@ def gen_info_html():
     done_check = {}
     for db_fn in g_db_list:
         print "gen_info_html: " + db_fn
-        db = my_db_connect(db_fn)
+        db = cxxtags_util.my_db_connect(db_fn)
         res = db.execute("SELECT usr, line, col, file_name, name, kind FROM decl")
         #for i in  g_html_file_dict.keys():
         for i in res.fetchall():
@@ -619,69 +618,31 @@ span.pp {
     #fo.write("table.loc td { font-family: monospace }\n")
     fo.close()
 
-def my_exit(val, msg):
-    traceback.print_stack()
-    print msg
-    sys.exit(val)
-
-def my_db_connect(fn):
-    if not os.path.exists(fn):
-        my_exit(1, "ERROR: DB connect: "+fn)
-    db = sqlite3.connect(fn, isolation_level='EXCLUSIVE')
-    return db
-
-# make index to databases
-def make_index_db(db_file_name):
-    global OUT_DIR
-    global OUT_DB_DIR
-    db_dir = OUT_DIR + "/" + OUT_DB_DIR
-    # copy datababse file becase idexing db modifies the db file.
-    shutil.copy(db_file_name, db_dir)
-    db_file_name = db_dir + "/" + os.path.basename(db_file_name)
-    print "ADD_INDEX: " + db_file_name
-    # connect to db
-    db = my_db_connect(db_file_name)
-    # create index
-    st = time.time()
-    q = "CREATE INDEX ref_index0 ON ref(file_name, name, line, col)"
-    res = db.execute(q)
-    q = "CREATE INDEX decl_index0 ON decl(file_name, name, line, col)"
-    res = db.execute(q)
-    q = "CREATE INDEX ref_index1 ON ref(file_name)"
-    res = db.execute(q)
-    q = "CREATE INDEX decl_index1 ON decl(file_name)"
-    res = db.execute(q)
-    #print "    CREATE_INDEX: " + str(time.time()-st)
-    db.close()
-    return db_file_name # new db file location
-
 ### main ###
 def main():
     global g_db_list
-    global g_db_file_dict
-    global OUT_DB_DIR
+    global g_src_file_dict
     db_in_dir  = sys.argv[1]
 
     # make output dir
     if os.path.exists(OUT_DIR):
         shutil.rmtree(OUT_DIR)
     os.mkdir(OUT_DIR)
-    os.mkdir(OUT_DIR + "/" + OUT_DB_DIR)
     os.mkdir("%s/%s" % (OUT_DIR, REF_DIR))
 
     # build file list from file index
-    db_idx = my_db_connect(db_in_dir + "/" + FILE_INDEX_DB_NAME)
+    db_idx = cxxtags_util.my_db_connect(db_in_dir + "/" + FILE_INDEX_DB_NAME)
     res = db_idx.execute("SELECT file_name, db_file FROM file_index")
-    new_db_loc_dict = {}
+    added_db_dict = {}
     for row in res.fetchall():
         fn = row[0]
         db_fn = db_in_dir + "/" + row[1]
-        if not new_db_loc_dict.has_key(db_fn):
-            new_loc = make_index_db(db_fn)
-            new_db_loc_dict[db_fn] = new_loc
-            g_db_list.append(new_loc)
-        if not g_db_file_dict.has_key(fn):
-            g_db_file_dict[fn] = new_db_loc_dict[db_fn]
+        if not added_db_dict.has_key(db_fn):
+            #new_loc = make_index_db(db_fn)
+            added_db_dict[db_fn] = db_fn
+            g_db_list.append(db_fn)
+        if not g_src_file_dict.has_key(fn):
+            g_src_file_dict[fn] = db_fn
             # decide file name
             add_html_file(fn)
     db_idx.close()
@@ -705,7 +666,7 @@ def main():
     gen_info_html()
     #print "    GEN_INFO_HTML = " + fpformat.fix(time.time()-st,3)
 
-    for f in g_db_file_dict.keys():
+    for f in g_src_file_dict.keys():
         print "%s" % (f)
         proc_file(f)
 # run script

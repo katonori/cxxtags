@@ -63,6 +63,7 @@ if argv == None:
 if not os.path.exists(in_file):
     print "ERROR: file not found: %s\n"%(in_file)
     exit(1)
+in_file = os.path.abspath(in_file)
 
 # get current directory
 cur_dir = os.getcwd()

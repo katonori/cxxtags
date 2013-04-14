@@ -10,8 +10,10 @@ import shutil
 import sqlite3
 import time
 import fpformat
+import traceback
 
-TXT_DELIM = '\0'
+TXT_DELIM = '\1'
+FILE_INDEX_DB_NAME = "file_index.db"
 
 KEYWORDS = [
     "asm",
@@ -125,45 +127,48 @@ if (document.addEventListener) {
 //-->
 """
 
-file_dict = {}
-ref_file_dict = {}
-file_cnt = 0
-file_cnt_ref = 0
-OUT_DIR = "./html/"
-REF_DIR = "./ref"
+g_html_file_dict = {}
+g_file_cnt = 0
+g_file_cnt_ref = 0
+OUT_DIR = "html"
+OUT_DB_DIR = "db"
+REF_DIR = "ref"
 LOC_ANCHOR_PREFIX = "a_loc"
 LOC_SPAN_PREFIX = "s_loc"
 db = None
+g_db_list = []
+g_db_file_dict = {}
 
-# register html files to be generated.
+# register html files to be generated to the dictionary.
 def add_html_file(path):
-    global file_dict
-    global file_cnt
+    global g_html_file_dict
+    global g_file_cnt
     global OUT_DIR
     if path == None or path == "":
         return
     fn = ""
     bn = os.path.basename(path)
-    if file_dict.has_key(path):
-        print "ERROR: %s is already registered.\n" % (path)
+    if g_html_file_dict.has_key(path):
+        my_exit(1, "ERROR: %s is already registered" % (path))
     else:
-        fn = "%s.%d" % (bn, file_cnt)
-        file_cnt += 1
-        file_dict[path] = fn
+        fn = "%s.%d" % (bn, g_file_cnt)
+        g_file_cnt += 1
+        g_html_file_dict[path] = fn
 
-# get file name from usr
+# get file name by USR
 def get_info_file(usr):
-    global file_dict
+    global g_html_file_dict
     if usr == None or usr == "":
         return None
     fn = None
-    if file_dict.has_key(usr):
-        fn = file_dict[usr]
+    if g_html_file_dict.has_key(usr):
+        fn = g_html_file_dict[usr]
     return fn
 
+# decide file name and register to the dictionary
 def add_info_file(usr):
-    global file_dict
-    global file_cnt_ref
+    global g_html_file_dict
+    global g_file_cnt_ref
     if usr == None or usr == "":
         return None
     # generate file name from usr
@@ -173,47 +178,42 @@ def add_info_file(usr):
     fn_len = len(fn)
     if fn_len > 128:
         fn = "_" + fn[fn_len-128:]
-    fn = "ref/%s.%d" % (fn, file_cnt_ref)
-    file_cnt_ref += 1
-    file_dict[usr] = fn
+    fn = "ref/%s.%d" % (fn, g_file_cnt_ref)
+    g_file_cnt_ref += 1
+    g_html_file_dict[usr] = fn
     return fn
 
-# get file name by path.
+# get html file name by path.
 def get_file_name(path):
-    global file_dict
-    global file_cnt
+    global g_html_file_dict
     global OUT_DIR
     fn = ""
-    if not file_dict.has_key(path):
-        print "ERROR: output file for %s is not found.\n" % (path)
+    if not g_html_file_dict.has_key(path):
+        my_exit(1, "ERROR: output file for %s is not found" % (path))
     else:
-        fn = file_dict[path]
+        fn = g_html_file_dict[path]
     return fn
 
-def get_src_ref_line(file_name, line, col):
-    if not file_dict.has_key(file_name):
-        print "ERROR: fopen"
-        exit(1)
-    str = "<a href=\"../%s#a_loc_%d\">%s, %d, %d</a>\n" % (file_dict[file_name]+".html", line, file_name, line, col)
+# generate link html to a file
+def gen_link_html(file_name, line, col):
+    if not g_html_file_dict.has_key(file_name):
+        my_exit(1, "ERROR: fopen: " + file_name)
+    str = "<a href=\"../%s#a_loc_%d\">%s, %d, %d</a>\n" % (g_html_file_dict[file_name]+".html", line, file_name, line, col)
     return str
 
-def get_link(file_name, word, line, col):
-    global file_dict
-    global file_cnt
+# return location to link by word information
+def get_loc_to_link(db, file_name, word, line, col):
+    global g_html_file_dict
     global OUT_DIR
     global LOC_ANCHOR_PREFIX
-    global db
+    global g_db_list
     #print "GET: %s, %d, %d, %s" %(word, line, col, file_name)
     # ref
-    q = "SELECT usr, ref_file_name, ref_line, ref_col FROM ref WHERE file_name='%s' AND name='%s' AND line=%d AND col=%d" % (file_name, word, line, col)
-    res = db.execute(q)
+    res = db.execute("SELECT usr, ref_file_name, ref_line, ref_col FROM ref WHERE file_name='%s' AND name='%s' AND line=%d AND col=%d" % (file_name, word, line, col))
     for ref_row in res.fetchall():
-        ref_usr = ref_row[0]
-        ref_file_name = ref_row[1]
-        ref_line = ref_row[2]
-        ref_col = ref_row[3]
-        if file_dict.has_key(ref_file_name):
-            link = "%s#%s_%d" % (file_dict[ref_file_name]+".html", LOC_ANCHOR_PREFIX, ref_line)
+        ref_usr, ref_file_name, ref_line, ref_col = ref_row
+        if g_html_file_dict.has_key(ref_file_name):
+            link = "%s#%s_%d" % (g_html_file_dict[ref_file_name]+".html", LOC_ANCHOR_PREFIX, ref_line)
             return link
     # decl
     q = "SELECT usr FROM decl WHERE file_name='%s' AND name='%s' AND line=%d AND col=%d" % (file_name, word, line, col)
@@ -226,10 +226,6 @@ def get_link(file_name, word, line, col):
             #print "DECL: %s, %d, %d, %s" %(word, line, col, html_fn)
             return fn
     return None
-
-def q_str(q):
-    global db
-    db.execute(q)
 
 def replace_html_special_char(str):
     str = re.sub(r"<", "&lt", str)
@@ -245,7 +241,7 @@ def proc_file(fn):
     global OUT_DIR
     fi = open(u"%s" % (fn), 'r')
     line_no = 1
-    fo_name = OUT_DIR + get_file_name(fn)
+    fo_name = OUT_DIR + "/" + get_file_name(fn)
     fo = open(u"%s.html" % (fo_name), 'w')
     #print "%s->%s" % (fn, fo_name)
     fo.write("<?xml version=\"1.0\" encoding=\"shift_jis\"?>\n")
@@ -260,6 +256,7 @@ def proc_file(fn):
     fo.write("<h3>%s</h3>\n"%(fn))
     fo.write("<pre>\n")
     is_in_comment = 0
+    db = my_db_connect(g_db_file_dict[fn])
     for line in fi.readlines():
         line_len = len(line)
         idx = 0
@@ -323,7 +320,7 @@ def proc_file(fn):
                     if val in KEYWORDS:
                         fo.write("<span class=\"kw\">%s</span>" % (val))
                     else:
-                        link = get_link(fn, val, line_no, idx+1)
+                        link = get_loc_to_link(db, fn, val, line_no, idx+1)
                         if link:
                             fo.write("<a href=\"%s\">%s</a>" % (link, val))
                         else:
@@ -371,284 +368,225 @@ def proc_file(fn):
                 idx += len(val)
         line_no += 1
         fo.write("</a>\n")
+    db.close()
     fi.close()
     fo.close()
 
-def gen_ref_info():
+def get_line(fn, line_no):
     global OUT_DIR
-    q = "SELECT usr, line, col, file_name, name, kind, ref_file_name, ref_line, ref_col FROM ref"
-    res = db.execute(q)
-    for i in res.fetchall():
-        ref_usr = i[0]
-        line = i[1]
-        col = i[2]
-        file_name = i[3]
-        name = i[4]
-        kind = i[5]
-        ref_file_name = i[6]
-        ref_line = i[7]
-        ref_col = i[8]
-        #print "REF_FILE: %s, %d, %d, %s, %s, %s, %s, %d, %d\n"%(ref_usr, line, col, file_name, name, kind, ref_file_name, ref_line, ref_col)
-        # add to reference list
-        if ref_usr != "" and file_name != "":
-            fn = get_info_file(ref_usr)
-            if fn == None:
-                fn = add_info_file(ref_usr)
-            if fn == None:
-                print "ERROR: REF_FILE\n"
-                exit(1)
-            fo_txt = open("%s/%s.txt"%(OUT_DIR, fn), 'a+')
-            fi = open(file_name, 'r')
-            all_lines = fi.readlines()
-            str_line = ""
-            if len(all_lines) < line:
-                print "ERROR: line: %s, %s, %d, %d\n"%(name, file_name, line, col)
-                exit(1)
-            else:
-                str_line = all_lines[line-1]
-            str_line = re.sub("\n", "", str_line)
-            fo_txt.write("refered: "+ref_usr+TXT_DELIM+file_name+TXT_DELIM+str(line)+TXT_DELIM+str(col)+TXT_DELIM+str_line+"\n")
-            fo_txt.close()
+    fi = open(fn, 'r')
+    all_lines = fi.readlines()
+    str_line = ""
+    if len(all_lines) < line_no:
+        my_exit(1, "ERROR: line: %s, %s, %d, %d\n"%(name, fn, line_no, col))
+    else:
+        str_line = all_lines[line_no-1]
+    str_line = re.sub("\n", "", str_line)
+    return str_line
 
+# generate text files that reference informations are listed
+def gen_ref_info_txt():
+    global OUT_DIR
+    global g_db_list
+    done_dict = {}
+    for db_fn in g_db_list:
+        print "gen_ref: " + db_fn
+        db = my_db_connect(db_fn)
+        columns = "usr, line, col, file_name, name, kind, ref_file_name, ref_line, ref_col"
+        res = db.execute("SELECT " + columns + " FROM ref")
+        for i in res.fetchall():
+            # get values from a query result
+            ref_usr, line, col, file_name, name, kind, ref_file_name, ref_line, ref_col = i
+            #print "REF_FILE: %s, %d, %d, %s, %s, %s, %s, %d, %d\n"%(ref_usr, line, col, file_name, name, kind, ref_file_name, ref_line, ref_col)
+            # add to reference list
+            if ref_usr != "" and file_name != "":
+                ref_info_str = ref_usr+TXT_DELIM+file_name+TXT_DELIM+str(line)+TXT_DELIM+str(col)+TXT_DELIM
+                # check if it's already processed
+                if done_dict.has_key(ref_info_str):
+                    continue
+                done_dict[ref_info_str] = 1
+
+                fn = get_info_file(ref_usr)
+                if fn == None:
+                    fn = add_info_file(ref_usr)
+                if fn == None:
+                    my_exit(1, "ERROR: REF_FILE: " + ref_usr)
+                fo_txt = open("%s/%s.txt"%(OUT_DIR, fn), 'a+')
+                str_line = get_line(file_name, line)
+                fo_txt.write("refered: "+ref_info_str+str_line+"\n")
+                fo_txt.close()
+        db.close()
+
+# generate text files that declaration informations are listed
 def gen_decl_info():
     global OUT_DIR
-    q = "SELECT usr, line, col, file_name, name, kind, val, is_virtual, is_def FROM decl"
-    res = db.execute(q)
-    for i in res.fetchall():
-        usr = i[0]
-        line = i[1]
-        col = i[2]
-        file_name = i[3]
-        name = i[4]
-        kind = i[5]
-        val = i[6]
-        is_virtual = i[7]
-        is_def = i[8]
-        #print "REF_FILE: %s, %d, %d, %s, %s, %s, %s, %d, %d\n"%(ref_usr, line, col, file_name, name, kind, ref_file_name, ref_line, ref_col)
-        # add to reference list
-        if usr != "" and file_name != "":
+    global g_db_list
+    done_dict = {}
+    for db_fn in g_db_list:
+        print "gen_decl: " + db_fn
+        db = my_db_connect(db_fn)
+        res = db.execute("SELECT usr, line, col, file_name, name, kind, val, is_virtual, is_def FROM decl")
+        for i in res.fetchall():
+            # get values from a query result
+            usr, line, col, file_name, name, kind, val, is_virtual, is_def = i
+            #print "REF_FILE: %s, %d, %d, %s, %s, %s, %s, %d, %d\n"%(ref_usr, line, col, file_name, name, kind, ref_file_name, ref_line, ref_col)
+            # add to reference list
+            if usr != "" and file_name != "":
+                decl_info_str = usr+TXT_DELIM+file_name+TXT_DELIM+str(line)+TXT_DELIM+str(col)+TXT_DELIM
+                # check if it's already processed
+                if done_dict.has_key(decl_info_str):
+                    continue
+                done_dict[decl_info_str] = 1
+
+                fn = get_info_file(usr)
+                if fn == None:
+                    fn = add_info_file(usr)
+                if fn == None:
+                    my_exit(1, "ERROR: REF_FILE: " + usr)
+                fo_txt = open("%s/%s.txt"%(OUT_DIR, fn), 'a+')
+                str_line = get_line(file_name, line)
+                if is_def == 1:
+                    fo_txt.write("defined: ")
+                else:
+                    fo_txt.write("declared: ")
+                fo_txt.write(decl_info_str+str_line+"\n")
+                fo_txt.close()
+        db.close()
+
+# generate text files that override informations are listed
+def gen_override_info():
+    global OUT_DIR
+    global g_db_list
+    done_dict = {}
+    for db_fn in g_db_list:
+        print "gen_overriden: " + db_fn
+        db = my_db_connect(db_fn)
+        res = db.execute("SELECT usr, name, file_name, line, col, kind, usr_overrider, is_def FROM overriden")
+        for row in res.fetchall():
+            # get values from a query result
+            usr, name, file_name, line, col, kind, usr_overrider, is_def = row
             fn = get_info_file(usr)
+            ovr_info_str = usr+TXT_DELIM+file_name+TXT_DELIM+str(line)+TXT_DELIM+str(col)+TXT_DELIM+usr_overrider
+            # check if it's already processed
+            if done_dict.has_key(ovr_info_str):
+                continue
+            done_dict[ovr_info_str] = 1
+
             if fn == None:
                 fn = add_info_file(usr)
-            if fn == None:
-                print "ERROR: REF_FILE\n"
-                exit(1)
-            fo_txt = open("%s/%s.txt"%(OUT_DIR, fn), 'a+')
-            fi = open(file_name, 'r')
-            all_lines = fi.readlines()
-            str_line = ""
-            if len(all_lines) < line:
-                print "ERROR: line: %s, %s, %d, %d\n"%(name, file_name, line, col)
-                exit(1)
-            else:
-                str_line = all_lines[line-1]
-            str_line = re.sub("\n", "", str_line)
-            if is_def == 1:
-                fo_txt.write("defined: ")
-            else:
-                fo_txt.write("declared: ")
-            fo_txt.write(usr+TXT_DELIM+file_name+TXT_DELIM+str(line)+TXT_DELIM+str(col)+TXT_DELIM+str_line+"\n")
-            fo_txt.close()
-
-def gen_override_info():
-    global OUT_DIR
-    q = "SELECT usr, name, file_name, line, col, kind, usr_overrider, is_def FROM overriden"
-    res = db.execute(q)
-    for row in res.fetchall():
-        usr = row[0]
-        name = row[1]
-        file_name = row[2]
-        line = row[3]
-        col = row[4]
-        kind = row[5]
-        usr_overrider = row[6]
-        is_def = row[7]
-        fn = get_info_file(usr)
-        if fn == None:
-            fn = add_info_file(usr)
-        fo = open(OUT_DIR+fn+".txt", "a")
-        fo.write("overriden: "+usr+TXT_DELIM+file_name+TXT_DELIM+str(line)+TXT_DELIM+str(col)+TXT_DELIM+usr_overrider+"\n")
-        fo.close()
-        fn = get_info_file(usr_overrider)
-        if fn == None:
-            fn = add_info_file(usr_overrider)
-        fo = open(OUT_DIR+fn+".txt", "a")
-        q = "SELECT name, file_name, line, col, kind FROM decl WHERE usr='%s' ORDER BY is_def"%(usr_overrider)
-        res = db.execute(q)
-        all_rows = res.fetchall()
-        if all_rows:
-            row = all_rows[0]
-            name = row[0]
-            file_name = row[1]
-            line = row[2]
-            col = row[3]
-            kind = row[4]
+            fo = open(OUT_DIR+"/"+fn+".txt", "a")
+            fo.write("overriden: "+ovr_info_str+"\n")
+            fo.close()
             fn = get_info_file(usr_overrider)
             if fn == None:
                 fn = add_info_file(usr_overrider)
-            fo = open(OUT_DIR+fn+".txt", "a")
-            fo.write("override: "+usr_overrider+TXT_DELIM+file_name+TXT_DELIM+str(line)+TXT_DELIM+str(col)+TXT_DELIM+usr+"\n")
-        fo.close()
+            fo = open(OUT_DIR+"/"+fn+".txt", "a")
+            q = "SELECT name, file_name, line, col, kind FROM decl WHERE usr='%s' ORDER BY is_def"%(usr_overrider)
+            res = db.execute(q)
+            row = res.fetchone()
+            if row:
+                name, file_name, line, col, kind = row
+                fn = get_info_file(usr_overrider)
+                if fn == None:
+                    fn = add_info_file(usr_overrider)
+                fo = open(OUT_DIR+"/"+fn+".txt", "a")
+                fo.write("override: "+usr_overrider+TXT_DELIM+file_name+TXT_DELIM+str(line)+TXT_DELIM+str(col)+TXT_DELIM+usr+"\n")
+            fo.close()
+        db.close()
 
-def gen_override_info():
-    global OUT_DIR
-    q = "SELECT usr, name, file_name, line, col, kind, usr_overrider, is_def FROM overriden"
-    res = db.execute(q)
-    for row in res.fetchall():
-        usr = row[0]
-        name = row[1]
-        file_name = row[2]
-        line = row[3]
-        col = row[4]
-        kind = row[5]
-        usr_overrider = row[6]
-        is_def = row[7]
-        fn = get_info_file(usr)
-        if fn == None:
-            fn = add_info_file(usr)
-        fo = open(OUT_DIR+fn+".txt", "a")
-        fo.write("overriden: "+usr+TXT_DELIM+file_name+TXT_DELIM+str(line)+TXT_DELIM+str(col)+TXT_DELIM+usr_overrider+"\n")
-        fo.close()
-        fn = get_info_file(usr_overrider)
-        if fn == None:
-            fn = add_info_file(usr_overrider)
-        fo = open(OUT_DIR+fn+".txt", "a")
-        q = "SELECT name, file_name, line, col, kind FROM decl WHERE usr='%s' ORDER BY is_def"%(usr_overrider)
-        res = db.execute(q)
-        all_rows = res.fetchall()
-        if all_rows:
-            row = all_rows[0]
-            name = row[0]
-            file_name = row[1]
-            line = row[2]
-            col = row[3]
-            kind = row[4]
-            fn = get_info_file(usr_overrider)
-            if fn == None:
-                fn = add_info_file(usr_overrider)
-            fo = open(OUT_DIR+fn+".txt", "a")
-            fo.write("override: "+usr_overrider+TXT_DELIM+file_name+TXT_DELIM+str(line)+TXT_DELIM+str(col)+TXT_DELIM+usr+"\n")
-        fo.close()
+# print table data for "declared", "defined" and "refered" information.
+def print_info_table_data(fo_html, name, info_list):
+    td_format = "<td aligh=\"left\">%s</td><td><pre>    </pre></td><td>%s</td>\n"
+    fo_html.write("<h3>" + name + "</h3>\n")
+    fo_html.write("<table class=\"loc\">\n")
+    for i in info_list:
+        col_list = i.split(TXT_DELIM)
+        col_usr, col_file_name, col_line, col_col = col_list[:4]
+        col_str = string.join(col_list[4:],"")
+        fo_html.write("<tr>\n")
+        fo_html.write(td_format % (gen_link_html(col_file_name, int(col_line), int(col_col)), col_str))
+        fo_html.write("</tr>\n")
+    fo_html.write("</table>\n")
 
 # generate formatted html file from txt file
 def gen_info_html():
     global OUT_DIR
-    q = "SELECT usr, line, col, file_name, name, kind FROM decl"
-    res = db.execute(q)
-    #for i in  file_dict.keys():
-    for i in res.fetchall():
-        ref_usr = i[0]
-        line = i[1]
-        col = i[2]
-        file_name = i[3]
-        name = i[4]
-        kind = i[5]
-        #print "REF_FILE: %s, %d, %d, %s, %s, %s\n"%(ref_usr, int(line), int(col), file_name, name, kind)
-        # add to reference list
-        if ref_usr != "" and file_name != "":
-            fn = get_info_file(ref_usr)
-            if fn == None:
-                continue
-            ref_list = []
-            override_list = []
-            overriden_list = []
-            declared_list = []
-            defined_list = []
+    global g_db_list
+    done_check = {}
+    for db_fn in g_db_list:
+        print "gen_info_html: " + db_fn
+        db = my_db_connect(db_fn)
+        res = db.execute("SELECT usr, line, col, file_name, name, kind FROM decl")
+        #for i in  g_html_file_dict.keys():
+        for i in res.fetchall():
+            ref_usr, line, col, file_name, name, kind = i
+            #print "REF_FILE: %s, %d, %d, %s, %s, %s\n"%(ref_usr, int(line), int(col), file_name, name, kind)
+            # add to reference list
+            if ref_usr != "" and file_name != "":
+                if done_check.has_key(ref_usr):
+                    continue
+                fn = get_info_file(ref_usr)
+                if fn == None:
+                    continue
+                ref_list = []
+                override_list = []
+                overriden_list = []
+                declared_list = []
+                defined_list = []
 
-            txt_name = "%s/%s.txt"%(OUT_DIR, fn)
-            if os.path.exists(txt_name):
-                fi_txt = open("%s/%s.txt"%(OUT_DIR, fn), 'r')
-                for line in fi_txt.readlines():
-                    m = re.search("^refered: (.*)$", line)
-                    if m:
-                        ref_list.append(m.group(1))
-                    m = re.search("^override: (.*)$", line)
-                    if m:
-                        override_list.append(m.group(1))
-                    m = re.search("^overriden: (.*)$", line)
-                    if m:
-                        overriden_list.append(m.group(1))
-                    m = re.search("^declared: (.*)$", line)
-                    if m:
-                        declared_list.append(m.group(1))
-                    m = re.search("^defined: (.*)$", line)
-                    if m:
-                        defined_list.append(m.group(1))
+                txt_name = "%s/%s.txt"%(OUT_DIR, fn)
+                if os.path.exists(txt_name):
+                    fi_txt = open("%s/%s.txt"%(OUT_DIR, fn), 'r')
+                    for line in fi_txt.readlines():
+                        m = re.search("^refered: (.*)$", line)
+                        if m:
+                            ref_list.append(m.group(1))
+                        m = re.search("^override: (.*)$", line)
+                        if m:
+                            override_list.append(m.group(1))
+                        m = re.search("^overriden: (.*)$", line)
+                        if m:
+                            overriden_list.append(m.group(1))
+                        m = re.search("^declared: (.*)$", line)
+                        if m:
+                            declared_list.append(m.group(1))
+                        m = re.search("^defined: (.*)$", line)
+                        if m:
+                            defined_list.append(m.group(1))
 
-            fo_html = open("%s/%s.html"%(OUT_DIR, fn), 'w')
-            fo_html.write("<link rel=\"stylesheet\" href=\"../style.css\">\n")
-            fo_html.write("<body>\n")
-            fo_html.write("<h1>%s</h1>\n"%(name))
-            #fo_html.write("<a href=\"../%s.txt\">../%s.txt</a><BR>\n"%(fn, fn))
-            fo_html.write("<h3>USR</h3>\n")
-            fo_html.write("%s<BR>\n"%(ref_usr))
-            # declared
-            if len(declared_list) != 0:
-                fo_html.write("<h3>declared</h3>\n")
-                fo_html.write("<table class=\"loc\">\n")
-                for i in declared_list:
-                    col_list = i.split(TXT_DELIM)
-                    col_usr = col_list[0]
-                    col_file_name = col_list[1]
-                    col_line = col_list[2]
-                    col_col = col_list[3]
-                    col_str = string.join(col_list[4:],"")
-                    fo_html.write("<tr>\n")
-                    fo_html.write("<td aligh=\"left\">%s</td><td><pre>    </pre></td><td>%s</td>\n"%(get_src_ref_line(col_file_name, int(col_line), int(col_col)), col_str))
-                    fo_html.write("</tr>\n")
-                fo_html.write("</table>\n")
-            # defined
-            if len(defined_list) != 0:
-                fo_html.write("<h3>defined</h3>\n")
-                fo_html.write("<table class=\"loc\">\n")
-                for i in defined_list:
-                    col_list = i.split(TXT_DELIM)
-                    col_usr = col_list[0]
-                    col_file_name = col_list[1]
-                    col_line = col_list[2]
-                    col_col = col_list[3]
-                    col_str = string.join(col_list[4:],"")
-                    fo_html.write("<tr>\n")
-                    fo_html.write("<td aligh=\"left\">%s</td><td><pre>    </pre></td><td>%s</td>\n"%(get_src_ref_line(col_file_name, int(col_line), int(col_col)), col_str))
-                    fo_html.write("</tr>\n")
-                fo_html.write("</table>\n")
-            # refered
-            if len(ref_list) != 0:
-                fo_html.write("<h3>refered</h3>\n")
-                fo_html.write("<table class=\"loc\">\n")
-                for i in ref_list:
-                    col_list = i.split(TXT_DELIM)
-                    col_usr = col_list[0]
-                    col_file_name = col_list[1]
-                    col_line = col_list[2]
-                    col_col = col_list[3]
-                    col_str = string.join(col_list[4:],"")
-                    fo_html.write("<tr>\n")
-                    fo_html.write("<td aligh=\"left\">%s</td><td><pre>    </pre></td><td>%s</td>\n"%(get_src_ref_line(col_file_name, int(col_line), int(col_col)), col_str))
-                    fo_html.write("</tr>\n")
-                fo_html.write("</table>\n")
-            if len(override_list) != 0:
-                fo_html.write("<h3>oveerride</h3>")
-                for i in override_list:
-                    col_list = i.split(TXT_DELIM)
-                    col_usr = col_list[0]
-                    col_file_name = col_list[1]
-                    col_line = col_list[2]
-                    col_col = col_list[3]
-                    col_usr_overrider = col_list[4]
-                    fo_html.write("%s %s<BR>"%(get_src_ref_line(col_file_name, int(col_line), int(col_col)), col_usr_overrider))
-            if len(overriden_list) != 0:
-                fo_html.write("<h3>oveerriden</h3>")
-                for i in overriden_list:
-                    col_list = i.split(TXT_DELIM)
-                    col_usr = col_list[0]
-                    col_file_name = col_list[1]
-                    col_line = col_list[2]
-                    col_col = col_list[3]
-                    col_usr_overrider = col_list[4]
-                    fo_html.write("%s %s<BR>"%(get_src_ref_line(col_file_name, int(col_line), int(col_col)), col_usr_overrider))
-            fo_html.write("</body>\n")
-            fo_html.close()
+                fo_html = open("%s/%s.html"%(OUT_DIR, fn), 'w')
+                fo_html.write("<link rel=\"stylesheet\" href=\"../style.css\">\n")
+                fo_html.write("<body>\n")
+                fo_html.write("<h1>%s</h1>\n"%(name))
+                #fo_html.write("<a href=\"../%s.txt\">../%s.txt</a><BR>\n"%(fn, fn))
+                fo_html.write("<h3>USR</h3>\n")
+                fo_html.write("%s<BR>\n"%(ref_usr))
+                td_format = "<td aligh=\"left\">%s</td><td><pre>    </pre></td><td>%s</td>\n"
+                # declared
+                if len(declared_list) != 0:
+                    print_info_table_data(fo_html, "declared", declared_list)
+                # defined
+                if len(defined_list) != 0:
+                    print_info_table_data(fo_html, "defined", defined_list)
+                # refered
+                if len(ref_list) != 0:
+                    print_info_table_data(fo_html, "refered", ref_list)
+                if len(override_list) != 0:
+                    fo_html.write("<h3>oveerride</h3>")
+                    for i in override_list:
+                        col_list = i.split(TXT_DELIM)
+                        col_usr, col_file_name, col_line, col_col, col_usr_overrider = col_list
+                        fo_html.write("%s %s<BR>"%(gen_link_html(col_file_name, int(col_line), int(col_col)), col_usr_overrider))
+                if len(overriden_list) != 0:
+                    fo_html.write("<h3>oveerriden</h3>")
+                    for i in overriden_list:
+                        col_list = i.split(TXT_DELIM)
+                        col_usr, col_file_name, col_line, col_col, col_usr_overrider = col_list
+                        fo_html.write("%s %s<BR>"%(gen_link_html(col_file_name, int(col_line), int(col_col)), col_usr_overrider))
+                fo_html.write("</body>\n")
+                fo_html.close()
+                done_check[ref_usr] = 1
+        db.close()
 
 def gen_js():
     global OUT_DIR
@@ -659,7 +597,7 @@ def gen_js():
 
 def gen_css():
     global OUT_DIR
-    fo = open(OUT_DIR+"style.css", "w")
+    fo = open(OUT_DIR + "/" + "style.css", "w")
     fo.write("body { font-family: monospace; }\n")
     fo.write(
 """
@@ -681,68 +619,94 @@ span.pp {
     #fo.write("table.loc td { font-family: monospace }\n")
     fo.close()
 
+def my_exit(val, msg):
+    traceback.print_stack()
+    print msg
+    sys.exit(val)
+
+def my_db_connect(fn):
+    if not os.path.exists(fn):
+        my_exit(1, "ERROR: DB connect: "+fn)
+    db = sqlite3.connect(fn, isolation_level='EXCLUSIVE')
+    return db
+
+# make index to databases
+def make_index_db(db_file_name):
+    global OUT_DIR
+    global OUT_DB_DIR
+    db_dir = OUT_DIR + "/" + OUT_DB_DIR
+    # copy datababse file becase idexing db modifies the db file.
+    shutil.copy(db_file_name, db_dir)
+    db_file_name = db_dir + "/" + os.path.basename(db_file_name)
+    print "ADD_INDEX: " + db_file_name
+    # connect to db
+    db = my_db_connect(db_file_name)
+    # create index
+    st = time.time()
+    q = "CREATE INDEX ref_index0 ON ref(file_name, name, line, col)"
+    res = db.execute(q)
+    q = "CREATE INDEX decl_index0 ON decl(file_name, name, line, col)"
+    res = db.execute(q)
+    q = "CREATE INDEX ref_index1 ON ref(file_name)"
+    res = db.execute(q)
+    q = "CREATE INDEX decl_index1 ON decl(file_name)"
+    res = db.execute(q)
+    #print "    CREATE_INDEX: " + str(time.time()-st)
+    db.close()
+    return db_file_name # new db file location
+
 ### main ###
-db_file_name = sys.argv[1]
+def main():
+    global g_db_list
+    global g_db_file_dict
+    global OUT_DB_DIR
+    db_in_dir  = sys.argv[1]
 
-# make output dir
-if os.path.exists(OUT_DIR):
-    shutil.rmtree(OUT_DIR)
-os.mkdir(OUT_DIR)
-os.mkdir("%s/%s" % (OUT_DIR, REF_DIR))
+    # make output dir
+    if os.path.exists(OUT_DIR):
+        shutil.rmtree(OUT_DIR)
+    os.mkdir(OUT_DIR)
+    os.mkdir(OUT_DIR + "/" + OUT_DB_DIR)
+    os.mkdir("%s/%s" % (OUT_DIR, REF_DIR))
 
-# copy datababse file becase idexing db modifies db file.
-shutil.copy(db_file_name, OUT_DIR)
-db_file_name = OUT_DIR + "/" + os.path.basename(db_file_name)
+    # build file list from file index
+    db_idx = my_db_connect(db_in_dir + "/" + FILE_INDEX_DB_NAME)
+    res = db_idx.execute("SELECT file_name, db_file FROM file_index")
+    new_db_loc_dict = {}
+    for row in res.fetchall():
+        fn = row[0]
+        db_fn = db_in_dir + "/" + row[1]
+        if not new_db_loc_dict.has_key(db_fn):
+            new_loc = make_index_db(db_fn)
+            new_db_loc_dict[db_fn] = new_loc
+            g_db_list.append(new_loc)
+        if not g_db_file_dict.has_key(fn):
+            g_db_file_dict[fn] = new_db_loc_dict[db_fn]
+            # decide file name
+            add_html_file(fn)
+    db_idx.close()
 
-# connect to db
-db = sqlite3.connect(db_file_name)
-# create index
-st = time.time()
-q = "CREATE INDEX ref_index0 ON ref(file_name, name, line, col)"
-res = db.execute(q)
-q = "CREATE INDEX decl_index0 ON decl(file_name, name, line, col)"
-res = db.execute(q)
-q = "CREATE INDEX ref_index1 ON ref(file_name)"
-res = db.execute(q)
-q = "CREATE INDEX decl_index1 ON decl(file_name)"
-res = db.execute(q)
-#print "    CREATE_INDEX: " + str(time.time()-st)
+    gen_css()
+    gen_js()
+    # ref
+    st = time.time()
+    gen_ref_info_txt()
+    #print "    GEN_REF = " + fpformat.fix(time.time()-st,3)
+    # decl
+    st = time.time()
+    gen_decl_info()
+    #print "    GEN_DECL = " + fpformat.fix(time.time()-st,3)
+    # overriden
+    st = time.time()
+    gen_override_info()
+    #print "    GEN_OVERRIDEN = " + fpformat.fix(time.time()-st,3)
+    # info html
+    st = time.time()
+    gen_info_html()
+    #print "    GEN_INFO_HTML = " + fpformat.fix(time.time()-st,3)
 
-q = "SELECT file_name FROM ref WHERE file_name != ''"
-res = db.execute(q)
-file_list = res.fetchall()
-q = "SELECT file_name FROM decl WHERE file_name != ''"
-res = db.execute(q)
-file_list.extend(res.fetchall())
-# remove duplications
-file_list = list(set(file_list))
-
-# decide file name
-for f in file_list:
-    file_name = f[0]
-    add_html_file(file_name)
-
-gen_css()
-gen_js()
-# ref
-st = time.time()
-gen_ref_info()
-#print "    GEN_REF = " + fpformat.fix(time.time()-st,3)
-# decl
-st = time.time()
-gen_decl_info()
-#print "    GEN_DECL = " + fpformat.fix(time.time()-st,3)
-# overriden
-st = time.time()
-gen_override_info()
-#print "    GEN_OVERRIDEN = " + fpformat.fix(time.time()-st,3)
-# info html
-st = time.time()
-gen_info_html()
-#print "    GEN_INFO_HTML = " + fpformat.fix(time.time()-st,3)
-
-for f in file_list:
-    file_name = f[0]
-    print "%s\n" % (file_name)
-    proc_file(file_name)
-
+    for f in g_db_file_dict.keys():
+        print "%s" % (f)
+        proc_file(f)
+# run script
+main()

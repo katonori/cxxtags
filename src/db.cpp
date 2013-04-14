@@ -13,17 +13,17 @@ static std::list<std::string > insert_list_ref;
 static std::list<std::string > insert_list_decl;
 static std::list<std::string > insert_list_overriden;
 
-void init(std::string file_name)
+void init(std::string db_file_name, std::string src_file_name)
 {
     char *err=NULL;
-    if(sqlite3_open(file_name.c_str(), &db ) != SQLITE_OK) {
+    if(sqlite3_open(db_file_name.c_str(), &db ) != SQLITE_OK) {
         printf("ERROR: failt to open db");
         exit(1);
     }
     // begin transaction
     sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
     // db_info
-    sqlite3_exec(db, "CREATE TABLE db_info(db_format integer);", NULL, NULL, &err);
+    sqlite3_exec(db, "CREATE TABLE db_info(db_format INTEGER, src_file_name TEXT);", NULL, NULL, &err);
     // ref
     sqlite3_exec(db, "CREATE TABLE ref(usr TEXT, name TEXT, file_name TEXT, line INTEGER, col INTEGER, kind TEXT, ref_file_name TEXT, ref_line INTEGER, ref_col INTEGER);", NULL, NULL, &err);
     // decl
@@ -32,7 +32,7 @@ void init(std::string file_name)
     sqlite3_exec(db, "CREATE TABLE overriden(usr TEXT, name TEXT, file_name TEXT, line INTEGER, col INTEGER, kind TEXT, usr_overrider TEXT, is_def INTEGER);", NULL, NULL, &err);
 
     std::ostringstream os;
-    os << "INSERT INTO db_info VALUES(" << DB_VER << ");";
+    os << "INSERT INTO db_info VALUES(" << DB_VER << ", '" << src_file_name << "');";
     sqlite3_exec(db, os.str().c_str(), NULL, NULL, &err);
 }
 

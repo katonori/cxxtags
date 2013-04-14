@@ -394,11 +394,11 @@ int perform_test_load_source(int argc, const char **argv,
   int num_unsaved_files = 0;
   int result;
   const char *out_file_name = argv[0];
-  //const char *in_file_name = argv[1];
+  const char *in_file_name = argv[1];
   argv++;
   argc--;
 
-  db::init(out_file_name);
+  db::init(out_file_name, in_file_name);
   
   Idx = clang_createIndex(/* excludeDeclsFromPCH */
                            1,

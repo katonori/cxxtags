@@ -2,10 +2,10 @@
 #include <string>
 
 namespace db {
-static const int DB_VER = 4;
+static const int DB_VER = 5;
 static const int INSERT_LIST_MAX = 255;
 
-void init(std::string file_name);
+void init(std::string db_file_name, std::string src_file_name);
 void fin(void);
 
 void insert_ref_value(std::string usr, std::string name, std::string file_name, int32_t line, int32_t col, std::string kind, std::string ref_file_name, int ref_line, int ref_col);

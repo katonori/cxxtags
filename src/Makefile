@@ -8,3 +8,5 @@ all: cxxtags_core.cpp db.cpp
 	$(CC) $(CFLAGS) cxxtags_core.cpp -c $(INCLUDES)
 	$(CC) $(CFLAGS) db.cpp -c $(INCLUDES)
 	$(CC) $(LIBS) cxxtags_core.o db.o -o cxxtags_core
+	mkdir -p ../bin
+	cp cxxtags_core cxxtags cxxtags_gather cxxtags_html_dumper cxxtags_util.py ../bin

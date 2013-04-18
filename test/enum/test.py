@@ -3,10 +3,12 @@
 import sys
 import os
 import sqlite3
+sys.path.append("../../src/")
+import cxxtags_util as cxxtags
 
 err = 0
 
-def test_one(q, a):
+def test_one(db, q, a):
     global err
     res = list(db.execute(q).fetchall())
     if len(res) != 1:
@@ -25,6 +27,9 @@ def test_one(q, a):
 if len(sys.argv) != 2:
     print "usage: cmd db_file"
     exit(1)
+
+db_dir = sys.argv[1]
+db_list = cxxtags.get_db_file_list(db_dir)
 
 cur_dir = os.getcwd()
 
@@ -232,11 +237,11 @@ a_list = [
 ('c:@N@NS1@C@C1@F@check#','check',cur_dir+'/main.cpp',108,9,'MemberRefExpr',cur_dir+'/main.cpp',89,14),
 ]
 
-db = sqlite3.connect(sys.argv[1])
+db = cxxtags.my_db_connect(db_list[0])
 
 i = 0
 for q in q_list:
-    test_one(q, a_list[i])
+    test_one(db, q, a_list[i])
     i+=1
 if err == 0:
     print "OK"

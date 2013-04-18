@@ -3,10 +3,12 @@
 import sys
 import os
 import sqlite3
+sys.path.append("../../src/")
+import cxxtags_util as cxxtags
 
 err = 0
 
-def test_one(q, a):
+def test_one(db, q, a):
     global err
     res = list(db.execute(q).fetchall())
     if len(res) != 1:
@@ -177,11 +179,13 @@ a_list = [
 ('c:@C@CParent1@F@response#','response',cur_dir+'/inhe.cpp',62,14,'CXXMethod','c:@C@COther@F@response#',1),
 ]
 
-db = sqlite3.connect(sys.argv[1])
+db_dir = sys.argv[1]
+fn = cur_dir + "/" + "inhe.cpp"
+db = cxxtags.get_db_by_file_name(db_dir, fn)
 
 i = 0
 for q in q_list:
-    test_one(q, a_list[i])
+    test_one(db, q, a_list[i])
     i+=1
 if err == 0:
     print "OK"

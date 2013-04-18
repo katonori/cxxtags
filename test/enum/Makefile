@@ -1,19 +1,22 @@
-CXXTAGS = ../../src/cxxtags -e /usr/include
-MERGER = ../../src/cxxtags_merger
-DUMPER = ../../src/cxxtags_html_dumper
-.PHONY: dump clean
-index:
-	$(CXXTAGS) main.cpp
-merge: 
-	$(MERGER) index.db main.cpp.db
-test: index merge
-	./test.py index.db
-html: index merge
-	$(DUMPER) index.db
-dump:
-	sqlite3 index.db ".dump"
+PROJ_ROOT = ../../
+include ../util/common.mk
+
+GATHER_OUT = db
+.PHONY: clean
+.SUFFIXES: .db .cpp
+
+DB_FILES = main.db
+
+$(GATHER_OUT): $(DB_FILES)
+	$(GATHER) $@ $^
+test: $(GATHER_OUT)
+	./test.py $<
+html: $(GATHER_OUT)
+	$(DUMPER) $(GATHER_OUT)
 prog: main.cpp
-	g++ -c main.cpp
-	g++ main.o -o prog
+	$(CXX) main.cpp -o prog
 clean:
-	rm -rf html index.db main.cpp.db
+	rm -rf html $(GATHER_OUT) $(DB_FILES)
+
+.cpp.db:
+	$(CXXTAGS) $< -o $*.db

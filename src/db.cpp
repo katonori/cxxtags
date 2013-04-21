@@ -1,17 +1,104 @@
 #include "db.h"
 #include <sqlite3.h>
-#include <sstream>
-#include <list>
+#include <vector>
+#include <time.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+
+//#define USE_PTHRED
 
 namespace db {
-static void insert_ref_value_core(void);
-static void insert_decl_value_core(void);
-static void insert_overriden_value_core(void);
-
 static sqlite3 *db;
-static std::list<std::string > insert_list_ref;
-static std::list<std::string > insert_list_decl;
-static std::list<std::string > insert_list_overriden;
+static std::vector<std::string > insert_list_overriden;
+
+static clock_t time_sum0 = 0;
+static clock_t time_sum1 = 0;
+
+#ifdef USE_PTHRED
+static pthread_mutex_t mutex;
+#endif
+
+void CDBMgrBase::flush()
+{
+    if(count) {
+        arg_t arg;
+        arg.bank_no = mBankNo;
+        insertValueCore(&arg);
+        count = 0;
+    }
+#ifdef USE_PTHRED
+    if(mTid) {
+        pthread_join(mTid, NULL);
+    }
+#endif
+}
+
+void CDBMgrBase::insertValueCore(void* arg)
+{
+    int bank_no = ((arg_t*)arg)->bank_no;
+    char *err=NULL;
+#ifdef USE_PTHRED
+    pthread_mutex_lock(&mutex);
+#endif 
+    sqlite3_exec(db, mOs[bank_no].str().c_str(), NULL, NULL, &err);
+#ifdef USE_PTHRED
+    pthread_mutex_unlock(&mutex);
+#endif
+    if(err != SQLITE_OK) {
+        printf("ERROR: SQLITE3: %s\n", sqlite3_errmsg(db));
+    }
+    mOs[bank_no].str("");
+    mOs[bank_no].clear();
+}
+
+static CDBMgrRef refMgr;
+
+static void runner_ref(void *arg)
+{
+    refMgr.insertValueCore(arg);
+#ifdef USE_PTHRED
+    pthread_exit(NULL);
+#endif
+}
+
+void CDBMgrRef::insertValue(const char* usr, const char* name, const char* file_name, int32_t line, int32_t col, const char* kind, const char* ref_file_name, int ref_line, int ref_col)
+{
+    clock_t before = clock();
+    mOs[mBankNo] << "INSERT INTO ref VALUES ('" << usr << "','" << name << "', '" << file_name
+        << "', " << line << ", " << col << ", '" << kind << "', '" << ref_file_name
+        << "', " << ref_line << ", " << ref_col << ");";
+    count++;
+    clock_t after = clock();
+    time_sum0 += after - before;
+    if(count == INSERT_LIST_MAX) {
+#ifdef USE_PTHRED
+        if(mTid) {
+            pthread_join(mTid, NULL);
+        }
+#endif
+        mArg.bank_no = mBankNo;
+#ifdef USE_PTHRED
+        if(pthread_create(&mTid, 
+                NULL,
+                (void*(*)(void*))(runner_ref),
+                &mArg)) {
+            printf("ERROR: pthread_create()\n");
+            exit(1);
+        }
+#else
+        runner_ref(&mArg);
+#endif
+        switchBank();
+        count = 0;
+    }
+}
+
+void insert_ref_value(const char* usr, const char* name, const char* file_name, int32_t line, int32_t col, const char* kind, const char* ref_file_name, int ref_line, int ref_col)
+{
+    refMgr.insertValue(usr, name, file_name, line, col, kind, ref_file_name, ref_line, ref_col);
+    return ;
+}
 
 void init(std::string db_file_name, std::string src_file_name)
 {
@@ -21,7 +108,7 @@ void init(std::string db_file_name, std::string src_file_name)
         exit(1);
     }
     // begin transaction
-    sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+    sqlite3_exec(db, "BEGIN EXCLUSIVE;", NULL, NULL, NULL);
     // db_info
     sqlite3_exec(db, "CREATE TABLE db_info(db_format INTEGER, src_file_name TEXT);", NULL, NULL, &err);
     // ref
@@ -34,110 +121,114 @@ void init(std::string db_file_name, std::string src_file_name)
     std::ostringstream os;
     os << "INSERT INTO db_info VALUES(" << DB_VER << ", '" << src_file_name << "');";
     sqlite3_exec(db, os.str().c_str(), NULL, NULL, &err);
+
+#ifdef USE_PTHRED
+    pthread_mutex_init(&mutex, NULL);
+#endif
 }
 
-void insert_ref_value(std::string usr, std::string name, std::string file_name, int32_t line, int32_t col, std::string kind, std::string ref_file_name, int ref_line, int ref_col)
+static CDBMgrDecl declMgr;
+
+void insert_decl_value(const char* usr, const char* name, const char* file_name, int32_t line, int32_t col, const char* entity_kind, int val, int is_virtual, int is_def)
 {
-    std::ostringstream os;
-    os << "('" << usr << "','" << name << "', '" << file_name
-        << "', " << line << ", " << col << ", '" << kind << "', '" << ref_file_name
-        << "', " << ref_line << ", " << ref_col << ")";
-    insert_list_ref.push_back(os.str());
-    if(insert_list_ref.size() == INSERT_LIST_MAX) {
-        insert_ref_value_core();
-        insert_list_ref.clear();
-    }
+    declMgr.insertValue(usr, name, file_name, line, col, entity_kind, val, is_virtual, is_def);
 }
 
-static void insert_ref_value_core(void)
+static void runner_decl(void *arg)
 {
-    char *err=NULL;
-    std::ostringstream os;
-    std::ostringstream os_values;
-    for(std::list<std::string >::iterator itr = insert_list_ref.begin();
-        itr != insert_list_ref.end();
-        itr++) {
-        os << "INSERT INTO ref VALUES " << *itr << ";";
-        //printf("INSERT_REF: %s\n", values.c_str());
-    }
-    sqlite3_exec(db, os.str().c_str(), NULL, NULL, &err);
-    if(err != SQLITE_OK) {
-        printf("ERROR: SQLITE3: %s\n", sqlite3_errmsg(db));
-    }
+    declMgr.insertValueCore(arg);
+#ifdef USE_PTHRED
+    pthread_exit(NULL);
+#endif
 }
 
-void insert_decl_value(std::string usr, std::string name, std::string file_name, int32_t line, int32_t col, std::string entity_kind, int val, int is_virtual, int is_def)
+void CDBMgrDecl::insertValue(const char* usr, const char* name, const char* file_name, int32_t line, int32_t col, const char* entity_kind, int val, int is_virtual, int is_def)
 {
-    std::ostringstream os;
-    os << "('" << usr << "','" << name << "', '" << file_name
+    clock_t before = clock();
+    mOs[mBankNo] << "INSERT INTO decl VALUES ('" << usr << "','" << name << "', '" << file_name
         << "', " << line << ", " << col << ", '" << entity_kind << "', " << val << ", "
-        << is_virtual << ", " << is_def << ")";
-    insert_list_decl.push_back(os.str().c_str());
-    if(insert_list_decl.size() == INSERT_LIST_MAX) {
-        insert_decl_value_core();
-        insert_list_decl.clear();
+        << is_virtual << ", " << is_def << ");";
+    clock_t after = clock();
+    time_sum0 += after - before;
+    count++;
+    if(count == INSERT_LIST_MAX) {
+#ifdef USE_PTHRED
+        if(mTid) {
+            pthread_join(mTid, NULL);
+        }
+#endif
+        mArg.bank_no = mBankNo;
+#ifdef USE_PTHRED
+        if(pthread_create(&mTid, 
+                NULL,
+                (void*(*)(void*))runner_decl,
+                &mArg)) {
+            printf("ERROR: pthread_create()\n");
+            exit(1);
+        }
+#else
+        runner_decl(&mArg);
+#endif
+        switchBank();
+        count = 0;
     }
 }
 
-static void insert_decl_value_core(void)
+static CDBMgrOverriden overridenMgr;
+
+static void runner_overriden(void *arg)
 {
-    char *err=NULL;
-    std::ostringstream os;
-    std::ostringstream os_values;
-    for(std::list<std::string >::iterator itr = insert_list_decl.begin();
-        itr != insert_list_decl.end();
-        itr++) {
-        os << "INSERT INTO decl VALUES " << *itr << ";";
-    }
-    //printf("INSERT_DECL: %s\n", values.c_str());
-    sqlite3_exec(db, os.str().c_str(), NULL, NULL, &err);
-    if(err != SQLITE_OK) {
-        printf("ERROR: SQLITE3: %s\n", sqlite3_errmsg(db));
-    }
+    overridenMgr.insertValueCore(arg);
+#ifdef USE_PTHRED
+    pthread_exit(NULL);
+#endif
 }
 
-void insert_overriden_value(std::string usr, std::string name, std::string file_name, int32_t line, int32_t col, std::string entity_kind, std::string usr_overrider, int is_def)
+void insert_overriden_value(const char* usr, const char* name, const char* file_name, int32_t line, int32_t col, const char* entity_kind, const char* usr_overrider, int is_def)
 {
-    std::ostringstream os;
-    os << "('" << usr << "','" << name << "', '" << file_name
+    overridenMgr.insertValue(usr, name, file_name, line, col, entity_kind, usr_overrider, is_def);
+    return ;
+}
+
+void CDBMgrOverriden::insertValue(const char* usr, const char* name, const char* file_name, int32_t line, int32_t col, const char* entity_kind, const char* usr_overrider, int is_def)
+{
+    clock_t before = clock();
+    mOs[mBankNo] << "INSERT INTO overriden VALUES ('" << usr << "','" << name << "', '" << file_name
         << "', " << line << ", " << col << ", '" << entity_kind << "', '" << usr_overrider 
-        << "', " << is_def << ")";
-    insert_list_overriden.push_back(os.str().c_str());
-    if(insert_list_overriden.size() == INSERT_LIST_MAX) {
-        insert_overriden_value_core();
-        insert_list_overriden.clear();
-    }
-}
-
-static void insert_overriden_value_core(void)
-{
-    char *err=NULL;
-    std::ostringstream os;
-    std::ostringstream os_values;
-    for(std::list<std::string >::iterator itr = insert_list_overriden.begin();
-        itr != insert_list_overriden.end();
-        itr++) {
-        os << "INSERT INTO overriden VALUES " << *itr << ";";
-    }
-    //printf("INSERT_OVERRIDEN: %s\n", values.c_str());
-    sqlite3_exec(db, os.str().c_str(), NULL, NULL, &err);
-    if(err != SQLITE_OK) {
-        printf("ERROR: SQLITE3: %s\n", sqlite3_errmsg(db));
+        << "', " << is_def << ");";
+    clock_t after = clock();
+    time_sum0 += after - before;
+    count++;
+    if(count == INSERT_LIST_MAX) {
+#ifdef USE_PTHRED
+        if(mTid) {
+            pthread_join(mTid, NULL);
+        }
+#endif
+        mArg.bank_no = mBankNo;
+#ifdef USE_PTHRED
+        if(pthread_create(&mTid, 
+                NULL,
+                (void*(*)(void*))(runner_overriden),
+                &mArg)) {
+            printf("ERROR: pthread_create()\n");
+            exit(1);
+        }
+#else
+        runner_overriden(&mArg);
+#endif
+        switchBank();
+        count = 0;
     }
 }
 
 void fin(void)
 {
     // flush buffers
-    if(insert_list_ref.size()) {
-        insert_ref_value_core();
-    }
-    if(insert_list_decl.size()) {
-        insert_decl_value_core();
-    }
-    if(insert_list_overriden.size()) {
-        insert_overriden_value_core();
-    }
+    refMgr.flush();
+    declMgr.flush();
+    overridenMgr.flush();
+
     // create indices
     sqlite3_exec(db, "CREATE INDEX ref_index0 ON ref(file_name, name, line, col);", NULL, NULL, NULL);
     sqlite3_exec(db, "CREATE INDEX ref_index1 ON ref(file_name);", NULL, NULL, NULL);
@@ -150,5 +241,6 @@ void fin(void)
         fprintf(stderr, "%s\n", sqlite3_errmsg(db));
         exit(1);
     }
+    printf("TIME0:DB: %lf\n", ((double)time_sum0)/CLOCKS_PER_SEC);
 }
 };

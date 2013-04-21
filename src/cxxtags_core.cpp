@@ -2,9 +2,11 @@
 
 #include <string>
 #include <vector>
+#include <map>
 
 #include <stdio.h>
 #include <assert.h>
+#include <time.h>
 #include "db.h"
 
 #ifdef CLANG_HAVE_LIBXML
@@ -14,6 +16,7 @@
 #endif
 
 std::vector<std::string > exception_list;
+std::map<std::string, std::string > fileMap;
 
 static std::string getCursorSource(CXCursor Cursor);
 static const char *curDir;
@@ -67,12 +70,19 @@ static std::string normalizePath(std::string curDir, std::string path)
     if(path == "") {
         return "";
     }
+    std::string path_orig = path;
+    // lookup map
+    std::map<std::string, std::string >::iterator mapItr = fileMap.find(path);
+    if(mapItr != fileMap.end()){ 
+        return mapItr->second;
+    }
+
     if(path.at(0) != '/') {
         path = curDir + path; // abs path
     }
     std::vector<std::string > tokens;
     //printf("orig: %s\n", path.c_str());
-    int pos = 0;
+    std::string::size_type pos = 0;
     // split by path delimiter
     while((pos = path.find("/")) != std::string::npos) {
         std::string s = path.substr(0, pos);
@@ -110,12 +120,13 @@ static std::string normalizePath(std::string curDir, std::string path)
             itr++) {
         result += "/" + *itr;
     }
+    fileMap[path_orig] = result;
     return result;
 }
 
 static std::string formatName(std::string name)
 {
-    int pos = name.find("class ");
+    std::string::size_type pos = name.find("class ");
     if(pos == 0) {
         name = name.substr(6, name.size()-6);
     }
@@ -126,13 +137,43 @@ static std::string formatName(std::string name)
     return name;
 }
 
-static void PrintCursor(CXCursor Cursor) {
+clock_t time_sum0 = 0;
+clock_t time_sum1 = 0;
+clock_t time_sum2 = 0;
+clock_t time_sum4 = 0;
+static inline void PrintCursor(CXCursor Cursor) {
   if (clang_isInvalid(Cursor.kind)) {
     CXString ks = clang_getCursorKindSpelling(Cursor.kind);
     printf("Invalid Cursor => %s", clang_getCString(ks));
     clang_disposeString(ks);
   }
   else {
+    switch(Cursor.kind) {
+        case CXCursor_EnumConstantDecl:
+        case CXCursor_TypedefDecl:
+        case CXCursor_ClassDecl:
+        case CXCursor_Namespace:
+        case CXCursor_StructDecl:
+        case CXCursor_UnionDecl:
+        case CXCursor_VarDecl:
+        case CXCursor_ParmDecl:
+        case CXCursor_FieldDecl:
+        case CXCursor_MacroDefinition:
+        case CXCursor_CXXMethod:
+        case CXCursor_FunctionDecl:
+        case CXCursor_Constructor:
+        case CXCursor_Destructor:
+        case CXCursor_DeclRefExpr:
+        case CXCursor_MemberRefExpr:
+        case CXCursor_TypeRef:
+        //case CXCursor_CXXBaseSpecifier:
+        case CXCursor_MemberRef:
+        case CXCursor_NamespaceRef:
+        case CXCursor_MacroExpansion:
+        break;
+        default:
+            return;
+    }
     CXCursor Referenced;
     unsigned int line = 0;
     unsigned int column = 0;
@@ -148,9 +189,12 @@ static void PrintCursor(CXCursor Cursor) {
     }
     name = formatName(name);
     // usr
-    std::string usr = getUSR(Cursor);
+    CXString cxUSR = clang_getCursorUSR(Cursor);
+    const char *cUsr = clang_getCString(cxUSR);
+    assert(cUsr);
     // file_name
     std::string fileName = getCursorSource(Cursor);
+    clock_t before4 = clock();
     fileName = normalizePath(curDir, fileName);
     // decide if this Cursor info is to be registered to db.
     for(std::vector<std::string >::iterator itr = exception_list.begin();
@@ -160,13 +204,12 @@ static void PrintCursor(CXCursor Cursor) {
             return;
         }
     }
+    clock_t after4 = clock();
+    time_sum4 += after4 - before4;
+    clock_t before1 = clock();
     // kind
     CXString cxKs = clang_getCursorKindSpelling(Cursor.kind);
-    std::string ks = std::string(clang_getCString(cxKs));
-    clang_disposeString(cxKs);
-
-    // is_def
-    int isDef = clang_isCursorDefinition(Cursor);
+    const char* cKs = clang_getCString(cxKs);
 
     int isVirt = 0;
     int val = 0;
@@ -183,26 +226,33 @@ static void PrintCursor(CXCursor Cursor) {
         case CXCursor_VarDecl:
         case CXCursor_ParmDecl:
         case CXCursor_FieldDecl:
-        case CXCursor_MacroDefinition:
-            db::insert_decl_value(usr, name, fileName, line, column, ks, val, 0, isDef);
+        case CXCursor_MacroDefinition: {
+            // is_def
+            int isDef = clang_isCursorDefinition(Cursor);
+            db::insert_decl_value(cUsr, name.c_str(), fileName.c_str(), line, column, cKs, val, 0, isDef);
             break;
+        }
         case CXCursor_CXXMethod: {
+            // is_def
+            int isDef = clang_isCursorDefinition(Cursor);
             isVirt = clang_CXXMethod_isVirtual(Cursor);
             unsigned int numOverridden = 0;
             CXCursor *cursorOverridden;
             clang_getOverriddenCursors(Cursor, 
                     &cursorOverridden,
                     &numOverridden);
-            for(int i = 0; i < numOverridden; i++) {
+            for(unsigned int i = 0; i < numOverridden; i++) {
                 std::string usr_overrider = getUSR(cursorOverridden[i]);
-                db::insert_overriden_value(usr_overrider, name, fileName, line, column, ks, usr, isDef);
+                db::insert_overriden_value(usr_overrider.c_str(), name.c_str(), fileName.c_str(), line, column, cKs, cUsr, isDef);
             }
             // fall through
         }
         case CXCursor_FunctionDecl:
         case CXCursor_Constructor:
         case CXCursor_Destructor: {
-            db::insert_decl_value(usr, name, fileName, line, column, ks, 0, isVirt, isDef);
+            // is_def
+            int isDef = clang_isCursorDefinition(Cursor);
+            db::insert_decl_value(cUsr, name.c_str(), fileName.c_str(), line, column, cKs, 0, isVirt, isDef);
             break;
         }
         case CXCursor_DeclRefExpr:
@@ -212,12 +262,16 @@ static void PrintCursor(CXCursor Cursor) {
         case CXCursor_MemberRef:
         case CXCursor_NamespaceRef:
         case CXCursor_MacroExpansion: {
-            usr = "";
+            clock_t before0 = clock();
+            cUsr = "";
             std::string refFileName = "";
             Referenced = clang_getCursorReferenced(Cursor);
             if (!clang_equalCursors(Referenced, clang_getNullCursor())) {
                 // ref_usr
-                usr = getUSR(Referenced);
+                //usr = getUSR(Referenced);
+                CXString cxRefUSR = clang_getCursorUSR(Referenced);
+                cUsr = clang_getCString(cxRefUSR);
+                assert(cUsr);
                 // ref location
                 CXFile ref_file;
                 CXSourceLocation ref_loc = clang_getCursorLocation(Referenced);
@@ -228,8 +282,11 @@ static void PrintCursor(CXCursor Cursor) {
                     refFileName = normalizePath(curDir, refFileName);
                     clang_disposeString(cxRefFileName);
                 }
+                db::insert_ref_value(cUsr, name.c_str(), fileName.c_str(), line, column, cKs, refFileName.c_str(), ref_line, ref_column);
+                clang_disposeString(cxRefUSR);
             }
-            db::insert_ref_value(usr, name, fileName, line, column, ks, refFileName, ref_line, ref_column);
+            clock_t after0 = clock();
+	    time_sum0 += after0 - before0;
             break;
         }
         // TODO:
@@ -238,6 +295,10 @@ static void PrintCursor(CXCursor Cursor) {
         default:
             break;
     }
+    clock_t after1 = clock();
+    time_sum1 += after1 - before1;
+    clang_disposeString(cxKs);
+    clang_disposeString(cxUSR);
   }
   return;
 }
@@ -387,6 +448,7 @@ static int perform_test_load(CXIndex Idx, CXTranslationUnit TU,
 int perform_test_load_source(int argc, const char **argv,
                              CXCursorVisitor Visitor,
                              PostVisitTU PV) {
+  clock_t bbb = clock();
   CXIndex Idx;
   CXTranslationUnit TU;
   const char *CommentSchemaFile = NULL;
@@ -400,6 +462,7 @@ int perform_test_load_source(int argc, const char **argv,
 
   db::init(out_file_name, in_file_name);
   
+  clock_t b = clock();
   Idx = clang_createIndex(/* excludeDeclsFromPCH */
                            1,
                           /* displayDiagnosics=*/0);
@@ -409,17 +472,27 @@ int perform_test_load_source(int argc, const char **argv,
                                   argc - num_unsaved_files,
                                   unsaved_files, num_unsaved_files, 
                                   getDefaultParsingOptions());
+  clock_t a = clock();
+  printf("TIME: %lf\n", ((double)(a-b))/CLOCKS_PER_SEC);
   if (!TU) {
     fprintf(stderr, "Unable to load translation unit!\n");
     result = 1;
     goto FUNC_END;
   }
 
+  b = clock();
   result = perform_test_load(Idx, TU, NULL, Visitor, PV,
                              CommentSchemaFile);
+  a = clock();
+  printf("TIME: %lf\n", ((double)(a-b))/CLOCKS_PER_SEC);
+  printf("TIME0: %lf\n", ((double)time_sum0)/CLOCKS_PER_SEC);
+  printf("TIME1: %lf\n", ((double)time_sum1)/CLOCKS_PER_SEC);
+  printf("TIME4: %lf\n", ((double)time_sum4)/CLOCKS_PER_SEC);
 FUNC_END:
   clang_disposeIndex(Idx);
   db::fin();
+  clock_t aaa = clock();
+  printf("TIME: %lf\n", ((double)(aaa-bbb))/CLOCKS_PER_SEC);
   return result;
 }
 
@@ -437,7 +510,7 @@ static void print_usage(void) {
 static std::vector<std::string > split_string(std::string str)
 {
     std::vector<std::string > list;
-    int pos = 0;
+    std::string::size_type pos = 0;
     while((pos = str.find(":")) != std::string::npos) {
         std::string s = str.substr(0, pos);
         list.push_back(s);
@@ -456,7 +529,7 @@ static std::vector<std::string > split_string(std::string str)
 /***/
 
 int cindextest_main(int argc, const char **argv) {
-  clang_enableStackTraces();
+  //clang_enableStackTraces();
   if (argc >= 3) {
     if(0 == strncmp(argv[1], "-e", 2)) {
         exception_list = split_string(argv[2]);

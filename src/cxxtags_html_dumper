@@ -208,14 +208,14 @@ def get_loc_to_link(db, file_name, word, line, col):
     global g_db_list
     #print "GET: %s, %d, %d, %s" %(word, line, col, file_name)
     # ref
-    res = db.execute("SELECT usr, ref_file_name, ref_line, ref_col FROM ref WHERE file_name='%s' AND name='%s' AND line=%d AND col=%d" % (file_name, word, line, col))
+    res = db.execute("SELECT usr, ref_file_name, ref_line, ref_col FROM ref WHERE file_name='%s' AND name='%s' AND line=%d AND col=%d LIMIT 1" % (file_name, word, line, col))
     for ref_row in res.fetchall():
         ref_usr, ref_file_name, ref_line, ref_col = ref_row
         if g_html_file_dict.has_key(ref_file_name):
             link = "%s#%s_%d" % (g_html_file_dict[ref_file_name]+".html", LOC_ANCHOR_PREFIX, ref_line)
             return link
     # decl
-    q = "SELECT usr FROM decl WHERE file_name='%s' AND name='%s' AND line=%d AND col=%d" % (file_name, word, line, col)
+    q = "SELECT usr FROM decl WHERE file_name='%s' AND name='%s' AND line=%d AND col=%d LIMIT 1" % (file_name, word, line, col)
     res = db.execute(q)
     for decl_row in res.fetchall():
         decl_usr = decl_row[0]
@@ -480,7 +480,7 @@ def gen_override_info():
             if fn == None:
                 fn = add_info_file(usr_overrider)
             fo = open(OUT_DIR+"/"+fn+".txt", "a")
-            q = "SELECT name, file_name, line, col, kind FROM decl WHERE usr='%s' ORDER BY is_def"%(usr_overrider)
+            q = "SELECT name, file_name, line, col, kind FROM decl WHERE usr='%s' ORDER BY is_def LIMIT 1"%(usr_overrider)
             res = db.execute(q)
             row = res.fetchone()
             if row:

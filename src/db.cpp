@@ -1,19 +1,17 @@
 #include "db.h"
 #include <sqlite3.h>
 #include <vector>
+#include <map>
 #include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
 
-//#define USE_PTHRED
+#define USE_PTHRED
 
 namespace db {
 static sqlite3 *db;
 static std::vector<std::string > insert_list_overriden;
-
-static clock_t time_sum0 = 0;
-static clock_t time_sum1 = 0;
 
 #ifdef USE_PTHRED
 static pthread_mutex_t mutex;
@@ -62,15 +60,12 @@ static void runner_ref(void *arg)
 #endif
 }
 
-void CDBMgrRef::insertValue(const char* usr, const char* name, const char* file_name, int32_t line, int32_t col, const char* kind, const char* ref_file_name, int ref_line, int ref_col)
+void CDBMgrRef::insertValue(const char* usr, const char* name, int fid, int32_t line, int32_t col, int kind, int refFid, int ref_line, int ref_col)
 {
-    clock_t before = clock();
-    mOs[mBankNo] << "INSERT INTO ref VALUES ('" << usr << "','" << name << "', '" << file_name
-        << "', " << line << ", " << col << ", '" << kind << "', '" << ref_file_name
+    mOs[mBankNo] << "INSERT INTO ref VALUES ('" << usr << "','" << name << "', '" << fid
+        << "', " << line << ", " << col << ", '" << kind << "', '" << refFid
         << "', " << ref_line << ", " << ref_col << ");";
     count++;
-    clock_t after = clock();
-    time_sum0 += after - before;
     if(count == INSERT_LIST_MAX) {
 #ifdef USE_PTHRED
         if(mTid) {
@@ -94,9 +89,9 @@ void CDBMgrRef::insertValue(const char* usr, const char* name, const char* file_
     }
 }
 
-void insert_ref_value(const char* usr, const char* name, const char* file_name, int32_t line, int32_t col, const char* kind, const char* ref_file_name, int ref_line, int ref_col)
+void insert_ref_value(const char* usr, const char* name, int fid, int32_t line, int32_t col, int kind, int refFid, int ref_line, int ref_col)
 {
-    refMgr.insertValue(usr, name, file_name, line, col, kind, ref_file_name, ref_line, ref_col);
+    refMgr.insertValue(usr, name, fid, line, col, kind, refFid, ref_line, ref_col);
     return ;
 }
 
@@ -111,12 +106,14 @@ void init(std::string db_file_name, std::string src_file_name)
     sqlite3_exec(db, "BEGIN EXCLUSIVE;", NULL, NULL, NULL);
     // db_info
     sqlite3_exec(db, "CREATE TABLE db_info(db_format INTEGER, src_file_name TEXT);", NULL, NULL, &err);
+    // file_list
+    sqlite3_exec(db, "CREATE TABLE file_list(id INTEGER, name TEXT);", NULL, NULL, &err);
     // ref
-    sqlite3_exec(db, "CREATE TABLE ref(usr TEXT, name TEXT, file_name TEXT, line INTEGER, col INTEGER, kind TEXT, ref_file_name TEXT, ref_line INTEGER, ref_col INTEGER);", NULL, NULL, &err);
+    sqlite3_exec(db, "CREATE TABLE ref(usr TEXT, name TEXT, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, ref_file_id INTEGER, ref_line INTEGER, ref_col INTEGER);", NULL, NULL, &err);
     // decl
-    sqlite3_exec(db, "CREATE TABLE decl(usr TEXT, name TEXT, file_name TEXT, line INTEGER, col INTEGER, kind TEXT, val INTEGER, is_virtual INTEGER, is_def INTEGER);", NULL, NULL, &err);
+    sqlite3_exec(db, "CREATE TABLE decl(usr TEXT, name TEXT, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, val INTEGER, is_virtual INTEGER, is_def INTEGER);", NULL, NULL, &err);
     // overriden
-    sqlite3_exec(db, "CREATE TABLE overriden(usr TEXT, name TEXT, file_name TEXT, line INTEGER, col INTEGER, kind TEXT, usr_overrider TEXT, is_def INTEGER);", NULL, NULL, &err);
+    sqlite3_exec(db, "CREATE TABLE overriden(usr TEXT, name TEXT, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, usr_overrider TEXT, is_def INTEGER);", NULL, NULL, &err);
 
     std::ostringstream os;
     os << "INSERT INTO db_info VALUES(" << DB_VER << ", '" << src_file_name << "');";
@@ -129,9 +126,9 @@ void init(std::string db_file_name, std::string src_file_name)
 
 static CDBMgrDecl declMgr;
 
-void insert_decl_value(const char* usr, const char* name, const char* file_name, int32_t line, int32_t col, const char* entity_kind, int val, int is_virtual, int is_def)
+void insert_decl_value(const char* usr, const char* name, int fid, int32_t line, int32_t col, int entity_kind, int val, int is_virtual, int is_def)
 {
-    declMgr.insertValue(usr, name, file_name, line, col, entity_kind, val, is_virtual, is_def);
+    declMgr.insertValue(usr, name, fid, line, col, entity_kind, val, is_virtual, is_def);
 }
 
 static void runner_decl(void *arg)
@@ -142,14 +139,11 @@ static void runner_decl(void *arg)
 #endif
 }
 
-void CDBMgrDecl::insertValue(const char* usr, const char* name, const char* file_name, int32_t line, int32_t col, const char* entity_kind, int val, int is_virtual, int is_def)
+void CDBMgrDecl::insertValue(const char* usr, const char* name, int fid, int32_t line, int32_t col, int entity_kind, int val, int is_virtual, int is_def)
 {
-    clock_t before = clock();
-    mOs[mBankNo] << "INSERT INTO decl VALUES ('" << usr << "','" << name << "', '" << file_name
+    mOs[mBankNo] << "INSERT INTO decl VALUES ('" << usr << "','" << name << "', '" << fid
         << "', " << line << ", " << col << ", '" << entity_kind << "', " << val << ", "
         << is_virtual << ", " << is_def << ");";
-    clock_t after = clock();
-    time_sum0 += after - before;
     count++;
     if(count == INSERT_LIST_MAX) {
 #ifdef USE_PTHRED
@@ -184,20 +178,17 @@ static void runner_overriden(void *arg)
 #endif
 }
 
-void insert_overriden_value(const char* usr, const char* name, const char* file_name, int32_t line, int32_t col, const char* entity_kind, const char* usr_overrider, int is_def)
+void insert_overriden_value(const char* usr, const char* name, int fid, int32_t line, int32_t col, int entity_kind, const char* usr_overrider, int is_def)
 {
-    overridenMgr.insertValue(usr, name, file_name, line, col, entity_kind, usr_overrider, is_def);
+    overridenMgr.insertValue(usr, name, fid, line, col, entity_kind, usr_overrider, is_def);
     return ;
 }
 
-void CDBMgrOverriden::insertValue(const char* usr, const char* name, const char* file_name, int32_t line, int32_t col, const char* entity_kind, const char* usr_overrider, int is_def)
+void CDBMgrOverriden::insertValue(const char* usr, const char* name, int fid, int32_t line, int32_t col, int entity_kind, const char* usr_overrider, int is_def)
 {
-    clock_t before = clock();
-    mOs[mBankNo] << "INSERT INTO overriden VALUES ('" << usr << "','" << name << "', '" << file_name
+    mOs[mBankNo] << "INSERT INTO overriden VALUES ('" << usr << "','" << name << "', '" << fid
         << "', " << line << ", " << col << ", '" << entity_kind << "', '" << usr_overrider 
         << "', " << is_def << ");";
-    clock_t after = clock();
-    time_sum0 += after - before;
     count++;
     if(count == INSERT_LIST_MAX) {
 #ifdef USE_PTHRED
@@ -222,18 +213,39 @@ void CDBMgrOverriden::insertValue(const char* usr, const char* name, const char*
     }
 }
 
-void fin(void)
+static void addFileList(const std::map<std::string, int >& fileMap)
+{
+    char *err=NULL;
+    std::ostringstream os;
+    // lookup map
+    std::map<std::string, int >::const_iterator end = fileMap.end();
+    for(std::map<std::string, int >::const_iterator itr = fileMap.begin();
+            itr != end;
+            itr++) {
+        //os << "INSERT INTO file_list VALUES('" << itr->first << "', " << itr->second << ");";
+        os << "INSERT INTO file_list VALUES(" << itr->second << ", '" << itr->first << "');";
+    }
+    sqlite3_exec(db, os.str().c_str(), NULL, NULL, &err);
+    if(err != SQLITE_OK) {
+        printf("ERROR: SQLITE3: %s\n", sqlite3_errmsg(db));
+    }
+    return ;
+}
+
+void fin(const std::map<std::string, int >& fileMap)
 {
     // flush buffers
     refMgr.flush();
     declMgr.flush();
     overridenMgr.flush();
 
+    addFileList(fileMap);
+
     // create indices
-    sqlite3_exec(db, "CREATE INDEX ref_index0 ON ref(file_name, name, line, col);", NULL, NULL, NULL);
-    sqlite3_exec(db, "CREATE INDEX ref_index1 ON ref(file_name);", NULL, NULL, NULL);
-    sqlite3_exec(db, "CREATE INDEX decl_index0 ON decl(file_name, name, line, col);", NULL, NULL, NULL);
-    sqlite3_exec(db, "CREATE INDEX decl_index1 ON decl(file_name)", NULL, NULL, NULL);
+    sqlite3_exec(db, "CREATE INDEX ref_index0 ON ref(file_id, name, line, col);", NULL, NULL, NULL);
+    sqlite3_exec(db, "CREATE INDEX ref_index1 ON ref(file_id);", NULL, NULL, NULL);
+    sqlite3_exec(db, "CREATE INDEX decl_index0 ON decl(file_id, name, line, col);", NULL, NULL, NULL);
+    sqlite3_exec(db, "CREATE INDEX decl_index1 ON decl(file_id)", NULL, NULL, NULL);
     // end transaction
     sqlite3_exec(db, "END TRANSACTION;", NULL, NULL, NULL);
     if(SQLITE_OK != sqlite3_close(db)) {
@@ -241,6 +253,5 @@ void fin(void)
         fprintf(stderr, "%s\n", sqlite3_errmsg(db));
         exit(1);
     }
-    printf("TIME0:DB: %lf\n", ((double)time_sum0)/CLOCKS_PER_SEC);
 }
 };

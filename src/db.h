@@ -1,5 +1,6 @@
 #ifndef _DB_H_
 #include <string>
+#include <map>
 #include <stdint.h>
 #include <sstream>
 
@@ -8,11 +9,11 @@ static const int DB_VER = 5;
 static const int INSERT_LIST_MAX = 1023;
 
 void init(std::string db_file_name, std::string src_file_name);
-void fin(void);
+void fin(const std::map<std::string, int >& fileMap);
 
-void insert_ref_value(const char* usr, const char* name, const char* file_name, int32_t line, int32_t col, const char* kind, const char* ref_file_name, int ref_line, int ref_col);
-void insert_decl_value(const char* usr, const char* name, const char* file_name, int32_t line, int32_t col, const char* entity_kind, int val, int is_virtual, int is_def);
-void insert_overriden_value(const char* usr, const char* name, const char* file_name, int32_t line, int32_t col, const char* entity_kind, const char* usr_overrider, int is_def);
+void insert_ref_value(const char* usr, const char* name, int fid, int32_t line, int32_t col, int kind, int refFid, int ref_line, int ref_col);
+void insert_decl_value(const char* usr, const char* name, int fid, int32_t line, int32_t col, int entity_kind, int val, int is_virtual, int is_def);
+void insert_overriden_value(const char* usr, const char* name, int fid, int32_t line, int32_t col, int entity_kind, const char* usr_overrider, int is_def);
 
 struct arg_t {
     arg_t()
@@ -47,7 +48,7 @@ public:
     CDBMgrRef()
         : CDBMgrBase("ref")
     {}
-    void insertValue(const char* usr, const char* name, const char* file_name, int32_t line, int32_t col, const char* kind, const char* ref_file_name, int ref_line, int ref_col);
+    void insertValue(const char* usr, const char* name, int fid, int32_t line, int32_t col, int kind, int refFid, int ref_line, int ref_col);
 };
 
 class CDBMgrDecl
@@ -56,7 +57,7 @@ public:
     CDBMgrDecl()
         : CDBMgrBase("decl")
     {}
-    void insertValue(const char* usr, const char* name, const char* file_name, int32_t line, int32_t col, const char* entity_kind, int val, int is_virtual, int is_def);
+    void insertValue(const char* usr, const char* name, int fid, int32_t line, int32_t col, int entity_kind, int val, int is_virtual, int is_def);
 };
 
 class CDBMgrOverriden
@@ -65,7 +66,7 @@ public:
     CDBMgrOverriden()
         : CDBMgrBase("overriden")
     {}
-    void insertValue(const char* usr, const char* name, const char* file_name, int32_t line, int32_t col, const char* entity_kind, const char* usr_overrider, int is_def);
+    void insertValue(const char* usr, const char* name, int fid, int32_t line, int32_t col, int entity_kind, const char* usr_overrider, int is_def);
 };
 
 };

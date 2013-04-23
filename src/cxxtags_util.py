@@ -9,14 +9,14 @@ def my_exit(val, msg):
     print msg
     sys.exit(val)
 
-def my_db_connect(fn):
+def db_connect(fn):
     if not os.path.exists(fn):
         my_exit(1, "ERROR: DB connect: "+fn)
     db = sqlite3.connect(fn, isolation_level='EXCLUSIVE')
     return db
 
 def get_db_file_list(db_dir):
-    db = my_db_connect(db_dir + "/" + "file_index.db")
+    db = db_connect(db_dir + "/" + "file_index.db")
     res = db.execute("SELECT db_file FROM file_index;")
     db_list = []
     for i in res.fetchall():
@@ -24,11 +24,11 @@ def get_db_file_list(db_dir):
     return db_list
 
 def get_db_by_file_name(db_dir, file_name):
-    db = my_db_connect(db_dir + "/" + "file_index.db")
+    db = db_connect(db_dir + "/" + "file_index.db")
     res = db.execute("SELECT db_file FROM file_index WHERE file_name='%s';"%(file_name))
     row = res.fetchone()
     if row == None:
         my_exit(1, "database file is not found: " + file_name)
     db_fn = row[0]
-    return my_db_connect(db_dir + "/" + db_fn)
+    return db_connect(db_dir + "/" + db_fn)
 

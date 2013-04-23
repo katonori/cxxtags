@@ -5,6 +5,8 @@ import os
 import re
 import string
 import time
+import sqlite3
+import cxxtags_util
 
 excep_list = ""
 in_file = ""
@@ -77,9 +79,19 @@ if os.path.exists(out_file):
     os.remove(out_file)
 cmd = "%s/cxxtags_core %s %s %s %s "%(exe_dir, excep_list, cur_dir, out_file, in_file)+string.join(argv)
 #print(cmd)
-time_list.append(time.time())
+#time_list.append(time.time())
 os.system(cmd)
-time_list.append(time.time())
+#time_list.append(time.time())
+
+# normalize paths
+db = cxxtags_util.db_connect(out_file)
+res = db.execute("SELECT * FROM file_list")
+new_file_list = []
+for row in res.fetchall():
+    num, fn = row
+    new_file_list.append((num, os.path.abspath(fn)))
+
+db.executemany(u"UPDATE file_list SET id=?, name=?", new_file_list)
 
 #print "time:"
 #print "    proc0: ", time_list[1]-time_list[0]

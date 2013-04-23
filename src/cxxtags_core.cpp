@@ -10,12 +10,6 @@
 #include <time.h>
 #include "db.h"
 
-#ifdef CLANG_HAVE_LIBXML
-#include <libxml/parser.h>
-#include <libxml/relaxng.h>
-#include <libxml/xmlerror.h>
-#endif
-
 std::vector<std::string > exception_list;
 std::map<std::string, std::string > fileMap;
 
@@ -32,18 +26,12 @@ static unsigned getDefaultParsingOptions() {
   return options;
 }
 
-static int checkForErrors(CXTranslationUnit TU);
-
 /******************************************************************************/
 /* Pretty-printing.                                                           */
 /******************************************************************************/
 
 typedef struct {
   const char *CommentSchemaFile;
-#ifdef CLANG_HAVE_LIBXML
-  xmlRelaxNGParserCtxtPtr RNGParser;
-  xmlRelaxNGPtr Schema;
-#endif
 } CommentXMLValidationData;
 
 static std::string getName(const CXCursor& C)
@@ -54,75 +42,6 @@ static std::string getName(const CXCursor& C)
     std::string name = std::string(cName);
     clang_disposeString(cxName);
     return name;
-}
-
-static std::string getUSR(const CXCursor& C)
-{
-    CXString cxUSR = clang_getCursorUSR(C);
-    const char *c_usr = clang_getCString(cxUSR);
-    assert(c_usr);
-    std::string usr = std::string(c_usr);
-    clang_disposeString(cxUSR);
-    return usr;
-}
-
-static std::string normalizePath(std::string curDir, std::string path)
-{
-    if(path == "") {
-        return "";
-    }
-    std::string path_orig = path;
-    // lookup map
-    std::map<std::string, std::string >::iterator mapItr = fileMap.find(path);
-    if(mapItr != fileMap.end()){ 
-        return mapItr->second;
-    }
-
-    if(path.at(0) != '/') {
-        path = curDir + path; // abs path
-    }
-    std::vector<std::string > tokens;
-    //printf("orig: %s\n", path.c_str());
-    std::string::size_type pos = 0;
-    // split by path delimiter
-    while((pos = path.find("/")) != std::string::npos) {
-        std::string s = path.substr(0, pos);
-        if(s != "") {
-            tokens.push_back(s);
-        }
-        if(pos == path.size()-1) {
-            path = "";
-            break;
-        }
-        path = path.substr(pos+1, path.size()-(pos+1));
-    }
-    if(path != "") {
-        tokens.push_back(path);
-    }
-    std::vector<std::string > normalized;
-    for(std::vector<std::string >::reverse_iterator itr = tokens.rbegin();
-            itr != tokens.rend();
-            itr++) {
-        if(*itr == ".") {
-            // discard
-        }
-        else if(*itr == "..") {
-            // up one dir level
-            itr++;
-            assert(itr != tokens.rend());
-        }
-        else {
-            normalized.push_back(*itr);
-        }
-    }
-    std::string result = "";
-    for(std::vector<std::string >::reverse_iterator itr = normalized.rbegin();
-            itr != normalized.rend();
-            itr++) {
-        result += "/" + *itr;
-    }
-    fileMap[path_orig] = result;
-    return result;
 }
 
 static std::string formatName(std::string name)
@@ -138,18 +57,43 @@ static std::string formatName(std::string name)
     return name;
 }
 
-clock_t time_sum0 = 0;
-clock_t time_sum1 = 0;
-clock_t time_sum2 = 0;
-clock_t time_sum4 = 0;
+class CFidTbl
+{
+public:
+    CFidTbl()
+    : mCurFid(1)
+    {
+        fidMap[""] = 0;
+    }
+    std::map<std::string, int > fidMap;
+    int mCurFid;
+    int getFileId(std::string fn)
+    {
+        // lookup map
+        std::map<std::string, int >::iterator mapItr = fidMap.find(fn);
+        if(mapItr != fidMap.end()){ 
+            return mapItr->second;
+        }
+        fidMap[fn] = mCurFid;
+        mCurFid++;
+        return mCurFid - 1;
+    }
+    const std::map<std::string, int >& getTbl(void) const
+    {
+        return fidMap;
+    }
+};
+class CFidTbl fidTbl;
+
 static inline void PrintCursor(CXCursor Cursor) {
-  if (clang_isInvalid(Cursor.kind)) {
-    CXString ks = clang_getCursorKindSpelling(Cursor.kind);
+  CXCursorKind kind = Cursor.kind;
+  if (clang_isInvalid(kind)) {
+    CXString ks = clang_getCursorKindSpelling(kind);
     printf("Invalid Cursor => %s", clang_getCString(ks));
     clang_disposeString(ks);
   }
   else {
-    switch(Cursor.kind) {
+    switch(kind) {
         case CXCursor_EnumConstantDecl:
         case CXCursor_TypedefDecl:
         case CXCursor_ClassDecl:
@@ -195,26 +139,20 @@ static inline void PrintCursor(CXCursor Cursor) {
     assert(cUsr);
     // file_name
     std::string fileName = getCursorSource(Cursor);
-    clock_t before4 = clock();
-    fileName = normalizePath(curDir, fileName);
     // decide if this Cursor info is to be registered to db.
+    std::vector<std::string >::iterator itrEnd = exception_list.end();
     for(std::vector<std::string >::iterator itr = exception_list.begin();
-        itr != exception_list.end();
+        itr != itrEnd;
         itr++) {
         if(fileName.find(*itr) == 0) {
             return;
         }
     }
-    clock_t after4 = clock();
-    time_sum4 += after4 - before4;
-    clock_t before1 = clock();
-    // kind
-    CXString cxKs = clang_getCursorKindSpelling(Cursor.kind);
-    const char* cKs = clang_getCString(cxKs);
+    int fid = fidTbl.getFileId(fileName);
 
     int isVirt = 0;
     int val = 0;
-    switch(Cursor.kind) {
+    switch(kind) {
         case CXCursor_EnumConstantDecl:
             // get enum constant value
             val = clang_getEnumConstantDeclValue(Cursor);
@@ -230,7 +168,7 @@ static inline void PrintCursor(CXCursor Cursor) {
         case CXCursor_MacroDefinition: {
             // is_def
             int isDef = clang_isCursorDefinition(Cursor);
-            db::insert_decl_value(cUsr, name.c_str(), fileName.c_str(), line, column, cKs, val, 0, isDef);
+            db::insert_decl_value(cUsr, name.c_str(), fid, line, column, kind, val, 0, isDef);
             break;
         }
         case CXCursor_CXXMethod: {
@@ -243,8 +181,11 @@ static inline void PrintCursor(CXCursor Cursor) {
                     &cursorOverridden,
                     &numOverridden);
             for(unsigned int i = 0; i < numOverridden; i++) {
-                std::string usr_overrider = getUSR(cursorOverridden[i]);
-                db::insert_overriden_value(usr_overrider.c_str(), name.c_str(), fileName.c_str(), line, column, cKs, cUsr, isDef);
+                // usr
+                CXString cxRefUSR = clang_getCursorUSR(cursorOverridden[i]);
+                const char *cRefUsr = clang_getCString(cxRefUSR);
+                assert(cRefUsr);
+                db::insert_overriden_value(cRefUsr, name.c_str(), fid, line, column, kind, cUsr, isDef);
             }
             // fall through
         }
@@ -253,7 +194,7 @@ static inline void PrintCursor(CXCursor Cursor) {
         case CXCursor_Destructor: {
             // is_def
             int isDef = clang_isCursorDefinition(Cursor);
-            db::insert_decl_value(cUsr, name.c_str(), fileName.c_str(), line, column, cKs, 0, isVirt, isDef);
+            db::insert_decl_value(cUsr, name.c_str(), fid, line, column, kind, 0, isVirt, isDef);
             break;
         }
         case CXCursor_DeclRefExpr:
@@ -263,13 +204,11 @@ static inline void PrintCursor(CXCursor Cursor) {
         case CXCursor_MemberRef:
         case CXCursor_NamespaceRef:
         case CXCursor_MacroExpansion: {
-            clock_t before0 = clock();
             cUsr = "";
             std::string refFileName = "";
             Referenced = clang_getCursorReferenced(Cursor);
             if (!clang_equalCursors(Referenced, clang_getNullCursor())) {
                 // ref_usr
-                //usr = getUSR(Referenced);
                 CXString cxRefUSR = clang_getCursorUSR(Referenced);
                 cUsr = clang_getCString(cxRefUSR);
                 assert(cUsr);
@@ -277,17 +216,15 @@ static inline void PrintCursor(CXCursor Cursor) {
                 CXFile ref_file;
                 CXSourceLocation ref_loc = clang_getCursorLocation(Referenced);
                 clang_getSpellingLocation(ref_loc, &ref_file, &ref_line, &ref_column, 0);
+                int refFid = 0;
                 if(ref_file) {
                     CXString cxRefFileName = clang_getFileName(ref_file);
-                    refFileName = std::string(clang_getCString(cxRefFileName));
-                    refFileName = normalizePath(curDir, refFileName);
+                    refFid = fidTbl.getFileId(clang_getCString(cxRefFileName));
                     clang_disposeString(cxRefFileName);
                 }
-                db::insert_ref_value(cUsr, name.c_str(), fileName.c_str(), line, column, cKs, refFileName.c_str(), ref_line, ref_column);
+                db::insert_ref_value(cUsr, name.c_str(), fid, line, column, kind, refFid, ref_line, ref_column);
                 clang_disposeString(cxRefUSR);
             }
-            clock_t after0 = clock();
-	    time_sum0 += after0 - before0;
             break;
         }
         // TODO:
@@ -296,9 +233,6 @@ static inline void PrintCursor(CXCursor Cursor) {
         default:
             break;
     }
-    clock_t after1 = clock();
-    time_sum1 += after1 - before1;
-    clang_disposeString(cxKs);
     clang_disposeString(cxUSR);
   }
   return;
@@ -426,10 +360,6 @@ static int perform_test_load(CXIndex Idx, CXTranslationUnit TU,
     Data.TU = TU;
     Data.Filter = ck;
     Data.ValidationData.CommentSchemaFile = CommentSchemaFile;
-#ifdef CLANG_HAVE_LIBXML
-    Data.ValidationData.RNGParser = NULL;
-    Data.ValidationData.Schema = NULL;
-#endif
     clang_visitChildren(clang_getTranslationUnitCursor(TU), Visitor, &Data);
   }
 
@@ -437,11 +367,6 @@ static int perform_test_load(CXIndex Idx, CXTranslationUnit TU,
     PV(TU);
 
   PrintDiagnostics(TU);
-  if (checkForErrors(TU) != 0) {
-    clang_disposeTranslationUnit(TU);
-    return -1;
-  }
-
   clang_disposeTranslationUnit(TU);
   return 0;
 }
@@ -449,7 +374,6 @@ static int perform_test_load(CXIndex Idx, CXTranslationUnit TU,
 int perform_test_load_source(int argc, const char **argv,
                              CXCursorVisitor Visitor,
                              PostVisitTU PV) {
-  clock_t bbb = clock();
   CXIndex Idx;
   CXTranslationUnit TU;
   const char *CommentSchemaFile = NULL;
@@ -463,7 +387,6 @@ int perform_test_load_source(int argc, const char **argv,
 
   db::init(out_file_name, in_file_name);
   
-  clock_t b = clock();
   Idx = clang_createIndex(/* excludeDeclsFromPCH */
                            1,
                           /* displayDiagnosics=*/0);
@@ -473,32 +396,18 @@ int perform_test_load_source(int argc, const char **argv,
                                   argc - num_unsaved_files,
                                   unsaved_files, num_unsaved_files, 
                                   getDefaultParsingOptions());
-  clock_t a = clock();
-  printf("TIME: %lf\n", ((double)(a-b))/CLOCKS_PER_SEC);
   if (!TU) {
     fprintf(stderr, "Unable to load translation unit!\n");
     result = 1;
     goto FUNC_END;
   }
 
-  b = clock();
   result = perform_test_load(Idx, TU, NULL, Visitor, PV,
                              CommentSchemaFile);
-  a = clock();
-  printf("TIME: %lf\n", ((double)(a-b))/CLOCKS_PER_SEC);
-  printf("TIME0: %lf\n", ((double)time_sum0)/CLOCKS_PER_SEC);
-  printf("TIME1: %lf\n", ((double)time_sum1)/CLOCKS_PER_SEC);
-  printf("TIME4: %lf\n", ((double)time_sum4)/CLOCKS_PER_SEC);
 FUNC_END:
   clang_disposeIndex(Idx);
-  db::fin();
-  clock_t aaa = clock();
-  printf("TIME: %lf\n", ((double)(aaa-bbb))/CLOCKS_PER_SEC);
+  db::fin(fidTbl.getTbl());
   return result;
-}
-
-static int checkForErrors(CXTranslationUnit TU) {
-  return 0;
 }
 
 /******************************************************************************/
@@ -557,10 +466,5 @@ int main(int argc, const char **argv) {
 #else
 int c_index_test(int argc, const char **argv) {
 #endif
-
-#ifdef CLANG_HAVE_LIBXML
-  LIBXML_TEST_VERSION
-#endif
-
   return cindextest_main(argc, argv);
 }

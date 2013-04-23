@@ -5,6 +5,8 @@ import os
 import sqlite3
 sys.path.append("../../src/")
 import cxxtags_util as cxxtags
+sys.path.append("../util/")
+import clang.cindex # for kind types
 
 err = 0
 
@@ -33,211 +35,212 @@ db_list = cxxtags.get_db_file_list(db_dir)
 
 cur_dir = os.getcwd()
 
-decl_col = "usr, name, file_name, line, col, kind, val, is_def from decl"
-ref_col = " usr, name, file_name, line, col, kind, ref_file_name, ref_line, ref_col from ref"
+decl_col = "usr, decl.name, file_list.name, decl.line, decl.col, decl.kind, decl.val, decl.is_def FROM decl, file_list ON decl.file_id=file_list.id"
+ref_col = " usr, ref.name, file_list.name, ref.line, ref.col, ref.kind, ref_file_list.name, ref.ref_line, ref.ref_col FROM (ref, file_list ON ref.file_id=file_list.id), file_list AS ref_file_list ON ref.ref_file_id=ref_file_list.id"
 
 q_list = [
 # main.cpp
-"select "+decl_col+" where line=4 and col=5 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_0
-"select "+decl_col+" where line=5 and col=5 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_1
-"select "+decl_col+" where line=6 and col=5 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_2
-"select "+decl_col+" where line=7 and col=5 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_3
-"select "+decl_col+" where line=11 and col=5 and file_name=\""+cur_dir+"/main.cpp\"", #VAL1_0
-"select "+decl_col+" where line=12 and col=5 and file_name=\""+cur_dir+"/main.cpp\"", #VAL1_1
-"select "+decl_col+" where line=13 and col=5 and file_name=\""+cur_dir+"/main.cpp\"", #VAL1_2
-"select "+decl_col+" where line=14 and col=5 and file_name=\""+cur_dir+"/main.cpp\"", #VAL1_3
-"select "+decl_col+" where line=17 and col=13 and file_name=\""+cur_dir+"/main.cpp\"", #check
-"select * from ref where line=19 and col=35 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_0
-"select * from ref where line=19 and col=43 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_1
-"select * from ref where line=19 and col=51 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_2
-"select * from ref where line=19 and col=59 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_3
-"select "+decl_col+" where line=22 and col=11 and file_name=\""+cur_dir+"/main.cpp\"", #NS0
-"select "+decl_col+" where line=24 and col=9 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_0
-"select "+decl_col+" where line=25 and col=9 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_1
-"select "+decl_col+" where line=26 and col=9 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_2
-"select "+decl_col+" where line=27 and col=9 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_3
-"select "+decl_col+" where line=29 and col=17 and file_name=\""+cur_dir+"/main.cpp\"", #check
-"select * from ref where line=31 and col=42 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_0
-"select * from ref where line=31 and col=50 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_1
-"select * from ref where line=31 and col=58 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_2
-"select * from ref where line=31 and col=66 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_3
-"select "+decl_col+" where line=33 and col=11 and file_name=\""+cur_dir+"/main.cpp\"", #C0
-"select "+decl_col+" where line=36 and col=13 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_0
-"select "+decl_col+" where line=37 and col=13 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_1
-"select "+decl_col+" where line=38 and col=13 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_2
-"select "+decl_col+" where line=39 and col=13 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_3
-"select "+decl_col+" where line=41 and col=14 and file_name=\""+cur_dir+"/main.cpp\"", #check
-"select * from ref where line=43 and col=50 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_0
-"select * from ref where line=43 and col=58 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_1
-"select * from ref where line=43 and col=66 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_2
-"select * from ref where line=43 and col=74 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_3
-"select "+decl_col+" where line=46 and col=11 and file_name=\""+cur_dir+"/main.cpp\"", #C1
-"select * from ref where line=46 and col=23 and file_name=\""+cur_dir+"/main.cpp\"", #C0
-"select "+decl_col+" where line=50 and col=13 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_0
-"select "+decl_col+" where line=51 and col=13 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_1
-"select "+decl_col+" where line=52 and col=13 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_2
-"select "+decl_col+" where line=53 and col=13 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_3
-"select "+decl_col+" where line=55 and col=14 and file_name=\""+cur_dir+"/main.cpp\"", #check
-"select * from ref where line=57 and col=50 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_0
-"select * from ref where line=57 and col=58 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_1
-"select * from ref where line=57 and col=66 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_2
-"select * from ref where line=57 and col=74 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_3
-"select "+decl_col+" where line=62 and col=11 and file_name=\""+cur_dir+"/main.cpp\"", #NS1
-"select "+decl_col+" where line=64 and col=9 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_0
-"select "+decl_col+" where line=65 and col=9 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_1
-"select "+decl_col+" where line=66 and col=9 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_2
-"select "+decl_col+" where line=67 and col=9 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_3
-"select "+decl_col+" where line=69 and col=17 and file_name=\""+cur_dir+"/main.cpp\"", #check
-"select * from ref where line=71 and col=42 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_0
-"select * from ref where line=71 and col=50 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_1
-"select * from ref where line=71 and col=58 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_2
-"select * from ref where line=71 and col=66 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_3
-"select "+decl_col+" where line=73 and col=11 and file_name=\""+cur_dir+"/main.cpp\"", #C0
-"select "+decl_col+" where line=76 and col=13 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_0
-"select "+decl_col+" where line=77 and col=13 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_1
-"select "+decl_col+" where line=78 and col=13 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_2
-"select "+decl_col+" where line=79 and col=13 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_3
-"select "+decl_col+" where line=81 and col=14 and file_name=\""+cur_dir+"/main.cpp\"", #check
-"select * from ref where line=83 and col=50 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_0
-"select * from ref where line=83 and col=58 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_1
-"select * from ref where line=83 and col=66 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_2
-"select * from ref where line=83 and col=74 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_3
-"select "+decl_col+" where line=86 and col=11 and file_name=\""+cur_dir+"/main.cpp\"", #C1
-"select * from ref where line=86 and col=23 and file_name=\""+cur_dir+"/main.cpp\"", #C0
-"select "+decl_col+" where line=89 and col=14 and file_name=\""+cur_dir+"/main.cpp\"", #check
-"select * from ref where line=91 and col=50 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_0
-"select * from ref where line=91 and col=58 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_1
-"select * from ref where line=91 and col=66 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_2
-"select * from ref where line=91 and col=74 and file_name=\""+cur_dir+"/main.cpp\"", #VAL0_3
-"select "+decl_col+" where line=96 and col=5 and file_name=\""+cur_dir+"/main.cpp\"", #main
-"select * from ref where line=98 and col=5 and file_name=\""+cur_dir+"/main.cpp\"", #NS0
-"select * from ref where line=98 and col=10 and file_name=\""+cur_dir+"/main.cpp\"", #C0
-"select "+decl_col+" where line=98 and col=13 and file_name=\""+cur_dir+"/main.cpp\"", #c00
-"select * from ref where line=99 and col=5 and file_name=\""+cur_dir+"/main.cpp\"", #NS0
-"select * from ref where line=99 and col=10 and file_name=\""+cur_dir+"/main.cpp\"", #C1
-"select "+decl_col+" where line=99 and col=13 and file_name=\""+cur_dir+"/main.cpp\"", #c01
-"select * from ref where line=100 and col=5 and file_name=\""+cur_dir+"/main.cpp\"", #NS1
-"select * from ref where line=100 and col=10 and file_name=\""+cur_dir+"/main.cpp\"", #C0
-"select "+decl_col+" where line=100 and col=13 and file_name=\""+cur_dir+"/main.cpp\"", #c10
-"select * from ref where line=101 and col=5 and file_name=\""+cur_dir+"/main.cpp\"", #NS1
-"select * from ref where line=101 and col=10 and file_name=\""+cur_dir+"/main.cpp\"", #C1
-"select "+decl_col+" where line=101 and col=13 and file_name=\""+cur_dir+"/main.cpp\"", #c11
-"select * from ref where line=102 and col=7 and file_name=\""+cur_dir+"/main.cpp\"", #check
-"select * from ref where line=103 and col=5 and file_name=\""+cur_dir+"/main.cpp\"", #NS0
-"select * from ref where line=103 and col=10 and file_name=\""+cur_dir+"/main.cpp\"", #check
-"select * from ref where line=104 and col=5 and file_name=\""+cur_dir+"/main.cpp\"", #NS1
-"select * from ref where line=104 and col=10 and file_name=\""+cur_dir+"/main.cpp\"", #check
-"select * from ref where line=105 and col=5 and file_name=\""+cur_dir+"/main.cpp\"", #c00
-"select * from ref where line=105 and col=9 and file_name=\""+cur_dir+"/main.cpp\"", #check
-"select * from ref where line=106 and col=5 and file_name=\""+cur_dir+"/main.cpp\"", #c01
-"select * from ref where line=106 and col=9 and file_name=\""+cur_dir+"/main.cpp\"", #check
-"select * from ref where line=107 and col=5 and file_name=\""+cur_dir+"/main.cpp\"", #c10
-"select * from ref where line=107 and col=9 and file_name=\""+cur_dir+"/main.cpp\"", #check
-"select * from ref where line=108 and col=5 and file_name=\""+cur_dir+"/main.cpp\"", #c11
-"select * from ref where line=108 and col=9 and file_name=\""+cur_dir+"/main.cpp\"", #check
+"SELECT "+decl_col+" WHERE line=4 AND col=5 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_0
+"SELECT "+decl_col+" WHERE line=5 AND col=5 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_1
+"SELECT "+decl_col+" WHERE line=6 AND col=5 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_2
+"SELECT "+decl_col+" WHERE line=7 AND col=5 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_3
+"SELECT "+decl_col+" WHERE line=11 AND col=5 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL1_0
+"SELECT "+decl_col+" WHERE line=12 AND col=5 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL1_1
+"SELECT "+decl_col+" WHERE line=13 AND col=5 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL1_2
+"SELECT "+decl_col+" WHERE line=14 AND col=5 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL1_3
+"SELECT "+decl_col+" WHERE line=17 AND col=13 AND file_list.name=\""+cur_dir+"/main.cpp\"", #check
+"SELECT "+ref_col+" WHERE line=19 AND col=35 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_0
+"SELECT "+ref_col+" WHERE line=19 AND col=43 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_1
+"SELECT "+ref_col+" WHERE line=19 AND col=51 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_2
+"SELECT "+ref_col+" WHERE line=19 AND col=59 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_3
+"SELECT "+decl_col+" WHERE line=22 AND col=11 AND file_list.name=\""+cur_dir+"/main.cpp\"", #NS0
+"SELECT "+decl_col+" WHERE line=24 AND col=9 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_0
+"SELECT "+decl_col+" WHERE line=25 AND col=9 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_1
+"SELECT "+decl_col+" WHERE line=26 AND col=9 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_2
+"SELECT "+decl_col+" WHERE line=27 AND col=9 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_3
+"SELECT "+decl_col+" WHERE line=29 AND col=17 AND file_list.name=\""+cur_dir+"/main.cpp\"", #check
+"SELECT "+ref_col+" WHERE line=31 AND col=42 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_0
+"SELECT "+ref_col+" WHERE line=31 AND col=50 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_1
+"SELECT "+ref_col+" WHERE line=31 AND col=58 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_2
+"SELECT "+ref_col+" WHERE line=31 AND col=66 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_3
+"SELECT "+decl_col+" WHERE line=33 AND col=11 AND file_list.name=\""+cur_dir+"/main.cpp\"", #C0
+"SELECT "+decl_col+" WHERE line=36 AND col=13 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_0
+"SELECT "+decl_col+" WHERE line=37 AND col=13 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_1
+"SELECT "+decl_col+" WHERE line=38 AND col=13 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_2
+"SELECT "+decl_col+" WHERE line=39 AND col=13 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_3
+"SELECT "+decl_col+" WHERE line=41 AND col=14 AND file_list.name=\""+cur_dir+"/main.cpp\"", #check
+"SELECT "+ref_col+" WHERE line=43 AND col=50 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_0
+"SELECT "+ref_col+" WHERE line=43 AND col=58 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_1
+"SELECT "+ref_col+" WHERE line=43 AND col=66 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_2
+"SELECT "+ref_col+" WHERE line=43 AND col=74 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_3
+"SELECT "+decl_col+" WHERE line=46 AND col=11 AND file_list.name=\""+cur_dir+"/main.cpp\"", #C1
+"SELECT "+ref_col+" WHERE line=46 AND col=23 AND file_list.name=\""+cur_dir+"/main.cpp\"", #C0
+"SELECT "+decl_col+" WHERE line=50 AND col=13 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_0
+"SELECT "+decl_col+" WHERE line=51 AND col=13 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_1
+"SELECT "+decl_col+" WHERE line=52 AND col=13 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_2
+"SELECT "+decl_col+" WHERE line=53 AND col=13 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_3
+"SELECT "+decl_col+" WHERE line=55 AND col=14 AND file_list.name=\""+cur_dir+"/main.cpp\"", #check
+"SELECT "+ref_col+" WHERE line=57 AND col=50 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_0
+"SELECT "+ref_col+" WHERE line=57 AND col=58 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_1
+"SELECT "+ref_col+" WHERE line=57 AND col=66 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_2
+"SELECT "+ref_col+" WHERE line=57 AND col=74 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_3
+"SELECT "+decl_col+" WHERE line=62 AND col=11 AND file_list.name=\""+cur_dir+"/main.cpp\"", #NS1
+"SELECT "+decl_col+" WHERE line=64 AND col=9 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_0
+"SELECT "+decl_col+" WHERE line=65 AND col=9 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_1
+"SELECT "+decl_col+" WHERE line=66 AND col=9 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_2
+"SELECT "+decl_col+" WHERE line=67 AND col=9 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_3
+"SELECT "+decl_col+" WHERE line=69 AND col=17 AND file_list.name=\""+cur_dir+"/main.cpp\"", #check
+"SELECT "+ref_col+" WHERE line=71 AND col=42 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_0
+"SELECT "+ref_col+" WHERE line=71 AND col=50 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_1
+"SELECT "+ref_col+" WHERE line=71 AND col=58 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_2
+"SELECT "+ref_col+" WHERE line=71 AND col=66 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_3
+"SELECT "+decl_col+" WHERE line=73 AND col=11 AND file_list.name=\""+cur_dir+"/main.cpp\"", #C0
+"SELECT "+decl_col+" WHERE line=76 AND col=13 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_0
+"SELECT "+decl_col+" WHERE line=77 AND col=13 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_1
+"SELECT "+decl_col+" WHERE line=78 AND col=13 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_2
+"SELECT "+decl_col+" WHERE line=79 AND col=13 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_3
+"SELECT "+decl_col+" WHERE line=81 AND col=14 AND file_list.name=\""+cur_dir+"/main.cpp\"", #check
+"SELECT "+ref_col+" WHERE line=83 AND col=50 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_0
+"SELECT "+ref_col+" WHERE line=83 AND col=58 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_1
+"SELECT "+ref_col+" WHERE line=83 AND col=66 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_2
+"SELECT "+ref_col+" WHERE line=83 AND col=74 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_3
+"SELECT "+decl_col+" WHERE line=86 AND col=11 AND file_list.name=\""+cur_dir+"/main.cpp\"", #C1
+"SELECT "+ref_col+" WHERE line=86 AND col=23 AND file_list.name=\""+cur_dir+"/main.cpp\"", #C0
+"SELECT "+decl_col+" WHERE line=89 AND col=14 AND file_list.name=\""+cur_dir+"/main.cpp\"", #check
+"SELECT "+ref_col+" WHERE line=91 AND col=50 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_0
+"SELECT "+ref_col+" WHERE line=91 AND col=58 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_1
+"SELECT "+ref_col+" WHERE line=91 AND col=66 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_2
+"SELECT "+ref_col+" WHERE line=91 AND col=74 AND file_list.name=\""+cur_dir+"/main.cpp\"", #VAL0_3
+"SELECT "+decl_col+" WHERE line=96 AND col=5 AND file_list.name=\""+cur_dir+"/main.cpp\"", #main
+"SELECT "+ref_col+" WHERE line=98 AND col=5 AND file_list.name=\""+cur_dir+"/main.cpp\"", #NS0
+"SELECT "+ref_col+" WHERE line=98 AND col=10 AND file_list.name=\""+cur_dir+"/main.cpp\"", #C0
+"SELECT "+decl_col+" WHERE line=98 AND col=13 AND file_list.name=\""+cur_dir+"/main.cpp\"", #c00
+"SELECT "+ref_col+" WHERE line=99 AND col=5 AND file_list.name=\""+cur_dir+"/main.cpp\"", #NS0
+"SELECT "+ref_col+" WHERE line=99 AND col=10 AND file_list.name=\""+cur_dir+"/main.cpp\"", #C1
+"SELECT "+decl_col+" WHERE line=99 AND col=13 AND file_list.name=\""+cur_dir+"/main.cpp\"", #c01
+"SELECT "+ref_col+" WHERE line=100 AND col=5 AND file_list.name=\""+cur_dir+"/main.cpp\"", #NS1
+"SELECT "+ref_col+" WHERE line=100 AND col=10 AND file_list.name=\""+cur_dir+"/main.cpp\"", #C0
+"SELECT "+decl_col+" WHERE line=100 AND col=13 AND file_list.name=\""+cur_dir+"/main.cpp\"", #c10
+"SELECT "+ref_col+" WHERE line=101 AND col=5 AND file_list.name=\""+cur_dir+"/main.cpp\"", #NS1
+"SELECT "+ref_col+" WHERE line=101 AND col=10 AND file_list.name=\""+cur_dir+"/main.cpp\"", #C1
+"SELECT "+decl_col+" WHERE line=101 AND col=13 AND file_list.name=\""+cur_dir+"/main.cpp\"", #c11
+"SELECT "+ref_col+" WHERE line=102 AND col=7 AND file_list.name=\""+cur_dir+"/main.cpp\"", #check
+"SELECT "+ref_col+" WHERE line=103 AND col=5 AND file_list.name=\""+cur_dir+"/main.cpp\"", #NS0
+"SELECT "+ref_col+" WHERE line=103 AND col=10 AND file_list.name=\""+cur_dir+"/main.cpp\"", #check
+"SELECT "+ref_col+" WHERE line=104 AND col=5 AND file_list.name=\""+cur_dir+"/main.cpp\"", #NS1
+"SELECT "+ref_col+" WHERE line=104 AND col=10 AND file_list.name=\""+cur_dir+"/main.cpp\"", #check
+"SELECT "+ref_col+" WHERE line=105 AND col=5 AND file_list.name=\""+cur_dir+"/main.cpp\"", #c00
+"SELECT "+ref_col+" WHERE line=105 AND col=9 AND file_list.name=\""+cur_dir+"/main.cpp\"", #check
+"SELECT "+ref_col+" WHERE line=106 AND col=5 AND file_list.name=\""+cur_dir+"/main.cpp\"", #c01
+"SELECT "+ref_col+" WHERE line=106 AND col=9 AND file_list.name=\""+cur_dir+"/main.cpp\"", #check
+"SELECT "+ref_col+" WHERE line=107 AND col=5 AND file_list.name=\""+cur_dir+"/main.cpp\"", #c10
+"SELECT "+ref_col+" WHERE line=107 AND col=9 AND file_list.name=\""+cur_dir+"/main.cpp\"", #check
+"SELECT "+ref_col+" WHERE line=108 AND col=5 AND file_list.name=\""+cur_dir+"/main.cpp\"", #c11
+"SELECT "+ref_col+" WHERE line=108 AND col=9 AND file_list.name=\""+cur_dir+"/main.cpp\"", #check
 ]
 
 a_list = [
-('c:main.cpp@20@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',4,5,'EnumConstantDecl',0,1),
-('c:main.cpp@20@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',5,5,'EnumConstantDecl',1,1),
-('c:main.cpp@20@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',6,5,'EnumConstantDecl',2,1),
-('c:main.cpp@20@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',7,5,'EnumConstantDecl',3,1),
-('c:main.cpp@79@Ea@VAL1_0','VAL1_0',cur_dir+'/main.cpp',11,5,'EnumConstantDecl',0,1),
-('c:main.cpp@79@Ea@VAL1_1','VAL1_1',cur_dir+'/main.cpp',12,5,'EnumConstantDecl',1,1),
-('c:main.cpp@79@Ea@VAL1_2','VAL1_2',cur_dir+'/main.cpp',13,5,'EnumConstantDecl',2,1),
-('c:main.cpp@79@Ea@VAL1_3','VAL1_3',cur_dir+'/main.cpp',14,5,'EnumConstantDecl',3,1),
-('c:main.cpp@138@F@check#','check',cur_dir+'/main.cpp',17,13,'FunctionDecl',0,1),
-('c:main.cpp@20@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',19,35,'DeclRefExpr',cur_dir+'/main.cpp',4,5),
-('c:main.cpp@20@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',19,43,'DeclRefExpr',cur_dir+'/main.cpp',5,5),
-('c:main.cpp@20@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',19,51,'DeclRefExpr',cur_dir+'/main.cpp',6,5),
-('c:main.cpp@20@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',19,59,'DeclRefExpr',cur_dir+'/main.cpp',7,5),
-('c:@N@NS0','NS0',cur_dir+'/main.cpp',22,11,'Namespace',0,1),
-('c:main.cpp@250@N@NS0@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',24,9,'EnumConstantDecl',10,1),
-('c:main.cpp@250@N@NS0@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',25,9,'EnumConstantDecl',11,1),
-('c:main.cpp@250@N@NS0@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',26,9,'EnumConstantDecl',12,1),
-('c:main.cpp@250@N@NS0@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',27,9,'EnumConstantDecl',13,1),
-('c:main.cpp@335@N@NS0@F@check#','check',cur_dir+'/main.cpp',29,17,'FunctionDecl',0,1),
-('c:main.cpp@250@N@NS0@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',31,42,'DeclRefExpr',cur_dir+'/main.cpp',24,9),
-('c:main.cpp@250@N@NS0@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',31,50,'DeclRefExpr',cur_dir+'/main.cpp',25,9),
-('c:main.cpp@250@N@NS0@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',31,58,'DeclRefExpr',cur_dir+'/main.cpp',26,9),
-('c:main.cpp@250@N@NS0@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',31,66,'DeclRefExpr',cur_dir+'/main.cpp',27,9),
-('c:@N@NS0@C@C0','C0',cur_dir+'/main.cpp',33,11,'ClassDecl',0,1),
-('c:main.cpp@480@N@NS0@C@C0@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',36,13,'EnumConstantDecl',20,1),
-('c:main.cpp@480@N@NS0@C@C0@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',37,13,'EnumConstantDecl',21,1),
-('c:main.cpp@480@N@NS0@C@C0@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',38,13,'EnumConstantDecl',22,1),
-('c:main.cpp@480@N@NS0@C@C0@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',39,13,'EnumConstantDecl',23,1),
-('c:@N@NS0@C@C0@F@check#','check',cur_dir+'/main.cpp',41,14,'CXXMethod',0,1),
-('c:main.cpp@480@N@NS0@C@C0@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',43,50,'DeclRefExpr',cur_dir+'/main.cpp',36,13),
-('c:main.cpp@480@N@NS0@C@C0@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',43,58,'DeclRefExpr',cur_dir+'/main.cpp',37,13),
-('c:main.cpp@480@N@NS0@C@C0@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',43,66,'DeclRefExpr',cur_dir+'/main.cpp',38,13),
-('c:main.cpp@480@N@NS0@C@C0@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',43,74,'DeclRefExpr',cur_dir+'/main.cpp',39,13),
-('c:@N@NS0@C@C1','C1',cur_dir+'/main.cpp',46,11,'ClassDecl',0,1),
-('c:@N@NS0@C@C0','C0',cur_dir+'/main.cpp',46,23,'TypeRef',cur_dir+'/main.cpp',33,11),
-('c:main.cpp@768@N@NS0@C@C1@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',50,13,'EnumConstantDecl',30,1),
-('c:main.cpp@768@N@NS0@C@C1@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',51,13,'EnumConstantDecl',31,1),
-('c:main.cpp@768@N@NS0@C@C1@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',52,13,'EnumConstantDecl',32,1),
-('c:main.cpp@768@N@NS0@C@C1@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',53,13,'EnumConstantDecl',33,1),
-('c:@N@NS0@C@C1@F@check#','check',cur_dir+'/main.cpp',55,14,'CXXMethod',0,1),
-('c:main.cpp@768@N@NS0@C@C1@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',57,50,'DeclRefExpr',cur_dir+'/main.cpp',50,13),
-('c:main.cpp@768@N@NS0@C@C1@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',57,58,'DeclRefExpr',cur_dir+'/main.cpp',51,13),
-('c:main.cpp@768@N@NS0@C@C1@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',57,66,'DeclRefExpr',cur_dir+'/main.cpp',52,13),
-('c:main.cpp@768@N@NS0@C@C1@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',57,74,'DeclRefExpr',cur_dir+'/main.cpp',53,13),
-('c:@N@NS1','NS1',cur_dir+'/main.cpp',62,11,'Namespace',0,1),
-('c:main.cpp@1025@N@NS1@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',64,9,'EnumConstantDecl',40,1),
-('c:main.cpp@1025@N@NS1@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',65,9,'EnumConstantDecl',41,1),
-('c:main.cpp@1025@N@NS1@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',66,9,'EnumConstantDecl',42,1),
-('c:main.cpp@1025@N@NS1@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',67,9,'EnumConstantDecl',43,1),
-('c:main.cpp@1112@N@NS1@F@check#','check',cur_dir+'/main.cpp',69,17,'FunctionDecl',0,1),
-('c:main.cpp@1025@N@NS1@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',71,42,'DeclRefExpr',cur_dir+'/main.cpp',64,9),
-('c:main.cpp@1025@N@NS1@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',71,50,'DeclRefExpr',cur_dir+'/main.cpp',65,9),
-('c:main.cpp@1025@N@NS1@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',71,58,'DeclRefExpr',cur_dir+'/main.cpp',66,9),
-('c:main.cpp@1025@N@NS1@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',71,66,'DeclRefExpr',cur_dir+'/main.cpp',67,9),
-('c:@N@NS1@C@C0','C0',cur_dir+'/main.cpp',73,11,'ClassDecl',0,1),
-('c:main.cpp@1257@N@NS1@C@C0@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',76,13,'EnumConstantDecl',50,1),
-('c:main.cpp@1257@N@NS1@C@C0@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',77,13,'EnumConstantDecl',51,1),
-('c:main.cpp@1257@N@NS1@C@C0@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',78,13,'EnumConstantDecl',52,1),
-('c:main.cpp@1257@N@NS1@C@C0@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',79,13,'EnumConstantDecl',53,1),
-('c:@N@NS1@C@C0@F@check#','check',cur_dir+'/main.cpp',81,14,'CXXMethod',0,1),
-('c:main.cpp@1257@N@NS1@C@C0@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',83,50,'DeclRefExpr',cur_dir+'/main.cpp',76,13),
-('c:main.cpp@1257@N@NS1@C@C0@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',83,58,'DeclRefExpr',cur_dir+'/main.cpp',77,13),
-('c:main.cpp@1257@N@NS1@C@C0@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',83,66,'DeclRefExpr',cur_dir+'/main.cpp',78,13),
-('c:main.cpp@1257@N@NS1@C@C0@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',83,74,'DeclRefExpr',cur_dir+'/main.cpp',79,13),
-('c:@N@NS1@C@C1','C1',cur_dir+'/main.cpp',86,11,'ClassDecl',0,1),
-('c:@N@NS1@C@C0','C0',cur_dir+'/main.cpp',86,23,'TypeRef',cur_dir+'/main.cpp',73,11),
-('c:@N@NS1@C@C1@F@check#','check',cur_dir+'/main.cpp',89,14,'CXXMethod',0,1),
-('c:main.cpp@1257@N@NS1@C@C0@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',91,50,'DeclRefExpr',cur_dir+'/main.cpp',76,13),
-('c:main.cpp@1257@N@NS1@C@C0@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',91,58,'DeclRefExpr',cur_dir+'/main.cpp',77,13),
-('c:main.cpp@1257@N@NS1@C@C0@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',91,66,'DeclRefExpr',cur_dir+'/main.cpp',78,13),
-('c:main.cpp@1257@N@NS1@C@C0@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',91,74,'DeclRefExpr',cur_dir+'/main.cpp',79,13),
-('c:@F@main','main',cur_dir+'/main.cpp',96,5,'FunctionDecl',0,1),
-('c:@N@NS0','NS0',cur_dir+'/main.cpp',98,5,'NamespaceRef',cur_dir+'/main.cpp',22,11),
-('c:@N@NS0@C@C0','C0',cur_dir+'/main.cpp',98,10,'TypeRef',cur_dir+'/main.cpp',33,11),
-('c:main.cpp@1688@F@main@c00','c00',cur_dir+'/main.cpp',98,13,'VarDecl',0,1),
-('c:@N@NS0','NS0',cur_dir+'/main.cpp',99,5,'NamespaceRef',cur_dir+'/main.cpp',22,11),
-('c:@N@NS0@C@C1','C1',cur_dir+'/main.cpp',99,10,'TypeRef',cur_dir+'/main.cpp',46,11),
-('c:main.cpp@1705@F@main@c01','c01',cur_dir+'/main.cpp',99,13,'VarDecl',0,1),
-('c:@N@NS1','NS1',cur_dir+'/main.cpp',100,5,'NamespaceRef',cur_dir+'/main.cpp',62,11),
-('c:@N@NS1@C@C0','C0',cur_dir+'/main.cpp',100,10,'TypeRef',cur_dir+'/main.cpp',73,11),
-('c:main.cpp@1722@F@main@c10','c10',cur_dir+'/main.cpp',100,13,'VarDecl',0,1),
-('c:@N@NS1','NS1',cur_dir+'/main.cpp',101,5,'NamespaceRef',cur_dir+'/main.cpp',62,11),
-('c:@N@NS1@C@C1','C1',cur_dir+'/main.cpp',101,10,'TypeRef',cur_dir+'/main.cpp',86,11),
-('c:main.cpp@1739@F@main@c11','c11',cur_dir+'/main.cpp',101,13,'VarDecl',0,1),
-('c:main.cpp@138@F@check#','check',cur_dir+'/main.cpp',102,7,'DeclRefExpr',cur_dir+'/main.cpp',17,13),
-('c:@N@NS0','NS0',cur_dir+'/main.cpp',103,5,'NamespaceRef',cur_dir+'/main.cpp',22,11),
-('c:main.cpp@335@N@NS0@F@check#','check',cur_dir+'/main.cpp',103,10,'DeclRefExpr',cur_dir+'/main.cpp',29,17),
-('c:@N@NS1','NS1',cur_dir+'/main.cpp',104,5,'NamespaceRef',cur_dir+'/main.cpp',62,11),
-('c:main.cpp@1112@N@NS1@F@check#','check',cur_dir+'/main.cpp',104,10,'DeclRefExpr',cur_dir+'/main.cpp',69,17),
-('c:main.cpp@1688@F@main@c00','c00',cur_dir+'/main.cpp',105,5,'DeclRefExpr',cur_dir+'/main.cpp',98,13),
-('c:@N@NS0@C@C0@F@check#','check',cur_dir+'/main.cpp',105,9,'MemberRefExpr',cur_dir+'/main.cpp',41,14),
-('c:main.cpp@1705@F@main@c01','c01',cur_dir+'/main.cpp',106,5,'DeclRefExpr',cur_dir+'/main.cpp',99,13),
-('c:@N@NS0@C@C1@F@check#','check',cur_dir+'/main.cpp',106,9,'MemberRefExpr',cur_dir+'/main.cpp',55,14),
-('c:main.cpp@1722@F@main@c10','c10',cur_dir+'/main.cpp',107,5,'DeclRefExpr',cur_dir+'/main.cpp',100,13),
-('c:@N@NS1@C@C0@F@check#','check',cur_dir+'/main.cpp',107,9,'MemberRefExpr',cur_dir+'/main.cpp',81,14),
-('c:main.cpp@1739@F@main@c11','c11',cur_dir+'/main.cpp',108,5,'DeclRefExpr',cur_dir+'/main.cpp',101,13),
-('c:@N@NS1@C@C1@F@check#','check',cur_dir+'/main.cpp',108,9,'MemberRefExpr',cur_dir+'/main.cpp',89,14),
+
+('c:main.cpp@20@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',4,5,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,0,1),
+('c:main.cpp@20@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',5,5,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,1,1),
+('c:main.cpp@20@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',6,5,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,2,1),
+('c:main.cpp@20@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',7,5,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,3,1),
+('c:main.cpp@79@Ea@VAL1_0','VAL1_0',cur_dir+'/main.cpp',11,5,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,0,1),
+('c:main.cpp@79@Ea@VAL1_1','VAL1_1',cur_dir+'/main.cpp',12,5,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,1,1),
+('c:main.cpp@79@Ea@VAL1_2','VAL1_2',cur_dir+'/main.cpp',13,5,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,2,1),
+('c:main.cpp@79@Ea@VAL1_3','VAL1_3',cur_dir+'/main.cpp',14,5,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,3,1),
+('c:main.cpp@138@F@check#','check',cur_dir+'/main.cpp',17,13,clang.cindex.CursorKind.FUNCTION_DECL.value,0,1),
+('c:main.cpp@20@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',19,35,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',4,5),
+('c:main.cpp@20@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',19,43,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',5,5),
+('c:main.cpp@20@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',19,51,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',6,5),
+('c:main.cpp@20@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',19,59,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',7,5),
+('c:@N@NS0','NS0',cur_dir+'/main.cpp',22,11,clang.cindex.CursorKind.NAMESPACE.value,0,1),
+('c:main.cpp@250@N@NS0@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',24,9,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,10,1),
+('c:main.cpp@250@N@NS0@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',25,9,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,11,1),
+('c:main.cpp@250@N@NS0@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',26,9,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,12,1),
+('c:main.cpp@250@N@NS0@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',27,9,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,13,1),
+('c:main.cpp@335@N@NS0@F@check#','check',cur_dir+'/main.cpp',29,17,clang.cindex.CursorKind.FUNCTION_DECL.value,0,1),
+('c:main.cpp@250@N@NS0@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',31,42,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',24,9),
+('c:main.cpp@250@N@NS0@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',31,50,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',25,9),
+('c:main.cpp@250@N@NS0@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',31,58,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',26,9),
+('c:main.cpp@250@N@NS0@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',31,66,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',27,9),
+('c:@N@NS0@C@C0','C0',cur_dir+'/main.cpp',33,11,clang.cindex.CursorKind.CLASS_DECL.value,0,1),
+('c:main.cpp@480@N@NS0@C@C0@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',36,13,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,20,1),
+('c:main.cpp@480@N@NS0@C@C0@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',37,13,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,21,1),
+('c:main.cpp@480@N@NS0@C@C0@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',38,13,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,22,1),
+('c:main.cpp@480@N@NS0@C@C0@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',39,13,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,23,1),
+('c:@N@NS0@C@C0@F@check#','check',cur_dir+'/main.cpp',41,14,clang.cindex.CursorKind.CXX_METHOD.value,0,1),
+('c:main.cpp@480@N@NS0@C@C0@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',43,50,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',36,13),
+('c:main.cpp@480@N@NS0@C@C0@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',43,58,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',37,13),
+('c:main.cpp@480@N@NS0@C@C0@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',43,66,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',38,13),
+('c:main.cpp@480@N@NS0@C@C0@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',43,74,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',39,13),
+('c:@N@NS0@C@C1','C1',cur_dir+'/main.cpp',46,11,clang.cindex.CursorKind.CLASS_DECL.value,0,1),
+('c:@N@NS0@C@C0','C0',cur_dir+'/main.cpp',46,23,clang.cindex.CursorKind.TYPE_REF.value,cur_dir+'/main.cpp',33,11),
+('c:main.cpp@768@N@NS0@C@C1@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',50,13,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,30,1),
+('c:main.cpp@768@N@NS0@C@C1@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',51,13,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,31,1),
+('c:main.cpp@768@N@NS0@C@C1@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',52,13,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,32,1),
+('c:main.cpp@768@N@NS0@C@C1@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',53,13,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,33,1),
+('c:@N@NS0@C@C1@F@check#','check',cur_dir+'/main.cpp',55,14,clang.cindex.CursorKind.CXX_METHOD.value,0,1),
+('c:main.cpp@768@N@NS0@C@C1@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',57,50,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',50,13),
+('c:main.cpp@768@N@NS0@C@C1@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',57,58,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',51,13),
+('c:main.cpp@768@N@NS0@C@C1@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',57,66,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',52,13),
+('c:main.cpp@768@N@NS0@C@C1@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',57,74,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',53,13),
+('c:@N@NS1','NS1',cur_dir+'/main.cpp',62,11,clang.cindex.CursorKind.NAMESPACE.value,0,1),
+('c:main.cpp@1025@N@NS1@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',64,9,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,40,1),
+('c:main.cpp@1025@N@NS1@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',65,9,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,41,1),
+('c:main.cpp@1025@N@NS1@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',66,9,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,42,1),
+('c:main.cpp@1025@N@NS1@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',67,9,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,43,1),
+('c:main.cpp@1112@N@NS1@F@check#','check',cur_dir+'/main.cpp',69,17,clang.cindex.CursorKind.FUNCTION_DECL.value,0,1),
+('c:main.cpp@1025@N@NS1@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',71,42,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',64,9),
+('c:main.cpp@1025@N@NS1@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',71,50,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',65,9),
+('c:main.cpp@1025@N@NS1@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',71,58,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',66,9),
+('c:main.cpp@1025@N@NS1@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',71,66,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',67,9),
+('c:@N@NS1@C@C0','C0',cur_dir+'/main.cpp',73,11,clang.cindex.CursorKind.CLASS_DECL.value,0,1),
+('c:main.cpp@1257@N@NS1@C@C0@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',76,13,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,50,1),
+('c:main.cpp@1257@N@NS1@C@C0@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',77,13,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,51,1),
+('c:main.cpp@1257@N@NS1@C@C0@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',78,13,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,52,1),
+('c:main.cpp@1257@N@NS1@C@C0@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',79,13,clang.cindex.CursorKind.ENUM_CONSTANT_DECL.value,53,1),
+('c:@N@NS1@C@C0@F@check#','check',cur_dir+'/main.cpp',81,14,clang.cindex.CursorKind.CXX_METHOD.value,0,1),
+('c:main.cpp@1257@N@NS1@C@C0@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',83,50,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',76,13),
+('c:main.cpp@1257@N@NS1@C@C0@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',83,58,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',77,13),
+('c:main.cpp@1257@N@NS1@C@C0@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',83,66,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',78,13),
+('c:main.cpp@1257@N@NS1@C@C0@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',83,74,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',79,13),
+('c:@N@NS1@C@C1','C1',cur_dir+'/main.cpp',86,11,clang.cindex.CursorKind.CLASS_DECL.value,0,1),
+('c:@N@NS1@C@C0','C0',cur_dir+'/main.cpp',86,23,clang.cindex.CursorKind.TYPE_REF.value,cur_dir+'/main.cpp',73,11),
+('c:@N@NS1@C@C1@F@check#','check',cur_dir+'/main.cpp',89,14,clang.cindex.CursorKind.CXX_METHOD.value,0,1),
+('c:main.cpp@1257@N@NS1@C@C0@Ea@VAL0_0','VAL0_0',cur_dir+'/main.cpp',91,50,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',76,13),
+('c:main.cpp@1257@N@NS1@C@C0@Ea@VAL0_1','VAL0_1',cur_dir+'/main.cpp',91,58,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',77,13),
+('c:main.cpp@1257@N@NS1@C@C0@Ea@VAL0_2','VAL0_2',cur_dir+'/main.cpp',91,66,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',78,13),
+('c:main.cpp@1257@N@NS1@C@C0@Ea@VAL0_3','VAL0_3',cur_dir+'/main.cpp',91,74,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',79,13),
+('c:@F@main','main',cur_dir+'/main.cpp',96,5,clang.cindex.CursorKind.FUNCTION_DECL.value,0,1),
+('c:@N@NS0','NS0',cur_dir+'/main.cpp',98,5,clang.cindex.CursorKind.NAMESPACE_REF.value,cur_dir+'/main.cpp',22,11),
+('c:@N@NS0@C@C0','C0',cur_dir+'/main.cpp',98,10,clang.cindex.CursorKind.TYPE_REF.value,cur_dir+'/main.cpp',33,11),
+('c:main.cpp@1688@F@main@c00','c00',cur_dir+'/main.cpp',98,13,clang.cindex.CursorKind.VAR_DECL.value,0,1),
+('c:@N@NS0','NS0',cur_dir+'/main.cpp',99,5,clang.cindex.CursorKind.NAMESPACE_REF.value,cur_dir+'/main.cpp',22,11),
+('c:@N@NS0@C@C1','C1',cur_dir+'/main.cpp',99,10,clang.cindex.CursorKind.TYPE_REF.value,cur_dir+'/main.cpp',46,11),
+('c:main.cpp@1705@F@main@c01','c01',cur_dir+'/main.cpp',99,13,clang.cindex.CursorKind.VAR_DECL.value,0,1),
+('c:@N@NS1','NS1',cur_dir+'/main.cpp',100,5,clang.cindex.CursorKind.NAMESPACE_REF.value,cur_dir+'/main.cpp',62,11),
+('c:@N@NS1@C@C0','C0',cur_dir+'/main.cpp',100,10,clang.cindex.CursorKind.TYPE_REF.value,cur_dir+'/main.cpp',73,11),
+('c:main.cpp@1722@F@main@c10','c10',cur_dir+'/main.cpp',100,13,clang.cindex.CursorKind.VAR_DECL.value,0,1),
+('c:@N@NS1','NS1',cur_dir+'/main.cpp',101,5,clang.cindex.CursorKind.NAMESPACE_REF.value,cur_dir+'/main.cpp',62,11),
+('c:@N@NS1@C@C1','C1',cur_dir+'/main.cpp',101,10,clang.cindex.CursorKind.TYPE_REF.value,cur_dir+'/main.cpp',86,11),
+('c:main.cpp@1739@F@main@c11','c11',cur_dir+'/main.cpp',101,13,clang.cindex.CursorKind.VAR_DECL.value,0,1),
+('c:main.cpp@138@F@check#','check',cur_dir+'/main.cpp',102,7,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',17,13),
+('c:@N@NS0','NS0',cur_dir+'/main.cpp',103,5,clang.cindex.CursorKind.NAMESPACE_REF.value,cur_dir+'/main.cpp',22,11),
+('c:main.cpp@335@N@NS0@F@check#','check',cur_dir+'/main.cpp',103,10,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',29,17),
+('c:@N@NS1','NS1',cur_dir+'/main.cpp',104,5,clang.cindex.CursorKind.NAMESPACE_REF.value,cur_dir+'/main.cpp',62,11),
+('c:main.cpp@1112@N@NS1@F@check#','check',cur_dir+'/main.cpp',104,10,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',69,17),
+('c:main.cpp@1688@F@main@c00','c00',cur_dir+'/main.cpp',105,5,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',98,13),
+('c:@N@NS0@C@C0@F@check#','check',cur_dir+'/main.cpp',105,9,clang.cindex.CursorKind.MEMBER_REF_EXPR.value,cur_dir+'/main.cpp',41,14),
+('c:main.cpp@1705@F@main@c01','c01',cur_dir+'/main.cpp',106,5,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',99,13),
+('c:@N@NS0@C@C1@F@check#','check',cur_dir+'/main.cpp',106,9,clang.cindex.CursorKind.MEMBER_REF_EXPR.value,cur_dir+'/main.cpp',55,14),
+('c:main.cpp@1722@F@main@c10','c10',cur_dir+'/main.cpp',107,5,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',100,13),
+('c:@N@NS1@C@C0@F@check#','check',cur_dir+'/main.cpp',107,9,clang.cindex.CursorKind.MEMBER_REF_EXPR.value,cur_dir+'/main.cpp',81,14),
+('c:main.cpp@1739@F@main@c11','c11',cur_dir+'/main.cpp',108,5,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/main.cpp',101,13),
+('c:@N@NS1@C@C1@F@check#','check',cur_dir+'/main.cpp',108,9,clang.cindex.CursorKind.MEMBER_REF_EXPR.value,cur_dir+'/main.cpp',89,14),
 ]
 
-db = cxxtags.my_db_connect(db_list[0])
+db = cxxtags.db_connect(db_list[0])
 
 i = 0
 for q in q_list:

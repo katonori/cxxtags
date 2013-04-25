@@ -208,15 +208,14 @@ def get_loc_to_link(db, file_name, word, line, col):
     global g_db_list
     #print "GET: %s, %d, %d, %s" %(word, line, col, file_name)
     # ref
-    res = db.execute("SELECT usr, ref_file_name, ref_line, ref_col FROM ref WHERE file_name='%s' AND name='%s' AND line=%d AND col=%d LIMIT 1" % (file_name, word, line, col))
+    res = db.execute("SELECT ref.usr, ref_file_list.name, ref.ref_line, ref.ref_col FROM " + cxxtags_util.QUERY_JOINED_TABLE_REF + " WHERE file_list.name=? AND ref.name=? AND ref.line=? AND ref.col=? LIMIT 1", (file_name, word, line, col))
     for ref_row in res.fetchall():
         ref_usr, ref_file_name, ref_line, ref_col = ref_row
         if g_html_file_dict.has_key(ref_file_name):
             link = "%s#%s_%d" % (g_html_file_dict[ref_file_name]+".html", LOC_ANCHOR_PREFIX, ref_line)
             return link
     # decl
-    q = "SELECT usr FROM decl WHERE file_name='%s' AND name='%s' AND line=%d AND col=%d LIMIT 1" % (file_name, word, line, col)
-    res = db.execute(q)
+    res = db.execute("SELECT decl.usr FROM " + cxxtags_util.QUERY_JOINED_TABLE_DECL + " WHERE file_list.name=? AND decl.name=? AND decl.line=? AND decl.col=? LIMIT 1", (file_name, word, line, col))
     for decl_row in res.fetchall():
         decl_usr = decl_row[0]
         fn = get_info_file(decl_usr)
@@ -255,7 +254,7 @@ def proc_file(fn):
     fo.write("<h3>%s</h3>\n"%(fn))
     fo.write("<pre>\n")
     is_in_comment = 0
-    db = cxxtags_util.my_db_connect(g_src_file_dict[fn])
+    db = cxxtags_util.db_connect(g_src_file_dict[fn])
     for line in fi.readlines():
         line_len = len(line)
         idx = 0
@@ -390,9 +389,9 @@ def gen_ref_info_txt():
     done_dict = {}
     for db_fn in g_db_list:
         print "gen_ref: " + db_fn
-        db = cxxtags_util.my_db_connect(db_fn)
-        columns = "usr, line, col, file_name, name, kind, ref_file_name, ref_line, ref_col"
-        res = db.execute("SELECT " + columns + " FROM ref")
+        db = cxxtags_util.db_connect(db_fn)
+        columns = "ref.usr, ref.line, ref.col, file_list.name, ref.name, ref.kind, ref_file_list.name, ref.ref_line, ref.ref_col"
+        res = db.execute("SELECT " + columns + " FROM " + cxxtags_util.QUERY_JOINED_TABLE_REF + ";")
         for i in res.fetchall():
             # get values from a query result
             ref_usr, line, col, file_name, name, kind, ref_file_name, ref_line, ref_col = i
@@ -423,8 +422,8 @@ def gen_decl_info():
     done_dict = {}
     for db_fn in g_db_list:
         print "gen_decl: " + db_fn
-        db = cxxtags_util.my_db_connect(db_fn)
-        res = db.execute("SELECT usr, line, col, file_name, name, kind, val, is_virtual, is_def FROM decl")
+        db = cxxtags_util.db_connect(db_fn)
+        res = db.execute("SELECT decl.usr, decl.line, decl.col, file_list.name, decl.name, decl.kind, decl.val, decl.is_virtual, decl.is_def FROM " + cxxtags_util.QUERY_JOINED_TABLE_DECL + ";")
         for i in res.fetchall():
             # get values from a query result
             usr, line, col, file_name, name, kind, val, is_virtual, is_def = i
@@ -459,8 +458,8 @@ def gen_override_info():
     done_dict = {}
     for db_fn in g_db_list:
         print "gen_overriden: " + db_fn
-        db = cxxtags_util.my_db_connect(db_fn)
-        res = db.execute("SELECT usr, name, file_name, line, col, kind, usr_overrider, is_def FROM overriden")
+        db = cxxtags_util.db_connect(db_fn)
+        res = db.execute("SELECT overriden.usr, overriden.name, file_list.name, overriden.line, overriden.col, overriden.kind, overriden.usr_overrider, overriden.is_def FROM " + cxxtags_util.QUERY_JOINED_TABLE_OVERRIDEN + ";")
         for row in res.fetchall():
             # get values from a query result
             usr, name, file_name, line, col, kind, usr_overrider, is_def = row
@@ -480,8 +479,7 @@ def gen_override_info():
             if fn == None:
                 fn = add_info_file(usr_overrider)
             fo = open(OUT_DIR+"/"+fn+".txt", "a")
-            q = "SELECT name, file_name, line, col, kind FROM decl WHERE usr='%s' ORDER BY is_def LIMIT 1"%(usr_overrider)
-            res = db.execute(q)
+            res = db.execute("SELECT decl.name, file_list.name, decl.line, decl.col, decl.kind FROM " + cxxtags_util.QUERY_JOINED_TABLE_DECL + " WHERE decl.usr='%s' ORDER BY decl.is_def LIMIT 1;"%(usr_overrider))
             row = res.fetchone()
             if row:
                 name, file_name, line, col, kind = row
@@ -514,8 +512,8 @@ def gen_info_html():
     done_check = {}
     for db_fn in g_db_list:
         print "gen_info_html: " + db_fn
-        db = cxxtags_util.my_db_connect(db_fn)
-        res = db.execute("SELECT usr, line, col, file_name, name, kind FROM decl")
+        db = cxxtags_util.db_connect(db_fn)
+        res = db.execute("SELECT decl.usr, decl.line, decl.col, file_list.name, decl.name, decl.kind FROM " + cxxtags_util.QUERY_JOINED_TABLE_DECL + ";")
         #for i in  g_html_file_dict.keys():
         for i in res.fetchall():
             ref_usr, line, col, file_name, name, kind = i
@@ -631,7 +629,7 @@ def main():
     os.mkdir("%s/%s" % (OUT_DIR, REF_DIR))
 
     # build file list from file index
-    db_idx = cxxtags_util.my_db_connect(db_in_dir + "/" + FILE_INDEX_DB_NAME)
+    db_idx = cxxtags_util.db_connect(db_in_dir + "/" + FILE_INDEX_DB_NAME)
     res = db_idx.execute("SELECT file_name, db_file FROM file_index")
     added_db_dict = {}
     for row in res.fetchall():

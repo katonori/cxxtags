@@ -2,8 +2,6 @@
 
 import sys
 import os
-#import re
-#import string
 #import time
 import shutil
 import sqlite3
@@ -63,15 +61,10 @@ for fn in input_files:
     src_file = res.fetchone()[0]
     # get all the file(include header files) name
     all_files = {}
-    res_ref = db_in.execute("SELECT file_name FROM ref;")
-    res_decl = db_in.execute("SELECT file_name FROM decl;")
-    res_over = db_in.execute("SELECT file_name FROM overriden;")
-    res_rows = res_ref.fetchall()
-    res_rows += res_decl.fetchall()
-    res_rows += res_over.fetchall()
+    res = db_in.execute("SELECT name FROM file_list;")
     q_list = []
     tgt_base_fn = os.path.basename(tgt_fn)
-    for f in res_rows:
+    for f in res.fetchall():
         fn = f[0]
         if fn != "" and not all_files.has_key(fn):
             is_src = 0

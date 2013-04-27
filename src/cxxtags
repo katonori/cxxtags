@@ -89,9 +89,11 @@ res = db.execute("SELECT * FROM file_list;")
 new_file_list = []
 for row in res.fetchall():
     num, fn = row
-    new_file_list.append((num, os.path.abspath(fn)))
+    new_file_list.append((os.path.abspath(fn), num))
 
-db.executemany(u"UPDATE file_list SET id=?, name=?;", new_file_list)
+db.executemany(u"UPDATE file_list SET name=? WHERE id=?;", new_file_list)
+db.commit()
+db.close()
 
 #print "time:"
 #print "    proc0: ", time_list[1]-time_list[0]

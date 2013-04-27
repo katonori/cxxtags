@@ -89,7 +89,8 @@ res = db.execute("SELECT * FROM file_list;")
 new_file_list = []
 for row in res.fetchall():
     num, fn = row
-    new_file_list.append((os.path.abspath(fn), num))
+    if fn != '':
+        new_file_list.append((os.path.abspath(fn), num))
 
 db.executemany(u"UPDATE file_list SET name=? WHERE id=?;", new_file_list)
 db.commit()

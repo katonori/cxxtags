@@ -10,7 +10,7 @@ DB_FILES = inhe.db
 $(GATHER_OUT): $(DB_FILES)
 	$(GATHER) $@ $^
 test: $(GATHER_OUT)
-	python test.py $(GATHER_OUT)
+	./test.py $(GATHER_OUT)
 html: $(GATHER_OUT)
 	$(DUMPER) $(GATHER_OUT)
 prog: inhe.cpp

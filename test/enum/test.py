@@ -31,7 +31,6 @@ if len(sys.argv) != 2:
     exit(1)
 
 db_dir = sys.argv[1]
-db_list = cxxtags.get_db_file_list(db_dir)
 
 cur_dir = os.getcwd()
 
@@ -240,7 +239,7 @@ a_list = [
 ('c:@N@NS1@C@C1@F@check#','check',cur_dir+'/main.cpp',108,9,clang.cindex.CursorKind.MEMBER_REF_EXPR.value,cur_dir+'/main.cpp',89,14),
 ]
 
-db = cxxtags.db_connect(db_list[0])
+db = cxxtags.get_db_by_file_name(db_dir, "main.cpp")
 
 i = 0
 for q in q_list:

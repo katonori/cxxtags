@@ -76,7 +76,8 @@ def main():
             cur_idx.executemany("INSERT INTO file_index VALUES(?, ?, ?);", q_list)
             db_in.close()
         except sqlite3.Error, e:
-            print "ERROR: input db: ", e.args[0]
+            print fn
+            print "ERROR: input db: %s:"%(fn), e.args[0]
             sys.exit(1)
 
     db_idx.commit()

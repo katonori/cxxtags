@@ -6,7 +6,7 @@ GATHER_OUT = db
 
 DB_FILES = main.db
 test: html
-	(grep "<a name=\"a_loc_16\" id=\"line_16\">" html/main.cpp.3.html) | (grep "<a href=\"ref/main.cpp@232@FT@>1.Tfunc_test.t0.0.@val.9.html\">val</a>") > html/out.txt
+	(grep "<a name=\"a_loc_16\" id=\"line_16\">" html/main.cpp.0.html) | (grep "<a href=\"ref/main.cpp@232@FT@>1.Tfunc_test.t0.0.@val.10.html\">val</a>") > html/out.txt
 main.cpp.db:
 	$(CXXTAGS) main.cpp -o $@
 $(GATHER_OUT): $(DB_FILES)
@@ -14,6 +14,6 @@ $(GATHER_OUT): $(DB_FILES)
 html: $(GATHER_OUT)
 	$(DUMPER) $<
 clean:
-	rm -rf main.cpp.db html
+	rm -rf main.cpp.db html $(GATHER_OUT)
 .cpp.db:
 	$(CXXTAGS) $< -o $*.db

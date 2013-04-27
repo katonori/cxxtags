@@ -16,12 +16,12 @@ def main():
     output_dir = sys.argv[1]
     input_files = sys.argv[2:]
     file_index = output_dir + "/file_index.db"
-# make output dir
+    # make output dir
     if os.path.exists(output_dir):
         shutil.rmtree(output_dir)
     os.mkdir(output_dir)
 
-# open file index db
+    # open file index db
     try:
         db_idx = sqlite3.connect(file_index, isolation_level='EXCLUSIVE')
         cur_idx = db_idx.cursor()

@@ -24,6 +24,7 @@ def get_db_file_list(db_dir):
     return db_list
 
 def get_db_by_file_name(db_dir, file_name):
+    file_name = os.path.abspath(file_name)
     db = db_connect(db_dir + "/" + "file_index.db")
     res = db.execute("SELECT db_file FROM file_index WHERE file_name='%s';"%(file_name))
     row = res.fetchone()

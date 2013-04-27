@@ -378,18 +378,6 @@ def proc_file(fn):
     fi.close()
     fo.close()
 
-def get_line(fn, line_no):
-    global OUT_DIR
-    fi = open(fn, 'r')
-    all_lines = fi.readlines()
-    str_line = ""
-    if len(all_lines) < line_no:
-        cxxtags_util.my_exit(1, "ERROR: line: %s, %s, %d, %d\n"%(name, fn, line_no, col))
-    else:
-        str_line = all_lines[line_no-1]
-    str_line = re.sub("\n", "", str_line)
-    return str_line
-
 # generate text files that reference informations are listed
 def gen_ref_info_txt():
     global OUT_DIR
@@ -419,7 +407,7 @@ def gen_ref_info_txt():
                 if fn == None:
                     cxxtags_util.my_exit(1, "ERROR: REF_FILE: " + ref_usr)
                 fo_txt = open("%s/%s.txt"%(OUT_DIR, fn), 'a+')
-                str_line = get_line(file_name, line)
+                str_line = cxxtags_util.get_line_from_file(file_name, line)
                 fo_txt.write("refered: "+ref_info_str+str_line+"\n")
                 fo_txt.close()
         db.close()
@@ -452,7 +440,7 @@ def gen_decl_info_txt():
                 if fn == None:
                     cxxtags_util.my_exit(1, "ERROR: REF_FILE: " + usr)
                 fo_txt = open("%s/%s.txt"%(OUT_DIR, fn), 'a+')
-                str_line = get_line(file_name, line)
+                str_line = cxxtags_util.get_line_from_file(file_name, line)
                 if is_def == 1:
                     fo_txt.write("defined: ")
                 else:

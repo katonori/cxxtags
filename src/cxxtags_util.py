@@ -17,17 +17,19 @@ def db_connect(fn):
 
 def get_db_file_list(db_dir):
     db = db_connect(db_dir + "/" + "file_index.db")
-    res = db.execute("SELECT db_file FROM file_index;")
+    cur = db.cursor()
+    cur.execute("SELECT db_file FROM file_index;")
     db_list = []
-    for i in res.fetchall():
+    for i in cur.fetchall():
         db_list.append(db_dir + "/" + i[0])
     return db_list
 
 def get_db_by_file_name(db_dir, file_name):
     file_name = os.path.abspath(file_name)
     db = db_connect(db_dir + "/" + "file_index.db")
-    res = db.execute("SELECT db_file FROM file_index WHERE file_name='%s';"%(file_name))
-    row = res.fetchone()
+    cur = db.cursor()
+    cur.execute("SELECT db_file FROM file_index WHERE file_name='%s';"%(file_name))
+    row = cur.fetchone()
     if row == None:
         my_exit(1, "database file is not found: " + file_name)
     db_fn = row[0]

@@ -12,69 +12,74 @@ def usage():
     print "usage: cxxtags_gather output_dir input_file [...]"
 
 ########## main ###########
-output_dir = sys.argv[1]
-input_files = sys.argv[2:]
-file_index = output_dir + "/file_index.db"
+def main():
+    output_dir = sys.argv[1]
+    input_files = sys.argv[2:]
+    file_index = output_dir + "/file_index.db"
 # make output dir
-if os.path.exists(output_dir):
-    shutil.rmtree(output_dir)
-os.mkdir(output_dir)
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
+    os.mkdir(output_dir)
 
 # open file index db
-db_idx = sqlite3.connect(file_index, isolation_level='EXCLUSIVE')
-if db_idx == None:
-    print "ERROR: db open: " + file_index
-db_idx.execute(
-        """
-        CREATE TABLE file_index(
-            file_name TEXT,
-            is_src INTEGER,
-            db_file TEXT
-            );
-        """
-     )
-db_idx.execute("CREATE TABLE db_info(db_format INTEGER);");
-db_idx.execute("INSERT INTO db_info VALUES('%d');"%(DB_VER));
+    try:
+        db_idx = sqlite3.connect(file_index, isolation_level='EXCLUSIVE')
+        cur_idx = db_idx.cursor()
+        cur_idx.execute(
+                """
+                CREATE TABLE file_index(
+                    file_name TEXT,
+                    is_src INTEGER,
+                    db_file TEXT
+                    );
+                """
+             )
+        cur_idx.execute("CREATE TABLE db_info(db_format INTEGER);");
+        cur_idx.execute("INSERT INTO db_info VALUES('%d');"%(DB_VER));
+    except sqlite3.Error, e:
+        print "ERROR: file_index: ", e.args[0]
+        sys.exit(1)
 
-for fn in input_files:
-    tgt_fn = output_dir + "/" + os.path.basename(fn)
-    # change file name if it already exists.
-    num = 0
-    while os.path.exists(tgt_fn):
-        path, ext = os.path.splitext(tgt_fn)
-        tgt_fn = path + ".%d"%(num) + ext
-    #shutil.copy(fn, tgt_fn)
-    shutil.move(fn, tgt_fn)
-    #print "move %s to %s"%(fn, tgt_fn)
+    for fn in input_files:
+        tgt_fn = output_dir + "/" + os.path.basename(fn)
+        # change file name if it already exists.
+        num = 0
+        while os.path.exists(tgt_fn):
+            path, ext = os.path.splitext(tgt_fn)
+            tgt_fn = path + ".%d"%(num) + ext
+        #shutil.copy(fn, tgt_fn)
+        shutil.move(fn, tgt_fn)
+        #print "move %s to %s"%(fn, tgt_fn)
 
-    # open db
-    db_in = sqlite3.connect(tgt_fn, isolation_level='EXCLUSIVE')
-    if db_in == None:
-        print "ERROR: db open: %s(%s)"%(tgt_fn, fn)
-        exit(1)
+        src_file = ""
+        try:
+            # open db
+            db_in = sqlite3.connect(tgt_fn, isolation_level='EXCLUSIVE')
+            cur_in = db_in.cursor()
+            # get main source file name
+            cur_in.execute("SELECT src_file_name FROM db_info;")
+            src_file = cur_in.fetchone()[0]
+            cur_in.execute("SELECT name FROM file_list;")
+            # get all the file(include header files) name
+            all_files = {}
+            q_list = []
+            tgt_base_fn = os.path.basename(tgt_fn)
+            for f in cur_in.fetchall():
+                fn = f[0]
+                if fn != "" and not all_files.has_key(fn):
+                    is_src = 0
+                    if fn == src_file:
+                        is_src = 1
+                    all_files[fn] = is_src
+                    #db_idx.execute("INSERT INTO file_index VALUES('" + f[0] + "', " + str(is_src) + ", '" +  os.path.basename(tgt_fn) + "');")
+                    q_list.append((fn, is_src, tgt_base_fn))
+            cur_idx.executemany("INSERT INTO file_index VALUES(?, ?, ?);", q_list)
+            db_in.close()
+        except sqlite3.Error, e:
+            print "ERROR: input db: ", e.args[0]
+            sys.exit(1)
 
-    # get main source file name
-    res = db_in.execute("SELECT src_file_name FROM db_info;")
-    if None == res:
-        print "ERROR: mulformed db"
-        exit(1)
-    src_file = res.fetchone()[0]
-    # get all the file(include header files) name
-    all_files = {}
-    res = db_in.execute("SELECT name FROM file_list;")
-    q_list = []
-    tgt_base_fn = os.path.basename(tgt_fn)
-    for f in res.fetchall():
-        fn = f[0]
-        if fn != "" and not all_files.has_key(fn):
-            is_src = 0
-            if fn == src_file:
-                is_src = 1
-            all_files[fn] = is_src
-            #db_idx.execute("INSERT INTO file_index VALUES('" + f[0] + "', " + str(is_src) + ", '" +  os.path.basename(tgt_fn) + "');")
-            q_list.append((fn, is_src, tgt_base_fn))
-    db_idx.executemany("INSERT INTO file_index VALUES(?, ?, ?);", q_list)
-    db_in.close()
-
-db_idx.commit()
-db_idx.close()
+    db_idx.commit()
+    db_idx.close()
+##########
+main()

@@ -3,50 +3,37 @@
 #include <map>
 #include <stdint.h>
 #include <sstream>
+#include <sqlite3.h>
 
 namespace db {
 static const int DB_VER = 5;
-static const int INSERT_LIST_MAX = 1023;
+static const int STEP_MAX_TRY_NUM = 1024;
 
 void init(std::string db_file_name, std::string src_file_name);
 void fin(const std::map<std::string, int >& fileMap);
-
 void insert_ref_value(const char* usr, const char* name, int fid, int32_t line, int32_t col, int kind, int refFid, int ref_line, int ref_col);
 void insert_decl_value(const char* usr, const char* name, int fid, int32_t line, int32_t col, int entity_kind, int val, int is_virtual, int is_def);
 void insert_overriden_value(const char* usr, const char* name, int fid, int32_t line, int32_t col, int entity_kind, const char* usr_overrider, int is_def);
 
-struct arg_t {
-    arg_t()
-        : bank_no(0)
-    {}
-    int bank_no;
-};
-
 class CDBMgrBase {
 public:
-    CDBMgrBase(const char* name)
-        : mBankNo(0), mTblName(name), count(0)
+    CDBMgrBase(const char* name, const char* query)
+        : mSqlStmt(NULL), mTblName(name), mQueryInsertTmpl(query)
     {}
-    arg_t mArg;
-    pthread_t mTid;
-    int mBankNo;
-    const char *mTblName;
-    int count;
-    std::ostringstream mOs[2];
-    inline void switchBank()
-    {
-        mBankNo = mBankNo ? 0 : 1;
-    }
-
-    void insertValueCore(void* arg);
-    void flush();
+    void initDb(sqlite3* db);
+    void finDb(sqlite3* db);
+protected:
+    sqlite3_stmt* mSqlStmt;
+private:
+    const char* mTblName;
+    const char* mQueryInsertTmpl;
 };
 
 class CDBMgrRef
     : public CDBMgrBase {
 public:
     CDBMgrRef()
-        : CDBMgrBase("ref")
+        : CDBMgrBase("ref", "INSERT INTO ref VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);")
     {}
     void insertValue(const char* usr, const char* name, int fid, int32_t line, int32_t col, int kind, int refFid, int ref_line, int ref_col);
 };
@@ -54,8 +41,8 @@ public:
 class CDBMgrDecl
     : public CDBMgrBase {
 public:
-    CDBMgrDecl()
-        : CDBMgrBase("decl")
+    CDBMgrDecl(void)
+        : CDBMgrBase("decl", "INSERT INTO decl VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);")
     {}
     void insertValue(const char* usr, const char* name, int fid, int32_t line, int32_t col, int entity_kind, int val, int is_virtual, int is_def);
 };
@@ -64,7 +51,7 @@ class CDBMgrOverriden
     : public CDBMgrBase {
 public:
     CDBMgrOverriden()
-        : CDBMgrBase("overriden")
+        : CDBMgrBase("overriden", "INSERT INTO overriden VALUES (?, ?, ?, ?, ?, ?, ?, ? );")
     {}
     void insertValue(const char* usr, const char* name, int fid, int32_t line, int32_t col, int entity_kind, const char* usr_overrider, int is_def);
 };

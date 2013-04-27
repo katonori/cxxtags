@@ -128,6 +128,7 @@ if (document.addEventListener) {
 """
 
 g_html_file_dict = {}
+g_info_file_dict = {}
 g_file_cnt = 0
 g_file_cnt_ref = 0
 OUT_DIR = "html"
@@ -141,6 +142,35 @@ g_src_file_dict = {}
 def path_regalizer(path):
     path = path.replace('/', '<slash>')
     return path
+
+# get file name by USR
+def get_info_file(usr):
+    global g_info_file_dict
+    if usr == None or usr == "":
+        return None
+    fn = None
+    if g_info_file_dict.has_key(usr):
+        fn = g_info_file_dict[usr]
+    return fn
+
+# decide file name and register to the dictionary
+def add_info_file(usr):
+    global g_info_file_dict
+    global g_file_cnt_ref
+    if usr == None or usr == "":
+        return None
+    # generate file name from usr
+    fn = re.sub("^c:", "", usr)
+    fn = re.sub("#", ".", fn)
+    # shorten file name
+    fn_len = len(fn)
+    if fn_len > 128:
+        fn = "_" + fn[fn_len-128:]
+    fn = path_regalizer(fn)
+    fn = "%s/%s.%d" % (REF_DIR, fn, g_file_cnt_ref)
+    g_file_cnt_ref += 1
+    g_info_file_dict[usr] = fn
+    return fn
 
 # register html files to be generated to the dictionary.
 def add_html_file(path):
@@ -159,37 +189,8 @@ def add_html_file(path):
         g_file_cnt += 1
         g_html_file_dict[path] = fn
 
-# get file name by USR
-def get_info_file(usr):
-    global g_html_file_dict
-    if usr == None or usr == "":
-        return None
-    fn = None
-    if g_html_file_dict.has_key(usr):
-        fn = g_html_file_dict[usr]
-    return fn
-
-# decide file name and register to the dictionary
-def add_info_file(usr):
-    global g_html_file_dict
-    global g_file_cnt_ref
-    if usr == None or usr == "":
-        return None
-    # generate file name from usr
-    fn = re.sub("^c:", "", usr)
-    fn = re.sub("#", ".", fn)
-    # shorten file name
-    fn_len = len(fn)
-    if fn_len > 128:
-        fn = "_" + fn[fn_len-128:]
-    fn = path_regalizer(fn)
-    fn = "ref/%s.%d" % (fn, g_file_cnt_ref)
-    g_file_cnt_ref += 1
-    g_html_file_dict[usr] = fn
-    return fn
-
 # get html file name by path.
-def get_file_name(path):
+def get_src_html_name(path):
     global g_html_file_dict
     global OUT_DIR
     fn = ""
@@ -246,7 +247,7 @@ def proc_file(fn):
     global OUT_DIR
     fi = open(u"%s" % (fn), 'r')
     line_no = 1
-    fo_name = OUT_DIR + "/" + get_file_name(fn)
+    fo_name = OUT_DIR + "/" + get_src_html_name(fn)
     fo = open(u"%s.html" % (fo_name), 'w')
     #print "%s->%s" % (fn, fo_name)
     fo.write("<?xml version=\"1.0\" encoding=\"shift_jis\"?>\n")
@@ -424,7 +425,7 @@ def gen_ref_info_txt():
         db.close()
 
 # generate text files that declaration informations are listed
-def gen_decl_info():
+def gen_decl_info_txt():
     global OUT_DIR
     global g_db_list
     done_dict = {}
@@ -461,7 +462,7 @@ def gen_decl_info():
         db.close()
 
 # generate text files that override informations are listed
-def gen_override_info():
+def gen_override_info_txt():
     global OUT_DIR
     global g_db_list
     done_dict = {}
@@ -666,11 +667,11 @@ def main():
     #print "    GEN_REF = " + fpformat.fix(time.time()-st,3)
     # decl
     st = time.time()
-    gen_decl_info()
+    gen_decl_info_txt()
     #print "    GEN_DECL = " + fpformat.fix(time.time()-st,3)
     # overriden
     st = time.time()
-    gen_override_info()
+    gen_override_info_txt()
     #print "    GEN_OVERRIDEN = " + fpformat.fix(time.time()-st,3)
     # info html
     st = time.time()

@@ -9,8 +9,8 @@ DB_FILES = main.db
 
 $(GATHER_OUT): $(DB_FILES)
 	$(GATHER) $@ $^
-test: $(GATHER_OUT)
-	./test.py $<
+test: clean $(GATHER_OUT)
+	./test.py $(GATHER_OUT)
 html: $(GATHER_OUT)
 	$(DUMPER) $(GATHER_OUT)
 prog: main.cpp

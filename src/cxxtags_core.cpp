@@ -10,7 +10,7 @@
 #include <time.h>
 #include "db.h"
 
-std::vector<std::string > exception_list;
+std::vector<std::string > excludeList;
 std::map<std::string, std::string > fileMap;
 
 static std::string getCursorSource(CXCursor Cursor);
@@ -85,6 +85,19 @@ public:
 };
 class CFidTbl fidTbl;
 
+static int isInExcludeList(std::string fileName)
+{
+    std::vector<std::string >::iterator itrEnd = excludeList.end();
+    for(std::vector<std::string >::iterator itr = excludeList.begin();
+        itr != itrEnd;
+        itr++) {
+        if(fileName.find(*itr) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static inline void PrintCursor(CXCursor Cursor) {
   CXCursorKind kind = Cursor.kind;
   if (clang_isInvalid(kind)) {
@@ -140,13 +153,8 @@ static inline void PrintCursor(CXCursor Cursor) {
     // file_name
     std::string fileName = getCursorSource(Cursor);
     // decide if this Cursor info is to be registered to db.
-    std::vector<std::string >::iterator itrEnd = exception_list.end();
-    for(std::vector<std::string >::iterator itr = exception_list.begin();
-        itr != itrEnd;
-        itr++) {
-        if(fileName.find(*itr) == 0) {
-            return;
-        }
+    if(isInExcludeList(fileName)) {
+        return;
     }
     int fid = fidTbl.getFileId(fileName);
 
@@ -219,8 +227,12 @@ static inline void PrintCursor(CXCursor Cursor) {
                 int refFid = 0;
                 if(ref_file) {
                     CXString cxRefFileName = clang_getFileName(ref_file);
-                    refFid = fidTbl.getFileId(clang_getCString(cxRefFileName));
+                    std::string cRefFileName = clang_getCString(cxRefFileName);
                     clang_disposeString(cxRefFileName);
+                    if(isInExcludeList(cRefFileName)) {
+                        break;
+                    }
+                    refFid = fidTbl.getFileId(cRefFileName);
                 }
                 db::insert_ref_value(cUsr, name.c_str(), fid, line, column, kind, refFid, ref_line, ref_column);
                 clang_disposeString(cxRefUSR);
@@ -414,7 +426,7 @@ FUNC_END:
 /* Command line processing.                                                   */
 /******************************************************************************/
 static void print_usage(void) {
-  fprintf(stderr, "usage: c-index-test [-e exception_list] cur_dir out_file in_file {<args>}*\n");
+  fprintf(stderr, "usage: c-index-test [-e excludeList] cur_dir out_file in_file {<args>}*\n");
 }
 
 static std::vector<std::string > split_string(std::string str)
@@ -442,7 +454,7 @@ int cindextest_main(int argc, const char **argv) {
   //clang_enableStackTraces();
   if (argc >= 3) {
     if(0 == strncmp(argv[1], "-e", 2)) {
-        exception_list = split_string(argv[2]);
+        excludeList = split_string(argv[2]);
         argc-=2;
         argv+=2;
     }

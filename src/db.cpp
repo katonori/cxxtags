@@ -109,10 +109,13 @@ void fin(const std::map<std::string, int >& fileMap)
     delete overridenMgr;
 
     // create indices
+    sqlite3_exec(db, "CREATE INDEX file_list_index0 ON file_list(id);", NULL, NULL, NULL);
+    sqlite3_exec(db, "CREATE INDEX file_list_index1 ON file_list(name);", NULL, NULL, NULL);
     sqlite3_exec(db, "CREATE INDEX ref_index0 ON ref(file_id, name, line, col);", NULL, NULL, NULL);
     sqlite3_exec(db, "CREATE INDEX ref_index1 ON ref(file_id);", NULL, NULL, NULL);
     sqlite3_exec(db, "CREATE INDEX decl_index0 ON decl(file_id, name, line, col);", NULL, NULL, NULL);
     sqlite3_exec(db, "CREATE INDEX decl_index1 ON decl(file_id)", NULL, NULL, NULL);
+    sqlite3_exec(db, "CREATE INDEX decl_index2 ON decl(usr)", NULL, NULL, NULL);
     // end transaction
     sqlite3_exec(db, "END TRANSACTION;", NULL, NULL, NULL);
     if(SQLITE_OK != sqlite3_close(db)) {

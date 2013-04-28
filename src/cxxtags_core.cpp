@@ -128,6 +128,8 @@ static inline void PrintCursor(CXCursor Cursor) {
         case CXCursor_MemberRef:
         case CXCursor_NamespaceRef:
         case CXCursor_MacroExpansion:
+        case CXCursor_TemplateTypeParameter:
+        case CXCursor_FunctionTemplate:
         break;
         default:
             return;
@@ -166,6 +168,8 @@ static inline void PrintCursor(CXCursor Cursor) {
             val = clang_getEnumConstantDeclValue(Cursor);
             // fall through
         case CXCursor_TypedefDecl:
+        case CXCursor_TemplateTypeParameter:
+        case CXCursor_FunctionTemplate:
         case CXCursor_ClassDecl:
         case CXCursor_Namespace:
         case CXCursor_StructDecl:
@@ -399,8 +403,7 @@ int perform_test_load_source(int argc, const char **argv,
 
   db::init(out_file_name, in_file_name);
   
-  Idx = clang_createIndex(/* excludeDeclsFromPCH */
-                           1,
+  Idx = clang_createIndex(/* excludeDeclsFromPCH */0,
                           /* displayDiagnosics=*/0);
 
   TU = clang_parseTranslationUnit(Idx, 0,

@@ -452,6 +452,7 @@ def gen_override_info_txt():
     global OUT_DIR
     global g_db_list
     done_dict = {}
+    done_dict_override = {}
     for db_fn in g_db_list:
         print "gen_overriden: " + db_fn
         db = cxxtags_util.db_connect(db_fn)
@@ -472,21 +473,19 @@ def gen_override_info_txt():
             fo = open(OUT_DIR+"/"+fn+".txt", "a")
             fo.write("overriden: "+ovr_info_str+"\n")
             fo.close()
-            fn = get_info_file(usr_overrider)
-            if fn == None:
-                fn = add_info_file(usr_overrider)
-            fo = open(OUT_DIR+"/"+fn+".txt", "a")
-            cur = db.cursor()
-            cur.execute("SELECT file_list.name, decl.line, decl.col FROM " + cxxtags_util.QUERY_JOINED_TABLE_DECL + " WHERE decl.usr=? ORDER BY decl.is_def LIMIT 1;", (usr_overrider,))
+            cur.execute("SELECT file_list.name, decl.line, decl.col FROM " + cxxtags_util.QUERY_JOINED_TABLE_DECL + " WHERE decl.usr=? ORDER BY decl.is_def LIMIT 1;", (usr,))
             row = cur.fetchone()
             if row:
                 file_name, line, col = row
-                fn = get_info_file(usr_overrider)
-                if fn == None:
-                    fn = add_info_file(usr_overrider)
-                fo = open(OUT_DIR+"/"+fn+".txt", "a")
-                fo.write("override: "+usr_overrider+TXT_DELIM+file_name+TXT_DELIM+str(line)+TXT_DELIM+str(col)+TXT_DELIM+usr+"\n")
-            fo.close()
+                line_str = usr_overrider+TXT_DELIM+file_name+TXT_DELIM+str(line)+TXT_DELIM+str(col)+TXT_DELIM+usr
+                if not done_dict_override.has_key(line_str):
+                    done_dict_override[line_str] = 1
+                    fn = get_info_file(usr_overrider)
+                    if fn == None:
+                        fn = add_info_file(usr_overrider)
+                    fo = open(OUT_DIR+"/"+fn+".txt", "a")
+                    fo.write("override: "+usr_overrider+TXT_DELIM+file_name+TXT_DELIM+str(line)+TXT_DELIM+str(col)+TXT_DELIM+usr+"\n")
+                    fo.close()
         db.close()
 
 # print table data for "declared", "defined" and "refered" information.
@@ -570,8 +569,8 @@ def gen_info_html():
                     fo_html.write("<h3>oveerride</h3>")
                     for i in override_list:
                         col_list = i.split(TXT_DELIM)
-                        col_usr, col_file_name, col_line, col_col, col_usr_overrider = col_list
-                        fo_html.write("%s %s<BR>"%(gen_link_html(col_file_name, int(col_line), int(col_col)), col_usr_overrider))
+                        col_usr_overrider, col_file_name, col_line, col_col, col_usr = col_list
+                        fo_html.write("%s %s<BR>"%(gen_link_html(col_file_name, int(col_line), int(col_col)), col_usr))
                 if len(overriden_list) != 0:
                     fo_html.write("<h3>oveerriden</h3>")
                     for i in overriden_list:

@@ -79,7 +79,7 @@ class QueryHandlerDecl(HandlerBase):
                 usr = self.GetUsrFromDeclTable(name, fileName, lineNo, colNo)
             if usr:
                 declFileName, line, col = self.QueryDeclInfo(usr)
-                print "%s\n%s\n%d\n"%(usr, declFileName, line), cxxtags_util.get_line_from_file(declFileName, line)
+                print "%s,%d,%d"%(declFileName, line, col)
                 self.mDb.close()
                 break;
             self.mDb.close()
@@ -106,7 +106,9 @@ class QueryHandlerDef(HandlerBase):
                 break;
         res = self.GetDef(usr)
         if res:
-            print res
+            resFileName, resLine, resCol = res
+            print "%s,%d,%d"%(resFileName, resLine, resCol)
+            return
 
     def GetDef(self, usr):
         res_list = []
@@ -136,7 +138,8 @@ class QueryHandlerRef(HandlerBase):
                 break;
         res_list = self.GetAllRefs(usr)
         for i in res_list:
-            print i
+            resFileName, resLine, resCol = i
+            print "%s,%d,%d"%(resFileName, resLine, resCol)
 
     def GetAllRefs(self, usr):
         res_list = []

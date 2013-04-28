@@ -8,16 +8,41 @@ import getopt
 import re
 import os
 
-def queryDecl(dbDir, name, fileName, lineNo, colNo):
-    dbFileList = []
-    if fileName == "":
-        dbFileList = cxxtags_util.get_db_file_list(dbDir)
-    else:
-        dbFileList = cxxtags_util.get_db_by_file_name_match(dbDir, fileName)
-    for fn in dbFileList:
-        db = cxxtags_util.db_connect(fn)
-        cur = db.cursor()
-        q = 'SELECT decl.usr, decl.name, file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE decl.name=?'
+class HandlerBase:
+    """ Base class of *Handler classes """
+
+    mDb = None
+    mDbFileList = []
+    def GetUsrFromRefTable(self, name, fileName, lineNo, colNo):
+        cur = self.mDb.cursor()
+        q = 'SELECT ref.usr, file_list.name FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE ref.name=?'
+        argList = (name,)
+        if fileName != "":
+            q += ' AND file_list.name LIKE ?'
+            argList += ('%'+fileName,)
+        if lineNo != -1:
+            q += ' AND ref.line=?'
+            argList += (lineNo,)
+        if colNo != -1:
+            q += ' AND ref.col=?'
+            argList += (colNo,)
+        q += ' LIMIT 2;'
+        cur.execute(q, argList)
+        res = cur.fetchall()
+        if len(res) > 1:
+            print "ERROR: Ambiguous query."
+            for row in res:
+                print row
+            sys.exit(1)
+        for row in res:
+            resUsr, resFileName = row
+            if fileName == "" or re.search(fileName + '$', resFileName):
+                return resUsr
+        return None
+
+    def GetUsrFromDeclTable(self, name, fileName, lineNo, colNo):
+        cur = self.mDb.cursor()
+        q = 'SELECT decl.usr, file_list.name FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE decl.name=?'
         argList = (name,)
         if fileName != "":
             q += ' AND file_list.name LIKE ?'
@@ -28,40 +53,102 @@ def queryDecl(dbDir, name, fileName, lineNo, colNo):
         if colNo != -1:
             q += ' AND decl.col=?'
             argList += (colNo,)
-        q += ';'
+        q += ' LIMIT 2;'
         cur.execute(q, argList)
-        for row in cur.fetchall():
-            resUsr, resName, resFileName, resLine, resCol = row
-            #print row
+        res = cur.fetchall()
+        if len(res) > 1:
+            print "ERROR: Ambiguous query."
+            for row in res:
+                print row
+            sys.exit(1)
+        for row in res:
+            resUsr, resFileName = row
             if fileName == "" or re.search(fileName + '$', resFileName):
-                print "%s\n%s\n%d\n"%(resUsr, resFileName, resLine), cxxtags_util.get_line_from_file(resFileName, resLine)
-        db.close()
+                return resUsr
+        return None
 
-def queryRef(dbDir, name, fileName, lineNo, colNo):
-    dbFileList = cxxtags_util.get_db_file_list(dbDir)
-    for fn in dbFileList:
-        db = cxxtags_util.db_connect(fn)
-        cur = db.cursor()
-        q = 'SELECT ref.usr, ref.name, file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE ref.name=?'
-        argList = (name,)
-        if fileName != "":
-            q += ' AND fileList.name LIKE ?'
-            argList += ('%'+fileName,)
-        if lineNo != -1:
-            q += ' AND ref.line=?'
-            argList += (lineNo,)
-        if colNo != -1:
-            q += ' AND ref.col=?'
-            argList += (colNo,)
-        q += ';'
-        cur.execute(q, argList)
-        #print fn
-        for row in cur.fetchall():
-            resUsr, resName, resFileName, resLine, resCol = row
-            #print row
-            if fileName == "" or re.search(fileName + '$', resFileName):
-                print "%s\n%s\n%d\n"%(resUsr, resFileName, resLine), cxxtags_util.get_line_from_file(resFileName, resLine)
-        db.close()
+class QueryHandlerDecl(HandlerBase):
+    """ Handle Rquest for infomation about declarations """
+
+    def DoQuery(self, dbDir, name, fileName, lineNo, colNo):
+        self.mDbFileList = cxxtags_util.get_db_file_list(dbDir)
+        for fn in self.mDbFileList:
+            self.mDb = cxxtags_util.db_connect(fn)
+            usr = self.GetUsrFromRefTable(name, fileName, lineNo, colNo)
+            if not usr:
+                usr = self.GetUsrFromDeclTable(name, fileName, lineNo, colNo)
+            if usr:
+                declFileName, line, col = self.QueryDeclInfo(usr)
+                print "%s\n%s\n%d\n"%(usr, declFileName, line), cxxtags_util.get_line_from_file(declFileName, line)
+                self.mDb.close()
+                break;
+            self.mDb.close()
+
+    def QueryDeclInfo(self, usr):
+        cur = self.mDb.cursor()
+        cur.execute('SELECT file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE decl.usr=? ORDER BY decl.is_def LIMIT 1', (usr,))
+        res = cur.fetchone()
+        return res
+
+class QueryHandlerDef(HandlerBase):
+    """ Handle Rquest for infomation about definition """
+
+    def DoQuery(self, dbDir, name, fileName, lineNo, colNo):
+        self.mDbFileList = cxxtags_util.get_db_file_list(dbDir)
+        usr = ""
+        for fn in self.mDbFileList:
+            self.mDb = cxxtags_util.db_connect(fn)
+            usr = self.GetUsrFromDeclTable(name, fileName, lineNo, colNo)
+            if not usr:
+                usr = self.GetUsrFromRefTable(name, fileName, lineNo, colNo)
+            self.mDb.close()
+            if usr:
+                break;
+        res = self.GetDef(usr)
+        if res:
+            print res
+
+    def GetDef(self, usr):
+        res_list = []
+        for fn in self.mDbFileList:
+            self.mDb = cxxtags_util.db_connect(fn)
+            cur = self.mDb.cursor()
+            cur.execute('SELECT file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE decl.usr=? AND is_def=1 LIMIT 1;', (usr,))
+            res = cur.fetchone()
+            self.mDb.close()
+            if res:
+                return res
+        return None
+
+class QueryHandlerRef(HandlerBase):
+    """ Handle Rquest for infomation about reference """
+
+    def DoQuery(self, dbDir, name, fileName, lineNo, colNo):
+        self.mDbFileList = cxxtags_util.get_db_file_list(dbDir)
+        usr = ""
+        for fn in self.mDbFileList:
+            self.mDb = cxxtags_util.db_connect(fn)
+            usr = self.GetUsrFromDeclTable(name, fileName, lineNo, colNo)
+            if not usr:
+                usr = self.GetUsrFromRefTable(name, fileName, lineNo, colNo)
+            self.mDb.close()
+            if usr:
+                break;
+        res_list = self.GetAllRefs(usr)
+        for i in res_list:
+            print i
+
+    def GetAllRefs(self, usr):
+        res_list = []
+        for fn in self.mDbFileList:
+            self.mDb = cxxtags_util.db_connect(fn)
+            cur = self.mDb.cursor()
+            cur.execute('SELECT file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE ref.usr=?;', (usr,))
+            res = cur.fetchall()
+            for i in res:
+                res_list.append(i)
+            self.mDb.close()
+        return res_list
 
 def main():
     global USAGE
@@ -76,7 +163,7 @@ def main():
     dbDir = args[0]
     name = args[1]
     queryType = args[2]
-    if queryType != 'ref' and queryType != 'decl':
+    if queryType != 'ref' and queryType != 'decl' and queryType != 'def':
         print "ERROR: query type must be ref, decl or def"
         sys.exit(1)
     fileName = ""
@@ -90,9 +177,14 @@ def main():
         elif opt == "-c":
             colNo = val
 
-    if queryType == 'ref':
-        queryRef(dbDir, name, fileName, lineNo, colNo)
-    elif queryType == 'decl':
-        queryDecl(dbDir, name, fileName, lineNo, colNo)
+    if queryType == 'ref': # get all references
+        refHandler = QueryHandlerRef()
+        refHandler.DoQuery(dbDir, name, fileName, lineNo, colNo)
+    elif queryType == 'decl': # get a declaration or definition
+        declHandler = QueryHandlerDecl()
+        declHandler.DoQuery(dbDir, name, fileName, lineNo, colNo)
+    elif queryType == 'def': # get a definition
+        defHandler = QueryHandlerDef()
+        defHandler.DoQuery(dbDir, name, fileName, lineNo, colNo)
 #######
 main()

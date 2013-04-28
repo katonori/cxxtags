@@ -130,6 +130,9 @@ static inline void PrintCursor(CXCursor Cursor) {
         case CXCursor_MacroExpansion:
         case CXCursor_TemplateTypeParameter:
         case CXCursor_FunctionTemplate:
+        case CXCursor_ClassTemplate:
+        case CXCursor_TemplateRef:
+        case CXCursor_OverloadedDeclRef:
         break;
         default:
             return;
@@ -170,6 +173,7 @@ static inline void PrintCursor(CXCursor Cursor) {
         case CXCursor_TypedefDecl:
         case CXCursor_TemplateTypeParameter:
         case CXCursor_FunctionTemplate:
+        case CXCursor_ClassTemplate:
         case CXCursor_ClassDecl:
         case CXCursor_Namespace:
         case CXCursor_StructDecl:
@@ -215,6 +219,8 @@ static inline void PrintCursor(CXCursor Cursor) {
         //case CXCursor_CXXBaseSpecifier:
         case CXCursor_MemberRef:
         case CXCursor_NamespaceRef:
+        case CXCursor_TemplateRef:
+        case CXCursor_OverloadedDeclRef:
         case CXCursor_MacroExpansion: {
             cUsr = "";
             std::string refFileName = "";

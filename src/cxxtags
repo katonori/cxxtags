@@ -70,11 +70,13 @@ def main():
         out_file = os.path.basename(in_file) + ".db"
     if len(in_file_list) > 1:
         print "INFO: multiple input file are specified. empty file \"%s\" is generated."%(out_file)
-        os.system("touch %s"%(out_file))
+        fo = open(out_file, 'a+') # touch file
+        fo.close()
         sys.exit(0)
     if re.match("^.+.o$", in_file):
         print "INFO: ignore input \"%s\". empty file \"%s\" is generated."%(in_file, out_file)
-        os.system("touch %s"%(out_file))
+        fo = open(out_file, 'a+') # touch file
+        fo.close()
         sys.exit(0)
 
     if not os.path.exists(in_file):

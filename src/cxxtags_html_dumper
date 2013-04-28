@@ -496,7 +496,7 @@ def print_info_table_data(fo_html, name, info_list):
     for i in info_list:
         col_list = i.split(TXT_DELIM)
         col_usr, col_file_name, col_line, col_col = col_list[:4]
-        col_str = string.join(col_list[4:],"")
+        col_str = replace_html_special_char(string.join(col_list[4:],""))
         fo_html.write("<tr>\n")
         fo_html.write(td_format % (gen_link_html(col_file_name, int(col_line), int(col_col)), col_str))
         fo_html.write("</tr>\n")

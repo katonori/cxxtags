@@ -15,6 +15,10 @@ def test_one(db, q):
     global err
     global ans_idx
     res = list(db.execute(q).fetchall())
+    if len(res) == 0:
+        print "ERROR: no result: %d"%(len(res))
+        print "    q = ", q
+        err += 1
     for row in res:
         if row != ans_list[ans_idx]:
             print "DIFFER:"

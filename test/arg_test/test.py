@@ -19,21 +19,26 @@ def test(cmd, in0, in1):
 # make ref
 os.system(CXXTAGS + " main.cpp -I./subdir")
 res = commands.getoutput("sqlite3 main.cpp.db \"select * from decl\" | wc -l")
-if int(res) != 4754:
+wl_orig = int(res)
+if wl_orig < 100:
     print "ERROR: reference generation"
     exit(1)
 shutil.copy("main.cpp.db", "ref.full.db")
 
 os.system(CXXTAGS + " -e /usr/include main.cpp -I./subdir")
 res = commands.getoutput("sqlite3 main.cpp.db \"select * from decl\" | wc -l")
-if int(res) != 233:
+wl_exclude = int(res)
+if wl_exclude < 100:
     print "ERROR: reference generation"
     exit(1)
 shutil.copy("main.cpp.db", "ref.db")
 
+if wl_orig <= wl_exclude:
+    print "ERROR: exception list: line_num"
+    err += 1
 res = commands.getoutput("sqlite3 main.cpp.db \"select * from decl\" | grep /usr/include")
 if res != "":
-    print "ERROR: exception list"
+    print "ERROR: exception list: grep"
     err += 1
 
 # argument tests

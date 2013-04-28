@@ -7,6 +7,11 @@ import os
 import re
 
 keywords = [
+"for",
+"typename",
+"template",
+"private",
+"const",
 "class",
 "int",
 "public",
@@ -56,7 +61,7 @@ def proc_file(fn):
                 if m:
                     val = m.group()
                     if val not in keywords:
-                        print "\"select * from ref where line=%d and col=%d and file_name=\\\"\"+cur_dir+\"/%s\\\"\", #%s"%(line_no, idx+1, sys.argv[1], val)
+                        print "\"SELECT \"+ref_col+\" WHERE line=%d and col=%d and file_list.name='\"+cur_dir+\"/%s'\", #%s"%(line_no, idx+1, sys.argv[1], val)
                     raise FIN
                 # find string
                 m = re.search("^\"[^\"]+\"", line[idx:line_len-1])

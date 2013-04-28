@@ -1,12 +1,13 @@
 PROJ_ROOT = ../../
 include ../util/common.mk
+CXXTAGS = ../../bin/cxxtags 
 GATHER_OUT = db
 .PHONY: clean html
 .SUFFIXES: .db .cpp
 
 DB_FILES = main.db
-test: html
-	(grep "<a name=\"a_loc_16\" id=\"line_16\">" html/main.cpp.0.html) | (grep "<a href=\"ref/main.cpp@232@FT@>1.Tfunc_test.t0.0.@val.5.html\">val</a>") > html/out.txt
+test: $(GATHER_OUT)
+	./test.py db
 main.cpp.db:
 	$(CXXTAGS) main.cpp -o $@
 $(GATHER_OUT): $(DB_FILES)

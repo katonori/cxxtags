@@ -56,12 +56,12 @@ q_list = [
 "SELECT "+ref_col+" WHERE line=18 and col=10 and file_list.name='"+cur_dir+"/main.cpp'", #cout
 "SELECT "+ref_col+" WHERE line=18 and col=29 and file_list.name='"+cur_dir+"/main.cpp'", #val
 "SELECT "+ref_col+" WHERE line=18 and col=36 and file_list.name='"+cur_dir+"/main.cpp'", #std
-#"SELECT "+ref_col+" WHERE line=18 and col=41 and file_list.name='"+cur_dir+"/main.cpp'", #endl
+"SELECT "+ref_col+" WHERE line=18 and col=41 and file_list.name='"+cur_dir+"/main.cpp'", #endl
 "SELECT "+decl_col+" WHERE line=21 and col=5 and file_list.name='"+cur_dir+"/main.cpp'", #main
 "SELECT "+ref_col+" WHERE line=23 and col=5 and file_list.name='"+cur_dir+"/main.cpp'", #func_test
 "SELECT "+ref_col+" WHERE line=24 and col=5 and file_list.name='"+cur_dir+"/main.cpp'", #func_test
 "SELECT "+ref_col+" WHERE line=25 and col=5 and file_list.name='"+cur_dir+"/main.cpp'", #std
-#"SELECT "+ref_col+" WHERE line=25 and col=10 and file_list.name='"+cur_dir+"/main.cpp'", #vector
+"SELECT "+ref_col+" WHERE line=25 and col=10 and file_list.name='"+cur_dir+"/main.cpp'", #vector
 "SELECT "+ref_col+" WHERE line=25 and col=17 and file_list.name='"+cur_dir+"/main.cpp'", #C0
 "SELECT "+decl_col+" WHERE line=25 and col=22 and file_list.name='"+cur_dir+"/main.cpp'", #vecTest
 "SELECT "+decl_col+" WHERE line=26 and col=13 and file_list.name='"+cur_dir+"/main.cpp'", #i
@@ -72,7 +72,7 @@ q_list = [
 "SELECT "+ref_col+" WHERE line=27 and col=27 and file_list.name='"+cur_dir+"/main.cpp'", #C0
 "SELECT "+ref_col+" WHERE line=27 and col=30 and file_list.name='"+cur_dir+"/main.cpp'", #i
 "SELECT "+ref_col+" WHERE line=29 and col=9 and file_list.name='"+cur_dir+"/main.cpp'", #std
-#"SELECT "+ref_col+" WHERE line=29 and col=14 and file_list.name='"+cur_dir+"/main.cpp'", #vector
+"SELECT "+ref_col+" WHERE line=29 and col=14 and file_list.name='"+cur_dir+"/main.cpp'", #vector
 "SELECT "+ref_col+" WHERE line=29 and col=21 and file_list.name='"+cur_dir+"/main.cpp'", #C0
 "SELECT "+ref_col+" WHERE line=29 and col=27 and file_list.name='"+cur_dir+"/main.cpp'", #iterator
 "SELECT "+decl_col+" WHERE line=29 and col=36 and file_list.name='"+cur_dir+"/main.cpp'", #itr
@@ -104,10 +104,12 @@ ans_list = [
 (u'c:@N@std@cout', u'cout', u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 18, 10, clang.cindex.CursorKind.DECL_REF_EXPR.value, u'/usr/include/c++/4.2.1/iostream', 64, 18),
 (u'c:main.cpp@232@FT@>1#Tfunc_test#t0.0#@val', u'val', u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 18, 29, clang.cindex.CursorKind.DECL_REF_EXPR.value, u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 16, 24),
 (u'c:@N@std', u'std', u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 18, 36, clang.cindex.CursorKind.NAMESPACE_REF.value, u'/usr/include/c++/4.2.1/iostream', 48, 26),
+(u'', u'endl', u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 18, 41, clang.cindex.CursorKind.OVERLOADED_DECL_REF.value, u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 18, 41),
 (u'c:@F@main', u'main', u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 21, 5, clang.cindex.CursorKind.FUNCTION_DECL.value, 0, 0, 1),
 (u'c:@F@func_test<#I>#I#', u'func_test', u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 23, 5, clang.cindex.CursorKind.DECL_REF_EXPR.value, u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 16, 6),
 (u'c:@F@func_test<#d>#d#', u'func_test', u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 24, 5, clang.cindex.CursorKind.DECL_REF_EXPR.value, u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 16, 6),
 (u'c:@N@std', u'std', u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 25, 5, clang.cindex.CursorKind.NAMESPACE_REF.value, u'/usr/include/c++/4.2.1/iostream', 48, 26),
+(u'c:@N@std@CT>2#T#T@vector', u'vector', u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 25, 10, clang.cindex.CursorKind.TEMPLATE_REF.value, u'/usr/include/c++/4.2.1/bits/stl_vector.h', 162, 11),
 (u'c:@C@C0', u'C0', u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 25, 17, clang.cindex.CursorKind.TYPE_REF.value, u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 4, 7),
 (u'c:main.cpp@351@F@main@vecTest', u'vecTest', u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 25, 22, clang.cindex.CursorKind.VAR_DECL.value, 0, 0, 1),
 (u'c:main.cpp@385@F@main@i', u'i', u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 26, 13, clang.cindex.CursorKind.VAR_DECL.value, 0, 0, 1),
@@ -118,6 +120,7 @@ ans_list = [
 (u'c:@C@C0', u'C0', u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 27, 27, clang.cindex.CursorKind.TYPE_REF.value, u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 4, 7),
 (u'c:main.cpp@385@F@main@i', u'i', u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 27, 30, clang.cindex.CursorKind.DECL_REF_EXPR.value, u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 26, 13),
 (u'c:@N@std', u'std', u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 29, 9, clang.cindex.CursorKind.NAMESPACE_REF.value, u'/usr/include/c++/4.2.1/iostream', 48, 26),
+(u'c:@N@std@CT>2#T#T@vector', u'vector', u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 29, 14, clang.cindex.CursorKind.TEMPLATE_REF.value, u'/usr/include/c++/4.2.1/bits/stl_vector.h', 162, 11),
 (u'c:@C@C0', u'C0', u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 29, 21, clang.cindex.CursorKind.TYPE_REF.value, u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 4, 7),
 (u'c:stl_vector.h@6289@N@std@C@vector>#$@C@C0#$@N@std@C@allocator>#S0_@T@iterator', u'iterator', u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 29, 27, clang.cindex.CursorKind.TYPE_REF.value, u'/usr/include/c++/4.2.1/bits/stl_vector.h', 179, 66),
 (u'c:main.cpp@458@F@main@itr', u'itr', u'/Users/norito/devel/cxxtags/test/template_type_param/main.cpp', 29, 36, clang.cindex.CursorKind.VAR_DECL.value, 0, 0, 1),

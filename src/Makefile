@@ -9,7 +9,8 @@ all: cxxtags_core.cpp db.cpp
 	$(CXX) $(CXXFLAGS) db.cpp -c $(INCLUDES)
 	$(CXX) cxxtags_core.o db.o $(LIBS) -o cxxtags_core
 	mkdir -p ../bin
-	cp cxxtags_core cxxtags cxxtags_gather cxxtags_html_dumper cxxtags_util.py ../bin
+	cp cxxtags_core cxxtags cxxtags_merger cxxtags_html_dumper cxxtags_util.py cxxtags_query ../bin
+	chmod +x cxxtags cxxtags_merger cxxtags_html_dumper cxxtags_util.py cxxtags_query ../bin
 	strip ../bin/cxxtags_core
 clean:
 	rm -f cxxtags_core.o db.o cxxtags_core

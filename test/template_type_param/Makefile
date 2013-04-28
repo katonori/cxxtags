@@ -1,20 +1,20 @@
 PROJ_ROOT = ../../
 include ../util/common.mk
 CXXTAGS = ../../bin/cxxtags 
-GATHER_OUT = db
+MERGER_OUT = db
 .PHONY: clean html
 .SUFFIXES: .db .cpp
 
 DB_FILES = main.db
-test: $(GATHER_OUT)
+test: $(MERGER_OUT)
 	./test.py db
 main.cpp.db:
 	$(CXXTAGS) main.cpp -o $@
-$(GATHER_OUT): $(DB_FILES)
-	$(GATHER) $@ $^
-html: $(GATHER_OUT)
+$(MERGER_OUT): $(DB_FILES)
+	$(MERGER) $@ $^
+html: $(MERGER_OUT)
 	$(DUMPER) $<
 clean:
-	rm -rf main.cpp.db html $(GATHER_OUT)
+	rm -rf main.cpp.db html $(MERGER_OUT)
 .cpp.db:
 	$(CXXTAGS) $< -o $*.db

@@ -1,3 +1,3 @@
 CXXTAGS = ../../src/cxxtags -e /usr/include
-GATHER = ../../src/cxxtags_gather
+MERGER = ../../src/cxxtags_merger
 DUMPER = ../../src/cxxtags_html_dumper

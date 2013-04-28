@@ -9,7 +9,7 @@ import sqlite3
 DB_VER = 5
 
 def usage():
-    print "usage: cxxtags_gather output_dir input_file [...]"
+    print "usage: cxxtags_merger output_dir input_file [...]"
 
 ########## main ###########
 def main():

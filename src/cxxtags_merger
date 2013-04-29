@@ -80,6 +80,7 @@ def main():
             print "ERROR: input db: %s:"%(fn), e.args[0]
             sys.exit(1)
 
+    cur_idx.execute("CREATE INDEX file_name_idx ON file_index(file_name);", NULL, NULL, NULL);
     db_idx.commit()
     db_idx.close()
 ##########

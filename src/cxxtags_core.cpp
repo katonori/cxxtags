@@ -67,14 +67,14 @@ public:
     }
     std::map<std::string, int > mMap;
     int mCurId;
-    int GetId(std::string fn)
+    int GetId(std::string str)
     {
         // lookup map
-        std::map<std::string, int >::iterator mapItr = mMap.find(fn);
+        std::map<std::string, int >::iterator mapItr = mMap.find(str);
         if(mapItr != mMap.end()){ 
             return mapItr->second;
         }
-        mMap[fn] = mCurId;
+        mMap[str] = mCurId;
         mCurId++;
         return mCurId - 1;
     }
@@ -85,6 +85,7 @@ public:
 };
 class IdTbl fileIdTbl;
 class IdTbl usrIdTbl;
+class IdTbl nameIdTbl;
 
 static int isInExcludeList(std::string fileName)
 {
@@ -152,6 +153,7 @@ static inline void PrintCursor(CXCursor Cursor) {
         return;
     }
     name = formatName(name);
+    int nameId = nameIdTbl.GetId(name);
     // usr
     CXString cxUSR = clang_getCursorUSR(Cursor);
     const char *cUsr = clang_getCString(cxUSR);
@@ -162,7 +164,7 @@ static inline void PrintCursor(CXCursor Cursor) {
     if(isInExcludeList(fileName)) {
         return;
     }
-    int fid = fileIdTbl.GetId(fileName);
+    int fileId = fileIdTbl.GetId(fileName);
     int usrId = usrIdTbl.GetId(cUsr);
 
     int isVirt = 0;
@@ -186,7 +188,7 @@ static inline void PrintCursor(CXCursor Cursor) {
         case CXCursor_MacroDefinition: {
             // is_def
             int isDef = clang_isCursorDefinition(Cursor);
-            db::insert_decl_value(usrId, name.c_str(), fid, line, column, kind, val, 0, isDef);
+            db::insert_decl_value(usrId, nameId, fileId, line, column, kind, val, 0, isDef);
             break;
         }
         case CXCursor_CXXMethod: {
@@ -204,7 +206,7 @@ static inline void PrintCursor(CXCursor Cursor) {
                 const char *cRefUsr = clang_getCString(cxRefUSR);
                 assert(cRefUsr);
                 int refUsrId = usrIdTbl.GetId(cRefUsr);
-                db::insert_overriden_value(refUsrId, name.c_str(), fid, line, column, kind, usrId, isDef);
+                db::insert_overriden_value(refUsrId, nameId, fileId, line, column, kind, usrId, isDef);
             }
             // fall through
         }
@@ -213,7 +215,7 @@ static inline void PrintCursor(CXCursor Cursor) {
         case CXCursor_Destructor: {
             // is_def
             int isDef = clang_isCursorDefinition(Cursor);
-            db::insert_decl_value(usrId, name.c_str(), fid, line, column, kind, 0, isVirt, isDef);
+            db::insert_decl_value(usrId, nameId, fileId, line, column, kind, 0, isVirt, isDef);
             break;
         }
         case CXCursor_DeclRefExpr:
@@ -248,7 +250,7 @@ static inline void PrintCursor(CXCursor Cursor) {
                     }
                     refFid = fileIdTbl.GetId(cRefFileName);
                 }
-                db::insert_ref_value(refUsrId, name.c_str(), fid, line, column, kind, refFid, ref_line, ref_column);
+                db::insert_ref_value(refUsrId, nameId, fileId, line, column, kind, refFid, ref_line, ref_column);
                 clang_disposeString(cxRefUSR);
             }
             break;
@@ -431,7 +433,7 @@ int perform_test_load_source(int argc, const char **argv,
                              CommentSchemaFile);
 FUNC_END:
   clang_disposeIndex(Idx);
-  db::fin(fileIdTbl.GetTbl(), usrIdTbl.GetTbl());
+  db::fin(fileIdTbl.GetTbl(), usrIdTbl.GetTbl(), nameIdTbl.GetTbl());
   return result;
 }
 

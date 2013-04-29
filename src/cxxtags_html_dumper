@@ -216,14 +216,14 @@ def get_loc_to_link(db, file_name, word, line, col):
     #print "GET: %s, %d, %d, %s" %(word, line, col, file_name)
     # ref
     cur = db.cursor()
-    cur.execute("SELECT ref_file_list.name, ref.ref_line FROM " + cxxtags_util.QUERY_JOINED_TABLE_REF + " WHERE file_list.name=? AND ref.name=? AND ref.line=? AND ref.col=? LIMIT 1", (file_name, word, line, col))
+    cur.execute("SELECT ref_file_list.name, ref.ref_line FROM " + cxxtags_util.QUERY_JOINED_TABLE_REF + " WHERE file_list.name=? AND name_list.name=? AND ref.line=? AND ref.col=? LIMIT 1", (file_name, word, line, col))
     for ref_row in cur.fetchall():
         ref_file_name, ref_line = ref_row
         if g_html_file_dict.has_key(ref_file_name):
             link = "%s#%s_%d" % (g_html_file_dict[ref_file_name]+".html", LOC_ANCHOR_PREFIX, ref_line)
             return link
     # decl
-    cur.execute("SELECT usr_list.name FROM " + cxxtags_util.QUERY_JOINED_TABLE_DECL + " WHERE file_list.name=? AND decl.name=? AND decl.line=? AND decl.col=? LIMIT 1", (file_name, word, line, col))
+    cur.execute("SELECT usr_list.name FROM " + cxxtags_util.QUERY_JOINED_TABLE_DECL + " WHERE file_list.name=? AND name_list.name=? AND decl.line=? AND decl.col=? LIMIT 1", (file_name, word, line, col))
     for decl_row in cur.fetchall():
         decl_usr = decl_row[0]
         fn = get_info_file(decl_usr)
@@ -511,7 +511,7 @@ def gen_info_html():
         print "gen_info_html: " + db_fn
         db = cxxtags_util.db_connect(db_fn)
         cur = db.cursor()
-        cur.execute("SELECT usr_list.name, decl.line, file_list.name, decl.name FROM " + cxxtags_util.QUERY_JOINED_TABLE_DECL + ";")
+        cur.execute("SELECT usr_list.name, decl.line, file_list.name, name_list.name FROM " + cxxtags_util.QUERY_JOINED_TABLE_DECL + ";")
         #for i in  g_html_file_dict.keys():
         for i in cur.fetchall():
             ref_usr, line, file_name, name = i

@@ -16,7 +16,7 @@ class HandlerBase:
     mDbDir = ""
     def GetUsrFromRefTable(self, name, fileName, lineNo, colNo):
         cur = self.mDb.cursor()
-        q = 'SELECT usr_list.name, file_list.name FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE ref.name=?'
+        q = 'SELECT usr_list.name, file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE name_list.name=?'
         argList = (name,)
         if fileName != "":
             q += ' AND file_list.name LIKE ?'
@@ -35,14 +35,14 @@ class HandlerBase:
                 print row
             sys.exit(1)
         for row in res:
-            resUsr, resFileName = row
+            resUsr, resFileName, resLine, resCol = row
             if fileName == "" or re.search(fileName + '$', resFileName):
                 return resUsr
         return None
 
     def GetUsrFromDeclTable(self, name, fileName, lineNo, colNo):
         cur = self.mDb.cursor()
-        q = 'SELECT usr_list.name, file_list.name FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE decl.name=?'
+        q = 'SELECT usr_list.name, file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE name_list.name=?'
         argList = (name,)
         if fileName != "":
             q += ' AND file_list.name LIKE ?'
@@ -61,7 +61,7 @@ class HandlerBase:
                 print row
             sys.exit(1)
         for row in res:
-            resUsr, resFileName = row
+            resUsr, resFileName, resLine, resCol = row
             if fileName == "" or re.search(fileName + '$', resFileName):
                 return resUsr
         return None
@@ -145,7 +145,6 @@ class QueryHandlerRef(HandlerBase):
     def GetAllRefs(self, usr):
         res_list = []
         for fn in self.mAllDbFileList:
-            print fn
             self.mDb = cxxtags_util.db_connect(fn)
             cur = self.mDb.cursor()
             cur.execute('SELECT file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE usr_list.name=?;', (usr,))

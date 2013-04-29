@@ -139,6 +139,9 @@ db = None
 g_db_list = []
 g_src_file_dict = {}
 
+g_num_things_todo = 0
+g_num_done = 0
+
 def path_regalizer(path):
     path = path.replace('/', '<slash>')
     return path
@@ -378,13 +381,23 @@ def proc_file(fn):
     fi.close()
     fo.close()
 
+def get_progress():
+    global g_num_done
+    global g_num_things_todo
+    return "[%d/%d]"%(g_num_done, g_num_things_todo)
+
+def update_progress():
+    global g_num_done
+    g_num_done += 1
+
 # generate text files that reference informations are listed
 def gen_ref_info_txt():
     global OUT_DIR
     global g_db_list
     done_dict = {}
     for db_fn in g_db_list:
-        print "gen_ref: " + db_fn
+        print get_progress() + " gen_ref_txt: " + db_fn
+        update_progress()
         db = cxxtags_util.db_connect(db_fn)
         cur = db.cursor()
         columns = "usr_list.name, ref.line, ref.col, file_list.name"
@@ -417,7 +430,8 @@ def gen_decl_info_txt():
     global g_db_list
     done_dict = {}
     for db_fn in g_db_list:
-        print "gen_decl: " + db_fn
+        print get_progress() + " gen_decl_txt: " + db_fn
+        update_progress()
         db = cxxtags_util.db_connect(db_fn)
         cur = db.cursor()
         cur.execute("SELECT usr_list.name, decl.line, decl.col, file_list.name, decl.is_def FROM " + cxxtags_util.QUERY_JOINED_TABLE_DECL + ";")
@@ -454,7 +468,8 @@ def gen_override_info_txt():
     done_dict = {}
     done_dict_override = {}
     for db_fn in g_db_list:
-        print "gen_overriden: " + db_fn
+        print get_progress() + " gen_overriden_txt: " + db_fn
+        update_progress()
         db = cxxtags_util.db_connect(db_fn)
         cur = db.cursor()
         cur.execute("SELECT usr_list.name, file_list.name, overriden.line, overriden.col, usr_list_overrider.name FROM " + cxxtags_util.QUERY_JOINED_TABLE_OVERRIDEN + ";")
@@ -508,7 +523,8 @@ def gen_info_html():
     global g_db_list
     done_check = {}
     for db_fn in g_db_list:
-        print "gen_info_html: " + db_fn
+        print get_progress() + " gen_info_html: " + db_fn
+        update_progress()
         db = cxxtags_util.db_connect(db_fn)
         cur = db.cursor()
         cur.execute("SELECT usr_list.name, decl.line, file_list.name, name_list.name FROM " + cxxtags_util.QUERY_JOINED_TABLE_DECL + ";")
@@ -617,6 +633,8 @@ span.pp {
 def main():
     global g_db_list
     global g_src_file_dict
+    global g_num_things_todo
+    global g_num_done
     db_in_dir  = sys.argv[1]
 
     # make output dir
@@ -643,6 +661,9 @@ def main():
             add_html_file(fn)
     db_idx.close()
 
+    g_num_things_todo = len(g_src_file_dict.keys()) + len(g_db_list)*4
+    g_num_done = 1
+
     gen_css()
     gen_js()
     # ref
@@ -663,7 +684,8 @@ def main():
     #print "    GEN_INFO_HTML = " + fpformat.fix(time.time()-st,3)
 
     for f in g_src_file_dict.keys():
-        print "%s" % (f)
+        print get_progress() + f
+        update_progress()
         proc_file(f)
 # run script
 main()

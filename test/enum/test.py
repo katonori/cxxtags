@@ -34,8 +34,8 @@ db_dir = sys.argv[1]
 
 cur_dir = os.getcwd()
 
-decl_col = "usr, decl.name, file_list.name, decl.line, decl.col, decl.kind, decl.val, decl.is_def FROM decl, file_list ON decl.file_id=file_list.id"
-ref_col = " usr, ref.name, file_list.name, ref.line, ref.col, ref.kind, ref_file_list.name, ref.ref_line, ref.ref_col FROM (ref, file_list ON ref.file_id=file_list.id), file_list AS ref_file_list ON ref.ref_file_id=ref_file_list.id"
+decl_col = "usr_list.name, decl.name, file_list.name, decl.line, decl.col, decl.kind, decl.val, decl.is_def FROM " + cxxtags.QUERY_JOINED_TABLE_DECL
+ref_col = " usr_list.name, ref.name, file_list.name, ref.line, ref.col, ref.kind, ref_file_list.name, ref.ref_line, ref.ref_col FROM " + cxxtags.QUERY_JOINED_TABLE_REF
 
 q_list = [
 # main.cpp

@@ -223,7 +223,7 @@ def get_loc_to_link(db, file_name, word, line, col):
             link = "%s#%s_%d" % (g_html_file_dict[ref_file_name]+".html", LOC_ANCHOR_PREFIX, ref_line)
             return link
     # decl
-    cur.execute("SELECT decl.usr FROM " + cxxtags_util.QUERY_JOINED_TABLE_DECL + " WHERE file_list.name=? AND decl.name=? AND decl.line=? AND decl.col=? LIMIT 1", (file_name, word, line, col))
+    cur.execute("SELECT usr_list.name FROM " + cxxtags_util.QUERY_JOINED_TABLE_DECL + " WHERE file_list.name=? AND decl.name=? AND decl.line=? AND decl.col=? LIMIT 1", (file_name, word, line, col))
     for decl_row in cur.fetchall():
         decl_usr = decl_row[0]
         fn = get_info_file(decl_usr)
@@ -387,7 +387,7 @@ def gen_ref_info_txt():
         print "gen_ref: " + db_fn
         db = cxxtags_util.db_connect(db_fn)
         cur = db.cursor()
-        columns = "ref.usr, ref.line, ref.col, file_list.name"
+        columns = "usr_list.name, ref.line, ref.col, file_list.name"
         cur.execute("SELECT " + columns + " FROM " + cxxtags_util.QUERY_JOINED_TABLE_REF + ";")
         for i in cur.fetchall():
             # get values from a query result
@@ -420,7 +420,7 @@ def gen_decl_info_txt():
         print "gen_decl: " + db_fn
         db = cxxtags_util.db_connect(db_fn)
         cur = db.cursor()
-        cur.execute("SELECT decl.usr, decl.line, decl.col, file_list.name, decl.is_def FROM " + cxxtags_util.QUERY_JOINED_TABLE_DECL + ";")
+        cur.execute("SELECT usr_list.name, decl.line, decl.col, file_list.name, decl.is_def FROM " + cxxtags_util.QUERY_JOINED_TABLE_DECL + ";")
         for i in cur.fetchall():
             # get values from a query result
             usr, line, col, file_name, is_def = i
@@ -457,7 +457,7 @@ def gen_override_info_txt():
         print "gen_overriden: " + db_fn
         db = cxxtags_util.db_connect(db_fn)
         cur = db.cursor()
-        cur.execute("SELECT overriden.usr, file_list.name, overriden.line, overriden.col, overriden.usr_overrider FROM " + cxxtags_util.QUERY_JOINED_TABLE_OVERRIDEN + ";")
+        cur.execute("SELECT usr_list.name, file_list.name, overriden.line, overriden.col, usr_list_overrider.name FROM " + cxxtags_util.QUERY_JOINED_TABLE_OVERRIDEN + ";")
         for row in cur.fetchall():
             # get values from a query result
             usr, file_name, line, col, usr_overrider = row
@@ -473,7 +473,7 @@ def gen_override_info_txt():
             fo = open(OUT_DIR+"/"+fn+".txt", "a")
             fo.write("overriden: "+ovr_info_str+"\n")
             fo.close()
-            cur.execute("SELECT file_list.name, decl.line, decl.col FROM " + cxxtags_util.QUERY_JOINED_TABLE_DECL + " WHERE decl.usr=? ORDER BY decl.is_def LIMIT 1;", (usr,))
+            cur.execute("SELECT file_list.name, decl.line, decl.col FROM " + cxxtags_util.QUERY_JOINED_TABLE_DECL + " WHERE usr_list.name=? ORDER BY decl.is_def LIMIT 1;", (usr,))
             row = cur.fetchone()
             if row:
                 file_name, line, col = row
@@ -511,7 +511,7 @@ def gen_info_html():
         print "gen_info_html: " + db_fn
         db = cxxtags_util.db_connect(db_fn)
         cur = db.cursor()
-        cur.execute("SELECT decl.usr, decl.line, file_list.name, decl.name FROM " + cxxtags_util.QUERY_JOINED_TABLE_DECL + ";")
+        cur.execute("SELECT usr_list.name, decl.line, file_list.name, decl.name FROM " + cxxtags_util.QUERY_JOINED_TABLE_DECL + ";")
         #for i in  g_html_file_dict.keys():
         for i in cur.fetchall():
             ref_usr, line, file_name, name = i

@@ -16,7 +16,7 @@ class HandlerBase:
     mDbDir = ""
     def GetUsrFromRefTable(self, name, fileName, lineNo, colNo):
         cur = self.mDb.cursor()
-        q = 'SELECT ref.usr, file_list.name FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE ref.name=?'
+        q = 'SELECT usr_list.name, file_list.name FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE ref.name=?'
         argList = (name,)
         if fileName != "":
             q += ' AND file_list.name LIKE ?'
@@ -42,7 +42,7 @@ class HandlerBase:
 
     def GetUsrFromDeclTable(self, name, fileName, lineNo, colNo):
         cur = self.mDb.cursor()
-        q = 'SELECT decl.usr, file_list.name FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE decl.name=?'
+        q = 'SELECT usr_list.name, file_list.name FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE decl.name=?'
         argList = (name,)
         if fileName != "":
             q += ' AND file_list.name LIKE ?'
@@ -85,7 +85,6 @@ class QueryHandlerDecl(HandlerBase):
 
     def __init__(self, dbDir):
         self.mDbDir = dbDir
-        #self.mAllDbFileList = cxxtags_util.get_db_file_list(self.mDbDir)
 
     def DoQuery(self, name, fileName, lineNo, colNo):
         usr = self.GetUsr(name, fileName, lineNo, colNo)
@@ -96,7 +95,7 @@ class QueryHandlerDecl(HandlerBase):
 
     def QueryDeclInfo(self, usr):
         cur = self.mDb.cursor()
-        cur.execute('SELECT file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE decl.usr=? ORDER BY decl.is_def LIMIT 1', (usr,))
+        cur.execute('SELECT file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name=? ORDER BY decl.is_def LIMIT 1', (usr,))
         res = cur.fetchone()
         return res
 
@@ -121,7 +120,7 @@ class QueryHandlerDef(HandlerBase):
         for fn in self.mAllDbFileList:
             self.mDb = cxxtags_util.db_connect(fn)
             cur = self.mDb.cursor()
-            cur.execute('SELECT file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE decl.usr=? AND is_def=1 LIMIT 1;', (usr,))
+            cur.execute('SELECT file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name=? AND is_def=1 LIMIT 1;', (usr,))
             res = cur.fetchone()
             self.mDb.close()
             if res:
@@ -146,9 +145,10 @@ class QueryHandlerRef(HandlerBase):
     def GetAllRefs(self, usr):
         res_list = []
         for fn in self.mAllDbFileList:
+            print fn
             self.mDb = cxxtags_util.db_connect(fn)
             cur = self.mDb.cursor()
-            cur.execute('SELECT file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE ref.usr=?;', (usr,))
+            cur.execute('SELECT file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE usr_list.name=?;', (usr,))
             res = cur.fetchall()
             for i in res:
                 res_list.append(i)

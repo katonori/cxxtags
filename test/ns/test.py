@@ -34,8 +34,8 @@ if len(sys.argv) != 2:
 
 cur_dir = os.getcwd()
 
-decl_col = "decl.usr, decl.name, file_list.name, decl.line, decl.col, decl.kind, decl.val, decl.is_virtual, decl.is_def"
-ref_col = " ref.usr, ref.name, file_list.name, ref.line, ref.col, ref.kind, ref_file_list.name, ref.ref_line, ref.ref_col"
+decl_col = "usr_list.name, decl.name, file_list.name, decl.line, decl.col, decl.kind, decl.val, decl.is_virtual, decl.is_def"
+ref_col = "usr_list.name, ref.name, file_list.name, ref.line, ref.col, ref.kind, ref_file_list.name, ref.ref_line, ref.ref_col"
 
 q_list = [
 # main.cpp

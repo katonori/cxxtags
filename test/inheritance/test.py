@@ -33,9 +33,9 @@ if len(sys.argv) != 2:
 
 cur_dir = os.getcwd()
 
-decl_col = "usr_list.name, decl.name, file_list.name, decl.line, decl.col, decl.kind, decl.val, decl.is_virtual, decl.is_def FROM " + cxxtags.QUERY_JOINED_TABLE_DECL
-ref_col = "usr_list.name, ref.name, file_list.name, ref.line, ref.col, ref.kind, ref_file_list.name, ref.ref_line, ref.ref_col FROM " + cxxtags.QUERY_JOINED_TABLE_REF
-overriden_col = "usr_list.name, overriden.name, file_list.name, overriden.line, overriden.col, overriden.kind, usr_list_overrider.name, overriden.is_def FROM " + cxxtags.QUERY_JOINED_TABLE_OVERRIDEN
+decl_col = "usr_list.name, name_list.name, file_list.name, decl.line, decl.col, decl.kind, decl.val, decl.is_virtual, decl.is_def FROM " + cxxtags.QUERY_JOINED_TABLE_DECL
+ref_col = "usr_list.name, name_list.name, file_list.name, ref.line, ref.col, ref.kind, ref_file_list.name, ref.ref_line, ref.ref_col FROM " + cxxtags.QUERY_JOINED_TABLE_REF
+overriden_col = "usr_list.name, name_list.name, file_list.name, overriden.line, overriden.col, overriden.kind, usr_list_overrider.name, overriden.is_def FROM " + cxxtags.QUERY_JOINED_TABLE_OVERRIDEN
 
 q_list = [
 # main.cpp

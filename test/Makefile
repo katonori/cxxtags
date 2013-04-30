@@ -1,10 +1,10 @@
-TESTS = enum ns inheritance arg_test template_type_param enum_query 
+TESTS = enum ns inheritance arg_test template_type_param enum_query db_update
 
 test: $(TESTS)
 	@for i in $^; \
-            do (make -C $$i test); \
+            do (echo $$i; make -C $$i test); \
         done
 clean: $(TESTS)
 	@for i in $^; \
-            do (make -C $$i clean); \
+            do (echo $$i; make -C $$i clean); \
         done

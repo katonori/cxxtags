@@ -141,7 +141,7 @@ for test in test_data_list:
             if len(i) == 9:
                 refUsr, refName, refFileName, refLine, refCol, dummy, dummy, dummy, dummy = i
                 if refUsr == usr:
-                    resultList.append((refFileName, refLine, refCol))
+                    resultList.append((refLine, refCol, refFileName))
         cmd = CXXTAGS_QUERY + " ref db %s -f %s -l %d -c %d"%(name, fileName, line, col)
 
         if len(resultList) == 0:
@@ -149,18 +149,23 @@ for test in test_data_list:
 
         # exec command
         dbgPrint("$ " + cmd)
-        cmdResult = commands.getoutput(cmd).split('\n')
+        result = commands.getoutput(cmd).split('\n')
+        cmdResult = []
+        for i in result:
+            fn, line, col = i.split('|')
+            cmdResult.append((int(line), int(col), fn))
         dbgPrint(cmdResult)
+        dbgPrint(resultList)
+        cmdResult = sorted(cmdResult)
+        resultList = sorted(resultList)
 
         # check result
         i  = 0
         for row in cmdResult:
-            fileName, line, col = row.split('|')
-            refFileName, refLine, refCol = resultList[i]
-            if fileName != refFileName or int(line) != int(refLine) or int(col) != int(refCol):
-                dbgPrint("DIFFER: ")
-                dbgPrint(row)
-                dbgPrint(resultList[i])
+            if row != resultList[i]:
+                print("DIFFER: ")
+                print(row)
+                print(resultList[i])
                 err += 1
             i+=1
     else:
@@ -172,7 +177,7 @@ for test in test_data_list:
             if len(i) == 8:
                 declUsr, declName, declFileName, declLine, declCol, dummy, dummy, dummy = i
                 if declUsr == usr:
-                    resultList.append((declFileName, declLine, declCol))
+                    resultList.append((declLine, declCol, declFileName ))
         cmd = CXXTAGS_QUERY + " decl db %s -f %s -l %d -c %d"%(name, fileName, line, col)
 
         if len(resultList) == 0:
@@ -180,15 +185,20 @@ for test in test_data_list:
 
         # exec command
         dbgPrint("$ " + cmd)
-        cmdResult = commands.getoutput(cmd).split('\n')
+        result = commands.getoutput(cmd).split('\n')
+        cmdResult = []
+        for i in result:
+            fn, line, col = i.split('|')
+            cmdResult.append((int(line), int(col), fn))
         dbgPrint(cmdResult)
+        dbgPrint(resultList)
+        cmdResult = sorted(cmdResult)
+        resultList = sorted(resultList)
 
         # check result
         i  = 0
         for row in cmdResult:
-            fileName, line, col = row.split('|')
-            refFileName, refLine, refCol = resultList[i]
-            if fileName != refFileName or int(line) != int(refLine) or int(col) != int(refCol):
+            if row != resultList[i]:
                 print "DIFFER: " 
                 print row
                 print resultList[i]

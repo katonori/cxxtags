@@ -9,6 +9,7 @@ import re
 import os
 
 gDebugMode = 0
+gPartialCompare = 0
 
 class HandlerBase:
     """ Base class of *Handler classes """
@@ -175,6 +176,7 @@ class QueryHandlerName(HandlerBase):
         self.mDbDir = dbDir
 
     def DoQuery(self, name, fileName, lineNo, colNo):
+        global gDebugMode
         resultList = []
         dbList = cxxtags_util.get_db_files_by_src_file_name(self.mDbDir, fileName)
         if dbList == []:
@@ -184,7 +186,10 @@ class QueryHandlerName(HandlerBase):
             cur = db.cursor()
             #cur.execute('SELECT file_list.name, name_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE name_list.name LIKE ?;', ('%'+name+'%',))
             #cur.execute('SELECT name_list.name, name_list.id FROM name_list WHERE name_list.name LIKE ?;', ('%'+name+'%',))
-            cur.execute('SELECT name_list.name, name_list.id FROM name_list WHERE name_list.name=?;', (name,))
+            if gPartialCompare == 1:
+                cur.execute('SELECT name_list.name, name_list.id FROM name_list WHERE name_list.name LIKE ?;', ('%'+name+'%',))
+            else:
+                cur.execute('SELECT name_list.name, name_list.id FROM name_list WHERE name_list.name=?;', (name,))
             result = cur.fetchall()
             for idRow in result:
                 resultName, resultId = idRow
@@ -202,8 +207,10 @@ class QueryHandlerName(HandlerBase):
 
 def main():
     global USAGE
+    global gDebugMode
+    global gPartialCompare
     try:
-        optlist, args = getopt.gnu_getopt(sys.argv[1:], 'f:l:c:d')
+        optlist, args = getopt.gnu_getopt(sys.argv[1:], 'f:l:c:d', ['debug', 'partial'])
     except getopt.GetoptError, e:
         print "ERROR: getopt: ", e.args[0]
         sys.exit(1)
@@ -223,8 +230,10 @@ def main():
             lineNo = val
         elif opt == "-c":
             colNo = val
-        elif opt == "-d":
+        elif opt in ("-d", "--debug"):
             gDebugMode = 1
+        elif opt == "--partial":
+            gPartialCompare = 1
 
     result = []
     if queryType == 'ref': # get all references

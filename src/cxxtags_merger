@@ -17,9 +17,8 @@ def main():
     input_files = sys.argv[2:]
     file_index = output_dir + "/file_index.db"
     # make output dir
-    if os.path.exists(output_dir):
-        shutil.rmtree(output_dir)
-    os.mkdir(output_dir)
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
 
     # open file index db
     try:
@@ -27,43 +26,57 @@ def main():
         cur_idx = db_idx.cursor()
         cur_idx.execute(
                 """
-                CREATE TABLE file_index(
+                CREATE TABLE IF NOT EXISTS file_index(
                     file_name TEXT,
                     is_src INTEGER,
                     db_file TEXT
                     );
                 """
              )
-        cur_idx.execute("CREATE TABLE db_info(db_format INTEGER);");
-        cur_idx.execute("INSERT INTO db_info VALUES('%d');"%(DB_VER));
+        cur_idx.execute("CREATE TABLE IF NOT EXISTS db_info(db_format INTEGER);")
+        cur_idx.execute("SELECT * FROM db_info;")
+        if not cur_idx.fetchall():
+            cur_idx.execute("INSERT INTO db_info VALUES('%d');"%(DB_VER))
     except sqlite3.Error, e:
         print "ERROR: file_index: ", e.args[0]
         sys.exit(1)
 
     for fn in input_files:
-        tgt_fn = output_dir + "/" + os.path.basename(fn)
-        # change file name if it already exists.
-        num = 0
-        while os.path.exists(tgt_fn):
-            path, ext = os.path.splitext(tgt_fn)
-            tgt_fn = path + ".%d"%(num) + ext
-        #shutil.copy(fn, tgt_fn)
-        shutil.move(fn, tgt_fn)
-        #print "move %s to %s"%(fn, tgt_fn)
 
         src_file = ""
         try:
             # open db
-            db_in = sqlite3.connect(tgt_fn, isolation_level='EXCLUSIVE')
+            db_in = sqlite3.connect(fn, isolation_level='EXCLUSIVE')
             cur_in = db_in.cursor()
             # get main source file name
             cur_in.execute("SELECT src_file_name FROM db_info;")
             src_file = cur_in.fetchone()[0]
-            cur_in.execute("SELECT name FROM file_list;")
+
+            # decide target file name
+            tgt_fn = ""
+            tgt_basename = ""
+            cur_idx.execute("SELECT db_file FROM file_index WHERE file_name=?;", (src_file,));
+            row = cur_idx.fetchone()
+            if row: # if already registered
+                tgt_basename, = row
+                tgt_fn = output_dir + "/" + tgt_basename
+                # delete old entries
+                cur_idx.execute("DELETE FROM file_index WHERE db_file=?;", (tgt_basename,));
+            else:
+                tgt_fn = output_dir + "/" + os.path.basename(fn)
+                # change file name if it already exists.
+                num = 0
+                while os.path.exists(tgt_fn):
+                    path, ext = os.path.splitext(tgt_fn)
+                    tgt_fn = path + ".%d"%(num) + ext
+            shutil.move(fn, tgt_fn)
+            print fn + "to" + tgt_fn
+
             # get all the file(include header files) name
             all_files = {}
-            q_list = []
+            value_list = []
             tgt_base_fn = os.path.basename(tgt_fn)
+            cur_in.execute("SELECT name FROM file_list;")
             for f in cur_in.fetchall():
                 fn = f[0]
                 if fn != "" and not all_files.has_key(fn):
@@ -72,15 +85,15 @@ def main():
                         is_src = 1
                     all_files[fn] = is_src
                     #db_idx.execute("INSERT INTO file_index VALUES('" + f[0] + "', " + str(is_src) + ", '" +  os.path.basename(tgt_fn) + "');")
-                    q_list.append((fn, is_src, tgt_base_fn))
-            cur_idx.executemany("INSERT INTO file_index VALUES(?, ?, ?);", q_list)
+                    value_list.append((fn, is_src, tgt_base_fn))
+            cur_idx.executemany("INSERT INTO file_index VALUES(?, ?, ?);", value_list)
             db_in.close()
         except sqlite3.Error, e:
             print fn
             print "ERROR: input db: %s:"%(fn), e.args[0]
             sys.exit(1)
 
-    cur_idx.execute("CREATE INDEX file_name_idx ON file_index(file_name);")
+    cur_idx.execute("CREATE INDEX IF NOT EXISTS file_name_idx ON file_index(file_name);")
     db_idx.commit()
     db_idx.close()
 ##########

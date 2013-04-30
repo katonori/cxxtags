@@ -84,7 +84,7 @@ Make a query to the database.
 * -f: Specify the file that contains the item.  
 * -l: Specify the line number the item is located.  
 * -c: Specify the column number the item is located.  
-* --partial: if *query_type* is *name*, items that include *item_name* in its name is also treated as matched.
+* -p, --partial: if *query_type* is *name*, items that include *item_name* in its name is also treated as matched.
 
 How to use
 ------------------------

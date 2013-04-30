@@ -18,7 +18,7 @@ class HandlerBase:
 
     mAllDbFileList = None
     mDbDir = ""
-    mUsrDb = None
+    mUsrDbName = None
 
     def GetAllDbFiles(self):
         if self.mAllDbFileList == None:
@@ -104,11 +104,19 @@ class HandlerBase:
         usr = self.GetUsrFromDeclTable(db, name, fileName, lineNo, colNo)
         if usr == "":
             usr = self.GetUsrFromRefTable(db, name, fileName, lineNo, colNo)
+        db.close()
         if usr != "":
-            self.mUsrDb = db
+            self.mUsrDbName = fn
             return usr
         return None
 
+    def GetMainSrcName(self):
+        db = cxxtags_util.db_connect(self.mUsrDbName)
+        cur = db.cursor()
+        cur.execute("SELECT src_file_name FROM db_info;")
+        result = cur.fetchone()
+        db.close()
+        return result[0]
 
 class QueryHandlerDecl(HandlerBase):
     """ Handle Rquest for infomation about declarations """
@@ -123,12 +131,13 @@ class QueryHandlerDecl(HandlerBase):
             if result:
                 resultName, resultLine, resultCol = result
                 print resultName + OUTPUT_DELIMITER + str(resultLine) + OUTPUT_DELIMITER + str(resultCol)
-            self.mUsrDb.close()
 
     def QueryDeclInfo(self, usr):
-        cur = self.mUsrDb.cursor()
+        db = cxxtags_util.db_connect(self.mUsrDbName)
+        cur = db.cursor()
         cur.execute('SELECT file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name=? ORDER BY decl.is_def LIMIT 1', (usr,))
         result = cur.fetchone()
+        db.close()
         return result
 
 class QueryHandlerDef(HandlerBase):
@@ -169,7 +178,14 @@ class QueryHandlerRef(HandlerBase):
 
     def GetAllRefs(self, usr):
         resultList = []
-        for fn in self.GetAllDbFiles():
+        db_list = []
+        mainSrcFile = self.GetMainSrcName()
+        bn = os.path.basename(mainSrcFile)
+        if re.match("c:"+bn, usr): # local scope
+            db_list = [self.mUsrDbName,]
+        else:
+            db_list = self.GetAllDbFiles()
+        for fn in db_list:
             db = cxxtags_util.db_connect(fn)
             cur = db.cursor()
             cur.execute('SELECT usr_list.id FROM usr_list WHERE name=?;', (usr,))

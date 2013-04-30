@@ -70,7 +70,6 @@ def main():
                     path, ext = os.path.splitext(tgt_fn)
                     tgt_fn = path + ".%d"%(num) + ext
             shutil.move(fn, tgt_fn)
-            print fn + "to" + tgt_fn
 
             # get all the file(include header files) name
             all_files = {}

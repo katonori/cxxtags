@@ -80,6 +80,8 @@ Make a query to the database.
     * decl: Query information about location where the item is **declared**.  
     * def: Query information about location where the item is **defined**.  
     * ref: Query information about all the locations where the item is **refered**  
+    * override: Query information about items that *item_name* overrides.
+    * overriden: Query information about items that is overriden by *item_name*.
     * name: Search information about all items named *item_name* in database.
 * -f: Specify the file that contains the item.  
 * -l: Specify the line number the item is located.  

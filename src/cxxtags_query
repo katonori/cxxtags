@@ -8,6 +8,8 @@ import getopt
 import re
 import os
 
+OUTPUT_DELIMITER = '|'
+
 gDebugMode = 0
 gPartialCompare = 0
 
@@ -109,8 +111,10 @@ class QueryHandlerDecl(HandlerBase):
         usr = self.GetUsr(name, fileName, lineNo, colNo)
         if usr:
             result = self.QueryDeclInfo(usr)
+            if result:
+                resultName, resultLine, resultCol = result
+                print resultName + OUTPUT_DELIMITER + str(resultLine) + OUTPUT_DELIMITER + str(resultCol)
         self.mUsrDb.close()
-        return result
 
     def QueryDeclInfo(self, usr):
         cur = self.mUsrDb.cursor()
@@ -129,10 +133,10 @@ class QueryHandlerDef(HandlerBase):
         if usr:
             result = self.GetDef(usr)
             if result:
-                return result
+                resultName, resultLine, resultCol = result
+                print resultName + OUTPUT_DELIMITER + str(resultLine) + OUTPUT_DELIMITER + str(resultCol)
 
     def GetDef(self, usr):
-        res_list = []
         for fn in self.GetAllDbFiles():
             db = cxxtags_util.db_connect(fn)
             cur = db.cursor()
@@ -152,10 +156,9 @@ class QueryHandlerRef(HandlerBase):
     def DoQuery(self, name, fileName, lineNo, colNo):
         usr = self.GetUsr(name, fileName, lineNo, colNo)
         if usr:
-            return self.GetAllRefs(usr)
+            self.GetAllRefs(usr)
 
     def GetAllRefs(self, usr):
-        res_list = []
         for fn in self.GetAllDbFiles():
             db = cxxtags_util.db_connect(fn)
             cur = db.cursor()
@@ -165,9 +168,10 @@ class QueryHandlerRef(HandlerBase):
                 usrId = row[0]
                 cur.execute('SELECT file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_FILELIST_REF + ' WHERE ref.usr_id=?;', (usrId,))
                 result = cur.fetchall()
-                res_list += result
+                for i in result:
+                    resultName, resultLine, resultCol = i
+                    print resultName + OUTPUT_DELIMITER + str(resultLine) + OUTPUT_DELIMITER + str(resultCol)
             db.close()
-        return res_list
 
 class QueryHandlerName(HandlerBase):
     """ Handle Rquest for infomation about name """
@@ -203,7 +207,6 @@ class QueryHandlerName(HandlerBase):
                         print resultName + ",", i
                     resultList += rows
             db.close()
-        return resultList
 
 def main():
     global USAGE
@@ -238,25 +241,19 @@ def main():
     result = []
     if queryType == 'ref': # get all references
         refHandler = QueryHandlerRef(dbDir)
-        result = refHandler.DoQuery(name, fileName, lineNo, colNo)
+        refHandler.DoQuery(name, fileName, lineNo, colNo)
     elif queryType == 'decl': # get a declaration or definition
         declHandler = QueryHandlerDecl(dbDir)
-        result = declHandler.DoQuery(name, fileName, lineNo, colNo)
-        result = (result,)
+        declHandler.DoQuery(name, fileName, lineNo, colNo)
     elif queryType == 'def': # get a definition
         defHandler = QueryHandlerDef(dbDir)
-        result = defHandler.DoQuery(name, fileName, lineNo, colNo)
-        result = (result,)
+        defHandler.DoQuery(name, fileName, lineNo, colNo)
     elif queryType == 'name': # search a name
         nameHandler = QueryHandlerName(dbDir)
-        result = nameHandler.DoQuery(name, fileName, lineNo, colNo)
+        nameHandler.DoQuery(name, fileName, lineNo, colNo)
     else:
         print "ERROR: query type must be ref, decl, def or name"
         sys.exit(1)
-
-    if queryType != 'name':
-        for i in result:
-            print i
 
 #######
 main()

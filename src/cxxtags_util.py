@@ -50,6 +50,17 @@ def get_db_by_file_name(db_dir, file_name):
     db_fn = row[0]
     return db_connect(db_dir + "/" + db_fn)
 
+def get_db_files_by_src_file_name(db_dir, file_name):
+    db_list = []
+    db = db_connect(db_dir + "/" + "file_index.db")
+    cur = db.cursor()
+    cur.execute("SELECT file_name, db_file FROM file_index WHERE file_name LIKE ?;", ('%'+file_name,))
+    for row in cur.fetchall():
+        res_src_file, res_db_file = row
+        if pathCmp(res_src_file, file_name):
+            db_list.append(db_dir + '/' + res_db_file)
+    return db_list
+
 def get_db_by_file_name_match(db_dir, file_name):
     db_list = []
     db = db_connect(db_dir + "/" + "file_index.db")

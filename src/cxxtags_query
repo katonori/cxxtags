@@ -1,5 +1,5 @@
 #!/usr/bin/python
-USAGE = 'usage: cmd database_dir name decl/def/ref [-f file_name] [-l line_no] [-c column_no]'
+USAGE = 'usage: cmd decl/def/ref/name database_dir name [-f file_name] [-l line_no] [-c column_no]'
 
 import sys
 import sqlite3
@@ -67,7 +67,7 @@ class HandlerBase:
         return None
 
     def GetUsr(self, name, fileName, lineNo, colNo):
-        db_list = cxxtags_util.get_db_by_file_name_match(self.mDbDir, fileName)
+        db_list = cxxtags_util.get_db_files_by_src_file_name(self.mDbDir, fileName)
         if db_list == []:
             db_list = self.mAllDbFileList
         for fn in db_list:
@@ -148,6 +148,30 @@ class QueryHandlerRef(HandlerBase):
             self.mDb.close()
         return res_list
 
+class QueryHandlerName(HandlerBase):
+    """ Handle Rquest for infomation about name """
+
+    def __init__(self, dbDir):
+        self.mDbDir = dbDir
+
+    def DoQuery(self, name, fileName, lineNo, colNo):
+        resultList = []
+        dbList = cxxtags_util.get_db_files_by_src_file_name(self.mDbDir, fileName)
+        if dbList == []:
+            self.mAllDbFileList = cxxtags_util.get_db_file_list(self.mDbDir)
+            dbList = self.mAllDbFileList
+        for fn in dbList:
+            self.mDb = cxxtags_util.db_connect(fn)
+            cur = self.mDb.cursor()
+            cur.execute('SELECT file_list.name, name_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE name_list.name LIKE ?;', ('%'+name+'%',))
+            result = cur.fetchall()
+            for i in result:
+                resultFileName, resultName, resultLine, resultColumn = i
+                if -1 != resultName.find(name): # exclude case mismatching
+                    resultList.append((i))
+            self.mDb.close()
+        return resultList
+
 def main():
     global USAGE
     try:
@@ -158,12 +182,9 @@ def main():
     if len(args) != 3:
         print USAGE
         sys.exit(0)
-    dbDir = args[0]
-    name = args[1]
-    queryType = args[2]
-    if queryType != 'ref' and queryType != 'decl' and queryType != 'def':
-        print "ERROR: query type must be ref, decl or def"
-        sys.exit(1)
+    queryType = args[0]
+    dbDir = args[1]
+    name = args[2]
     fileName = ""
     lineNo = -1
     colNo = -1
@@ -186,6 +207,12 @@ def main():
         defHandler = QueryHandlerDef(dbDir)
         result = defHandler.DoQuery(name, fileName, lineNo, colNo)
         result = (result,)
+    elif queryType == 'name': # search a name
+        nameHandler = QueryHandlerName(dbDir)
+        result = nameHandler.DoQuery(name, fileName, lineNo, colNo)
+    else:
+        print "ERROR: query type must be ref, decl, def or name"
+        sys.exit(1)
     for i in result:
         print i
 

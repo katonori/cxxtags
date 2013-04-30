@@ -153,7 +153,6 @@ static inline void PrintCursor(CXCursor Cursor) {
         return;
     }
     name = formatName(name);
-    int nameId = nameIdTbl.GetId(name);
     // usr
     CXString cxUSR = clang_getCursorUSR(Cursor);
     const char *cUsr = clang_getCString(cxUSR);
@@ -166,6 +165,7 @@ static inline void PrintCursor(CXCursor Cursor) {
     }
     int fileId = fileIdTbl.GetId(fileName);
     int usrId = usrIdTbl.GetId(cUsr);
+    int nameId = -1;
 
     int isVirt = 0;
     int val = 0;
@@ -188,6 +188,7 @@ static inline void PrintCursor(CXCursor Cursor) {
         case CXCursor_MacroDefinition: {
             // is_def
             int isDef = clang_isCursorDefinition(Cursor);
+            nameId = nameIdTbl.GetId(name);
             db::insert_decl_value(usrId, nameId, fileId, line, column, kind, val, 0, isDef);
             break;
         }
@@ -200,6 +201,7 @@ static inline void PrintCursor(CXCursor Cursor) {
             clang_getOverriddenCursors(Cursor, 
                     &cursorOverridden,
                     &numOverridden);
+            nameId = nameIdTbl.GetId(name);
             for(unsigned int i = 0; i < numOverridden; i++) {
                 // usr
                 CXString cxRefUSR = clang_getCursorUSR(cursorOverridden[i]);
@@ -214,6 +216,9 @@ static inline void PrintCursor(CXCursor Cursor) {
         case CXCursor_Constructor:
         case CXCursor_Destructor: {
             // is_def
+            if(nameId == -1) {
+                nameId = nameIdTbl.GetId(name);
+            }
             int isDef = clang_isCursorDefinition(Cursor);
             db::insert_decl_value(usrId, nameId, fileId, line, column, kind, 0, isVirt, isDef);
             break;
@@ -235,7 +240,6 @@ static inline void PrintCursor(CXCursor Cursor) {
                 CXString cxRefUSR = clang_getCursorUSR(Referenced);
                 cUsr = clang_getCString(cxRefUSR);
                 assert(cUsr);
-                int refUsrId = usrIdTbl.GetId(cUsr);
                 // ref location
                 CXFile ref_file;
                 CXSourceLocation ref_loc = clang_getCursorLocation(Referenced);
@@ -250,6 +254,8 @@ static inline void PrintCursor(CXCursor Cursor) {
                     }
                     refFid = fileIdTbl.GetId(cRefFileName);
                 }
+                int refUsrId = usrIdTbl.GetId(cUsr);
+                nameId = nameIdTbl.GetId(name);
                 db::insert_ref_value(refUsrId, nameId, fileId, line, column, kind, refFid, ref_line, ref_column);
                 clang_disposeString(cxRefUSR);
             }

@@ -85,19 +85,22 @@ class HandlerBase:
         if db_list == []:
             print "ERROR: database file of \'%s\' not found:"%(fileName)
             sys.exit(1)
-        if len(db_list) != 1:
-            print "ERROR: file name is ambiguous. candidates are:"
-            for i in db_list:
-                print i
-            sys.exit(1)
-        for fn in db_list:
-            db = cxxtags_util.db_connect(fn)
-            usr = self.GetUsrFromRefTable(db, name, fileName, lineNo, colNo)
-            if not usr:
-                usr = self.GetUsrFromDeclTable(db, name, fileName, lineNo, colNo)
-            if usr:
-                self.mUsrDb = db
-                return usr
+        # if multiple hit occur even though absolute path is specified,
+        # choose the file found the first.
+        if fileName[0] != '/':
+            if len(db_list) != 1 and fileName.find('/') != 0:
+                print "ERROR: file name is ambiguous. candidates are:"
+                for i in db_list:
+                    print i
+                sys.exit(1)
+        fn = db_list[0]
+        db = cxxtags_util.db_connect(fn)
+        usr = self.GetUsrFromRefTable(db, name, fileName, lineNo, colNo)
+        if not usr:
+            usr = self.GetUsrFromDeclTable(db, name, fileName, lineNo, colNo)
+        if usr:
+            self.mUsrDb = db
+            return usr
         return None
 
 
@@ -114,7 +117,7 @@ class QueryHandlerDecl(HandlerBase):
             if result:
                 resultName, resultLine, resultCol = result
                 print resultName + OUTPUT_DELIMITER + str(resultLine) + OUTPUT_DELIMITER + str(resultCol)
-        self.mUsrDb.close()
+            self.mUsrDb.close()
 
     def QueryDeclInfo(self, usr):
         cur = self.mUsrDb.cursor()
@@ -213,7 +216,7 @@ def main():
     global gDebugMode
     global gPartialCompare
     try:
-        optlist, args = getopt.gnu_getopt(sys.argv[1:], 'f:l:c:d', ['debug', 'partial'])
+        optlist, args = getopt.gnu_getopt(sys.argv[1:], 'f:l:c:dp', ['debug', 'partial'])
     except getopt.GetoptError, e:
         print "ERROR: getopt: ", e.args[0]
         sys.exit(1)
@@ -235,7 +238,7 @@ def main():
             colNo = val
         elif opt in ("-d", "--debug"):
             gDebugMode = 1
-        elif opt == "--partial":
+        elif opt in ("-p", "--partial"):
             gPartialCompare = 1
 
     result = []

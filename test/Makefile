@@ -1,12 +1,10 @@
-test:
-	make -C enum test
-	make -C ns test
-	make -C inheritance test
-	make -C arg_test test
-	make -C template_type_param test
-clean:
-	make -C enum clean
-	make -C ns clean
-	make -C inheritance clean
-	make -C arg_test clean
-	make -C template_type_param clean
+TESTS = enum ns inheritance arg_test template_type_param enum_query 
+
+test: $(TESTS)
+	@for i in $^; \
+            do (make -C $$i test); \
+        done
+clean: $(TESTS)
+	@for i in $^; \
+            do (make -C $$i clean); \
+        done

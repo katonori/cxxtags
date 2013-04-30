@@ -5,7 +5,7 @@ import commands
 gDebug = 0
 CXXTAGS_QUERY = "../../bin/cxxtags_query"
 
-def debugOn():
+def DebugOn():
     global gDebug
     gDebug = 1
 

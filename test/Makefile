@@ -1,4 +1,4 @@
-TESTS = enum ns inheritance arg_test template_type_param enum_query db_update
+TESTS = enum ns inheritance arg_test template_type_param enum_query db_update inheritance_query
 
 test: $(TESTS)
 	@for i in $^; \

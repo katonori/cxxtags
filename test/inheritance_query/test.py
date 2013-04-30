@@ -11,7 +11,7 @@ import clang.cindex # for kind types
 import common as test_util
 
 err = 0
-test_util.debugOn()
+#test_util.DebugOn()
 
 if len(sys.argv) != 2:
     print "usage: cmd db_file"

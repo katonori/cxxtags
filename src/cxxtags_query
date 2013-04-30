@@ -28,13 +28,13 @@ class HandlerBase:
             q += ' AND ref.col=?'
             argList += (colNo,)
         cur.execute(q, argList)
-        res = set(cur.fetchall())
-        if len(res) > 1:
+        result = set(cur.fetchall())
+        if len(result) > 1:
             print "ERROR: Ambiguous query."
-            for row in res:
+            for row in result:
                 print row
-            sys.exit(1)
-        for row in res:
+            return None
+        for row in result:
             resUsr, resFileName, resLine, resCol = row
             if fileName == "" or re.search(fileName + '$', resFileName):
                 return resUsr
@@ -54,13 +54,13 @@ class HandlerBase:
             q += ' AND decl.col=?'
             argList += (colNo,)
         cur.execute(q, argList)
-        res = set(cur.fetchall())
-        if len(res) > 1:
+        result = set(cur.fetchall())
+        if len(result) > 1:
             print "ERROR: Ambiguous query."
-            for row in res:
+            for row in result:
                 print row
-            sys.exit(1)
-        for row in res:
+            return None
+        for row in result:
             resUsr, resFileName, resLine, resCol = row
             if fileName == "" or re.search(fileName + '$', resFileName):
                 return resUsr
@@ -89,15 +89,15 @@ class QueryHandlerDecl(HandlerBase):
     def DoQuery(self, name, fileName, lineNo, colNo):
         usr = self.GetUsr(name, fileName, lineNo, colNo)
         if usr:
-            declFileName, line, col = self.QueryDeclInfo(usr)
-            print "%s,%d,%d"%(declFileName, line, col)
+            result = self.QueryDeclInfo(usr)
         self.mDb.close()
+        return result
 
     def QueryDeclInfo(self, usr):
         cur = self.mDb.cursor()
         cur.execute('SELECT file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name=? ORDER BY decl.is_def LIMIT 1', (usr,))
-        res = cur.fetchone()
-        return res
+        result = cur.fetchone()
+        return result
 
 class QueryHandlerDef(HandlerBase):
     """ Handle Rquest for infomation about definition """
@@ -109,11 +109,9 @@ class QueryHandlerDef(HandlerBase):
     def DoQuery(self, name, fileName, lineNo, colNo):
         usr = self.GetUsr(name, fileName, lineNo, colNo)
         if usr:
-            res = self.GetDef(usr)
-            if res:
-                resFileName, resLine, resCol = res
-                print "%s,%d,%d"%(resFileName, resLine, resCol)
-                return
+            result = self.GetDef(usr)
+            if result:
+                return result
 
     def GetDef(self, usr):
         res_list = []
@@ -121,10 +119,10 @@ class QueryHandlerDef(HandlerBase):
             self.mDb = cxxtags_util.db_connect(fn)
             cur = self.mDb.cursor()
             cur.execute('SELECT file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name=? AND is_def=1 LIMIT 1;', (usr,))
-            res = cur.fetchone()
+            result = cur.fetchone()
             self.mDb.close()
-            if res:
-                return res
+            if result:
+                return result
         return None
 
 class QueryHandlerRef(HandlerBase):
@@ -137,10 +135,7 @@ class QueryHandlerRef(HandlerBase):
     def DoQuery(self, name, fileName, lineNo, colNo):
         usr = self.GetUsr(name, fileName, lineNo, colNo)
         if usr:
-            res_list = self.GetAllRefs(usr)
-            for i in res_list:
-                resFileName, resLine, resCol = i
-                print "%s,%d,%d"%(resFileName, resLine, resCol)
+            return self.GetAllRefs(usr)
 
     def GetAllRefs(self, usr):
         res_list = []
@@ -148,9 +143,8 @@ class QueryHandlerRef(HandlerBase):
             self.mDb = cxxtags_util.db_connect(fn)
             cur = self.mDb.cursor()
             cur.execute('SELECT file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE usr_list.name=?;', (usr,))
-            res = cur.fetchall()
-            for i in res:
-                res_list.append(i)
+            result = cur.fetchall()
+            res_list.append(result)
             self.mDb.close()
         return res_list
 
@@ -181,14 +175,19 @@ def main():
         elif opt == "-c":
             colNo = val
 
+    result = []
     if queryType == 'ref': # get all references
         refHandler = QueryHandlerRef(dbDir)
-        refHandler.DoQuery(name, fileName, lineNo, colNo)
+        result = refHandler.DoQuery(name, fileName, lineNo, colNo)
     elif queryType == 'decl': # get a declaration or definition
         declHandler = QueryHandlerDecl(dbDir)
-        declHandler.DoQuery(name, fileName, lineNo, colNo)
+        result = declHandler.DoQuery(name, fileName, lineNo, colNo)
     elif queryType == 'def': # get a definition
         defHandler = QueryHandlerDef(dbDir)
-        defHandler.DoQuery(name, fileName, lineNo, colNo)
+        result = defHandler.DoQuery(name, fileName, lineNo, colNo)
+        result = (result,)
+    for i in result:
+        print i
+
 #######
 main()

@@ -158,9 +158,13 @@ class QueryHandlerRef(HandlerBase):
         for fn in self.GetAllDbFiles():
             db = cxxtags_util.db_connect(fn)
             cur = db.cursor()
-            cur.execute('SELECT file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE usr_list.name=?;', (usr,))
-            result = cur.fetchall()
-            res_list += result
+            cur.execute('SELECT usr_list.id FROM usr_list WHERE name=?;', (usr,))
+            row = cur.fetchone()
+            if row:
+                usrId = row[0]
+                cur.execute('SELECT file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_FILELIST_REF + ' WHERE ref.usr_id=?;', (usrId,))
+                result = cur.fetchall()
+                res_list += result
             db.close()
         return res_list
 

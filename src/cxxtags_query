@@ -39,17 +39,20 @@ class HandlerBase:
             q += ' AND ref.col=?'
             argList += (colNo,)
         cur.execute(q, argList)
-        result = set(cur.fetchall())
-        if len(result) > 1:
-            print "ERROR: Ambiguous query."
-            for row in result:
-                print row
-            return None
+        result = cur.fetchall()
+        usr = ""
         for row in result:
             resUsr, resFileName, resLine, resCol = row
             if fileName == "" or re.search(fileName + '$', resFileName):
-                return resUsr
-        return None
+                if usr == "":
+                    usr = resUsr
+                elif usr != resUsr:
+                    print usr + ", " + resUsr
+                    print "ERROR: Ambiguous query."
+                    for row in result:
+                        print row
+                    return ""
+        return usr
 
     def GetUsrFromDeclTable(self, db, name, fileName, lineNo, colNo):
         cur = db.cursor()
@@ -65,17 +68,20 @@ class HandlerBase:
             q += ' AND decl.col=?'
             argList += (colNo,)
         cur.execute(q, argList)
-        result = set(cur.fetchall())
-        if len(result) > 1:
-            print "ERROR: Ambiguous query."
-            for row in result:
-                print row
-            return None
+        result = cur.fetchall()
+        usr = ""
         for row in result:
             resUsr, resFileName, resLine, resCol = row
             if fileName == "" or re.search(fileName + '$', resFileName):
-                return resUsr
-        return None
+                if usr == "":
+                    usr = resUsr
+                elif usr != resUsr:
+                    print usr + ", " + resUsr
+                    print "ERROR: Ambiguous query."
+                    for row in result:
+                        print row
+                    return ""
+        return usr
 
     def GetUsr(self, name, fileName, lineNo, colNo):
         if fileName == "":
@@ -95,10 +101,10 @@ class HandlerBase:
                 sys.exit(1)
         fn = db_list[0]
         db = cxxtags_util.db_connect(fn)
-        usr = self.GetUsrFromRefTable(db, name, fileName, lineNo, colNo)
-        if not usr:
-            usr = self.GetUsrFromDeclTable(db, name, fileName, lineNo, colNo)
-        if usr:
+        usr = self.GetUsrFromDeclTable(db, name, fileName, lineNo, colNo)
+        if usr == "":
+            usr = self.GetUsrFromRefTable(db, name, fileName, lineNo, colNo)
+        if usr != "":
             self.mUsrDb = db
             return usr
         return None

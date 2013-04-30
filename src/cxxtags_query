@@ -144,7 +144,7 @@ class QueryHandlerRef(HandlerBase):
             cur = self.mDb.cursor()
             cur.execute('SELECT file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE usr_list.name=?;', (usr,))
             result = cur.fetchall()
-            res_list.append(result)
+            res_list += result
             self.mDb.close()
         return res_list
 
@@ -163,12 +163,17 @@ class QueryHandlerName(HandlerBase):
         for fn in dbList:
             self.mDb = cxxtags_util.db_connect(fn)
             cur = self.mDb.cursor()
-            cur.execute('SELECT file_list.name, name_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE name_list.name LIKE ?;', ('%'+name+'%',))
+            #cur.execute('SELECT file_list.name, name_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE name_list.name LIKE ?;', ('%'+name+'%',))
+            cur.execute('SELECT name_list.name, name_list.id FROM name_list WHERE name_list.name LIKE ?;', ('%'+name+'%',))
             result = cur.fetchall()
-            for i in result:
-                resultFileName, resultName, resultLine, resultColumn = i
+            for idRow in result:
+                resultName, resultId = idRow
                 if -1 != resultName.find(name): # exclude case mismatching
-                    resultList.append((i))
+                    cur.execute('SELECT file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_FILELIST_DECL + ' WHERE decl.name_id=?;', (resultId, ))
+                    rows = cur.fetchall()
+                    for i in rows:
+                        print resultName + ",", i
+                    resultList += rows
             self.mDb.close()
         return resultList
 
@@ -213,8 +218,10 @@ def main():
     else:
         print "ERROR: query type must be ref, decl, def or name"
         sys.exit(1)
-    for i in result:
-        print i
+
+    if queryType != 'name':
+        for i in result:
+            print i
 
 #######
 main()

@@ -168,6 +168,7 @@ class QueryHandlerRef(HandlerBase):
             self.GetAllRefs(usr)
 
     def GetAllRefs(self, usr):
+        resultList = []
         for fn in self.GetAllDbFiles():
             db = cxxtags_util.db_connect(fn)
             cur = db.cursor()
@@ -176,11 +177,12 @@ class QueryHandlerRef(HandlerBase):
             if row:
                 usrId = row[0]
                 cur.execute('SELECT file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_FILELIST_REF + ' WHERE ref.usr_id=?;', (usrId,))
-                result = cur.fetchall()
-                for i in result:
-                    resultName, resultLine, resultCol = i
-                    print resultName + OUTPUT_DELIMITER + str(resultLine) + OUTPUT_DELIMITER + str(resultCol)
+                resultList += cur.fetchall()
             db.close()
+        resultList = set(resultList)
+        for i in resultList:
+            resultName, resultLine, resultCol = i
+            print resultName + OUTPUT_DELIMITER + str(resultLine) + OUTPUT_DELIMITER + str(resultCol)
 
 class QueryHandlerName(HandlerBase):
     """ Handle Rquest for infomation about name """

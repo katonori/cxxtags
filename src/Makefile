@@ -1,7 +1,7 @@
 CXX=g++
 LLVM_HOME=/pkg/llvm-3.2
 INCLUDES=-I${LLVM_HOME}/include/
-LIBS=-L${LLVM_HOME}/lib/ -L/usr/lib/ -lsqlite3 -lclang -lstdc++ -lpthread
+LIBS=-L${LLVM_HOME}/lib/ -L/usr/lib/ -lsqlite3 -lclang -lstdc++ 
 CXXFLAGS=-Wall -g -O2
 
 all: cxxtags_core.cpp db.cpp

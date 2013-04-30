@@ -5,7 +5,7 @@ MERGER_OUT = db
 .PHONY: clean
 .SUFFIXES: .db .cpp
 DB_FILES = main.db
-VPATH = ./:../enum
+vpath %.cpp ./:../enum
 
 $(MERGER_OUT): $(DB_FILES)
 	$(MERGER) $@ $^

@@ -5,7 +5,8 @@ MERGER_OUT = db
 .PHONY: clean
 .SUFFIXES: .db .cpp
 DB_FILES = inhe.db
-VPATH = ./:../inheritance
+
+vpath %.cpp ./:../inheritance
 
 $(MERGER_OUT): $(DB_FILES)
 	$(MERGER) $@ $^

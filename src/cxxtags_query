@@ -11,11 +11,17 @@ import os
 class HandlerBase:
     """ Base class of *Handler classes """
 
-    mDb = None
-    mAllDbFileList = []
+    mAllDbFileList = None
     mDbDir = ""
-    def GetUsrFromRefTable(self, name, fileName, lineNo, colNo):
-        cur = self.mDb.cursor()
+    mUsrDb = None
+
+    def GetAllDbFiles(self):
+        if self.mAllDbFileList == None:
+            self.mAllDbFileList = cxxtags_util.get_db_file_list(self.mDbDir)
+        return self.mAllDbFileList
+
+    def GetUsrFromRefTable(self, db, name, fileName, lineNo, colNo):
+        cur = db.cursor()
         q = 'SELECT usr_list.name, file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE name_list.name=?'
         argList = (name,)
         if fileName != "":
@@ -40,8 +46,8 @@ class HandlerBase:
                 return resUsr
         return None
 
-    def GetUsrFromDeclTable(self, name, fileName, lineNo, colNo):
-        cur = self.mDb.cursor()
+    def GetUsrFromDeclTable(self, db, name, fileName, lineNo, colNo):
+        cur = db.cursor()
         q = 'SELECT usr_list.name, file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE name_list.name=?'
         argList = (name,)
         if fileName != "":
@@ -67,15 +73,25 @@ class HandlerBase:
         return None
 
     def GetUsr(self, name, fileName, lineNo, colNo):
+        if fileName == "":
+            print "ERROR: specify file name"
+            sys.exit(1)
         db_list = cxxtags_util.get_db_files_by_src_file_name(self.mDbDir, fileName)
         if db_list == []:
-            db_list = self.mAllDbFileList
+            print "ERROR: database file of \'%s\' not found:"%(fileName)
+            sys.exit(1)
+        if len(db_list) != 1:
+            print "ERROR: file name is ambiguous. candidates are:"
+            for i in db_list:
+                print i
+            sys.exit(1)
         for fn in db_list:
-            self.mDb = cxxtags_util.db_connect(fn)
-            usr = self.GetUsrFromRefTable(name, fileName, lineNo, colNo)
+            db = cxxtags_util.db_connect(fn)
+            usr = self.GetUsrFromRefTable(db, name, fileName, lineNo, colNo)
             if not usr:
-                usr = self.GetUsrFromDeclTable(name, fileName, lineNo, colNo)
+                usr = self.GetUsrFromDeclTable(db, name, fileName, lineNo, colNo)
             if usr:
+                self.mUsrDb = db
                 return usr
         return None
 
@@ -90,11 +106,11 @@ class QueryHandlerDecl(HandlerBase):
         usr = self.GetUsr(name, fileName, lineNo, colNo)
         if usr:
             result = self.QueryDeclInfo(usr)
-        self.mDb.close()
+        self.mUsrDb.close()
         return result
 
     def QueryDeclInfo(self, usr):
-        cur = self.mDb.cursor()
+        cur = self.mUsrDb.cursor()
         cur.execute('SELECT file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name=? ORDER BY decl.is_def LIMIT 1', (usr,))
         result = cur.fetchone()
         return result
@@ -104,7 +120,6 @@ class QueryHandlerDef(HandlerBase):
 
     def __init__(self, dbDir):
         self.mDbDir = dbDir
-        self.mAllDbFileList = cxxtags_util.get_db_file_list(self.mDbDir)
 
     def DoQuery(self, name, fileName, lineNo, colNo):
         usr = self.GetUsr(name, fileName, lineNo, colNo)
@@ -115,12 +130,12 @@ class QueryHandlerDef(HandlerBase):
 
     def GetDef(self, usr):
         res_list = []
-        for fn in self.mAllDbFileList:
-            self.mDb = cxxtags_util.db_connect(fn)
-            cur = self.mDb.cursor()
+        for fn in self.GetAllDbFiles():
+            db = cxxtags_util.db_connect(fn)
+            cur = db.cursor()
             cur.execute('SELECT file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name=? AND is_def=1 LIMIT 1;', (usr,))
             result = cur.fetchone()
-            self.mDb.close()
+            db.close()
             if result:
                 return result
         return None
@@ -130,7 +145,6 @@ class QueryHandlerRef(HandlerBase):
 
     def __init__(self, dbDir):
         self.mDbDir = dbDir
-        self.mAllDbFileList = cxxtags_util.get_db_file_list(self.mDbDir)
 
     def DoQuery(self, name, fileName, lineNo, colNo):
         usr = self.GetUsr(name, fileName, lineNo, colNo)
@@ -139,13 +153,13 @@ class QueryHandlerRef(HandlerBase):
 
     def GetAllRefs(self, usr):
         res_list = []
-        for fn in self.mAllDbFileList:
-            self.mDb = cxxtags_util.db_connect(fn)
-            cur = self.mDb.cursor()
+        for fn in self.GetAllDbFiles():
+            db = cxxtags_util.db_connect(fn)
+            cur = db.cursor()
             cur.execute('SELECT file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE usr_list.name=?;', (usr,))
             result = cur.fetchall()
             res_list += result
-            self.mDb.close()
+            db.close()
         return res_list
 
 class QueryHandlerName(HandlerBase):
@@ -158,13 +172,13 @@ class QueryHandlerName(HandlerBase):
         resultList = []
         dbList = cxxtags_util.get_db_files_by_src_file_name(self.mDbDir, fileName)
         if dbList == []:
-            self.mAllDbFileList = cxxtags_util.get_db_file_list(self.mDbDir)
-            dbList = self.mAllDbFileList
+            dbList = self.GetAllDbFiles()
         for fn in dbList:
-            self.mDb = cxxtags_util.db_connect(fn)
-            cur = self.mDb.cursor()
+            db = cxxtags_util.db_connect(fn)
+            cur = db.cursor()
             #cur.execute('SELECT file_list.name, name_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE name_list.name LIKE ?;', ('%'+name+'%',))
-            cur.execute('SELECT name_list.name, name_list.id FROM name_list WHERE name_list.name LIKE ?;', ('%'+name+'%',))
+            #cur.execute('SELECT name_list.name, name_list.id FROM name_list WHERE name_list.name LIKE ?;', ('%'+name+'%',))
+            cur.execute('SELECT name_list.name, name_list.id FROM name_list WHERE name_list.name=?;', (name,))
             result = cur.fetchall()
             for idRow in result:
                 resultName, resultId = idRow
@@ -174,7 +188,7 @@ class QueryHandlerName(HandlerBase):
                     for i in rows:
                         print resultName + ",", i
                     resultList += rows
-            self.mDb.close()
+            db.close()
         return resultList
 
 def main():
@@ -208,6 +222,7 @@ def main():
     elif queryType == 'decl': # get a declaration or definition
         declHandler = QueryHandlerDecl(dbDir)
         result = declHandler.DoQuery(name, fileName, lineNo, colNo)
+        result = (result,)
     elif queryType == 'def': # get a definition
         defHandler = QueryHandlerDef(dbDir)
         result = defHandler.DoQuery(name, fileName, lineNo, colNo)

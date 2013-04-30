@@ -8,6 +8,8 @@ import getopt
 import re
 import os
 
+gDebugMode = 0
+
 class HandlerBase:
     """ Base class of *Handler classes """
 
@@ -183,7 +185,10 @@ class QueryHandlerName(HandlerBase):
             for idRow in result:
                 resultName, resultId = idRow
                 if -1 != resultName.find(name): # exclude case mismatching
-                    cur.execute('SELECT file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_FILELIST_DECL + ' WHERE decl.name_id=?;', (resultId, ))
+                    if gDebugMode != 0:
+                        cur.execute('SELECT file_list.name, decl.line, decl.col, usr_list.name FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE decl.name_id=?;', (resultId, ))
+                    else:
+                        cur.execute('SELECT file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_FILELIST_DECL + ' WHERE decl.name_id=?;', (resultId, ))
                     rows = cur.fetchall()
                     for i in rows:
                         print resultName + ",", i
@@ -194,7 +199,7 @@ class QueryHandlerName(HandlerBase):
 def main():
     global USAGE
     try:
-        optlist, args = getopt.gnu_getopt(sys.argv[1:], 'f:l:c:')
+        optlist, args = getopt.gnu_getopt(sys.argv[1:], 'f:l:c:d')
     except getopt.GetoptError, e:
         print "ERROR: getopt: ", e.args[0]
         sys.exit(1)
@@ -214,6 +219,8 @@ def main():
             lineNo = val
         elif opt == "-c":
             colNo = val
+        elif opt == "-d":
+            gDebugMode = 1
 
     result = []
     if queryType == 'ref': # get all references

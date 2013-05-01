@@ -123,10 +123,10 @@ for test in test_list:
     resultList = []
     test_util.DbgPrint("override test")
     #print test
-    usr, name, fileName, line, col, dummy, dummy, dummy, is_def = test
+    usr, dummy, fileName, line, col, dummy, dummy, dummy, is_def = test
     # search overrider
     for i in test_data_list_overriden:
-        i_usr, i_name, i_fileName, i_line, i_col, dummy, i_usr_overrider, i_isDef = i
+        i_usr, dummy, i_fileName, i_line, i_col, dummy, i_usr_overrider, i_isDef = i
         if usr == i_usr_overrider:
             for declRow in test_data_list_decl:
                 declUsr, declName, declFileName, declLine, declCol, dummy, dummy, dummy, declIsDef = declRow
@@ -137,7 +137,7 @@ for test in test_list:
         continue
 
     # exec command
-    cmdResult = test_util.QueryTestExecCommand("override", name, fileName, line, col)
+    cmdResult = test_util.QueryTestExecCommand("override", fileName, line, col)
     test_util.DbgPrint(cmdResult)
     test_util.DbgPrint(resultList)
     cmdResult = sorted(cmdResult)
@@ -168,10 +168,10 @@ for test in test_list:
     resultList = []
     test_util.DbgPrint("overriden test")
     #print test
-    usr, name, fileName, line, col, dummy, dummy, dummy, is_def = test
+    usr, dummy, fileName, line, col, dummy, dummy, dummy, is_def = test
     # get decl location
     for i in test_data_list_overriden:
-        i_usr, i_name, i_fileName, i_line, i_col, dummy, i_usr_overrider, i_isDef = i
+        i_usr, dummy, i_fileName, i_line, i_col, dummy, i_usr_overrider, i_isDef = i
         if i_usr == usr:
             resultList.append((i_line, i_col, i_fileName ))
 
@@ -179,7 +179,7 @@ for test in test_list:
         continue
 
     # exec command
-    cmdResult = test_util.QueryTestExecCommand("overriden", name, fileName, line, col)
+    cmdResult = test_util.QueryTestExecCommand("overriden", fileName, line, col)
     test_util.DbgPrint(cmdResult)
     test_util.DbgPrint(resultList)
     cmdResult = sorted(cmdResult)

@@ -1,5 +1,7 @@
 #!/usr/bin/python
-USAGE = 'usage: cmd decl/def/ref/name database_dir name [-f file_name] [-l line_no] [-c column_no]'
+def usage():
+    print 'usage: cxxtags_query decl/def/ref database_dir file_name line_no column_no'
+    print '     : cxxtags_query         name database_dir item_name [-f file_name] [-l line_no] [-c column_no]'
 
 import sys
 import sqlite3
@@ -27,17 +29,11 @@ class HandlerBase:
 
     def GetUsrFromRefTable(self, db, name, fileName, lineNo, colNo):
         cur = db.cursor()
-        q = 'SELECT usr_list.name, file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE name_list.name=?'
-        argList = (name,)
-        if fileName != "":
-            q += ' AND file_list.name LIKE ?'
-            argList += ('%'+fileName,)
-        if lineNo != -1:
-            q += ' AND ref.line=?'
-            argList += (lineNo,)
-        if colNo != -1:
-            q += ' AND ref.col=?'
-            argList += (colNo,)
+        q = 'SELECT usr_list.name, file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE file_list.name LIKE ? AND ref.line=? AND ref.col=?'
+        argList = ()
+        argList += ('%'+fileName,)
+        argList += (lineNo,)
+        argList += (colNo,)
         cur.execute(q, argList)
         result = cur.fetchall()
         usr = ""
@@ -56,17 +52,11 @@ class HandlerBase:
 
     def GetUsrFromDeclTable(self, db, name, fileName, lineNo, colNo):
         cur = db.cursor()
-        q = 'SELECT usr_list.name, file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE name_list.name=?'
-        argList = (name,)
-        if fileName != "":
-            q += ' AND file_list.name LIKE ?'
-            argList += ('%'+fileName,)
-        if lineNo != -1:
-            q += ' AND decl.line=?'
-            argList += (lineNo,)
-        if colNo != -1:
-            q += ' AND decl.col=?'
-            argList += (colNo,)
+        q = 'SELECT usr_list.name, file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE file_list.name LIKE ? AND decl.line=? AND decl.col=?'
+        argList = ()
+        argList += ('%'+fileName,)
+        argList += (lineNo,)
+        argList += (colNo,)
         cur.execute(q, argList)
         result = cur.fetchall()
         usr = ""
@@ -267,7 +257,7 @@ class QueryHandlerName(HandlerBase):
     def __init__(self, dbDir):
         self.mDbDir = dbDir
 
-    def DoQuery(self, name, fileName, lineNo, colNo):
+    def DoQuery(self, name, fileName):
         global gDebugMode
         resultList = []
         dbList = cxxtags_util.get_db_files_by_src_file_name(self.mDbDir, fileName)
@@ -296,55 +286,72 @@ class QueryHandlerName(HandlerBase):
                     resultList += rows
             db.close()
 
-def main():
-    global USAGE
+def parseArg():
+    if len(sys.argv) != 6:
+        usage()
+        sys.exit(1)
+    return sys.argv[2:]
+
+def parseArgName():
     global gDebugMode
     global gPartialCompare
     try:
-        optlist, args = getopt.gnu_getopt(sys.argv[1:], 'f:l:c:dp', ['debug', 'partial'])
+        optlist, args = getopt.gnu_getopt(sys.argv[2:], 'f:dp', ['debug', 'partial'])
     except getopt.GetoptError, e:
         print "ERROR: getopt: ", e.args[0]
         sys.exit(1)
-    if len(args) != 3:
-        print USAGE
-        sys.exit(0)
-    queryType = args[0]
-    dbDir = args[1]
-    name = args[2]
+    if len(args) != 2:
+        usage()
+        sys.exit(1)
+    dbDir = args[0]
+    name = args[1]
     fileName = ""
     lineNo = -1
     colNo = -1
     for opt, val in optlist:
         if opt == "-f":
             fileName = val
-        elif opt == "-l":
-            lineNo = val
-        elif opt == "-c":
-            colNo = val
         elif opt in ("-d", "--debug"):
             gDebugMode = 1
         elif opt in ("-p", "--partial"):
             gPartialCompare = 1
+    return (dbDir, name, fileName, lineNo, colNo)
 
+def main():
     result = []
+    if len(sys.argv) <= 1:
+        usage()
+        sys.exit(1)
+    queryType = sys.argv[1]
     if queryType == 'ref': # get all references
+        name = ""
+        dbDir, fileName, lineNo, colNo = parseArg()
         refHandler = QueryHandlerRef(dbDir)
         refHandler.DoQuery(name, fileName, lineNo, colNo)
     elif queryType == 'decl': # get a declaration or definition
+        name = ""
+        dbDir, fileName, lineNo, colNo = parseArg()
         declHandler = QueryHandlerDecl(dbDir)
         declHandler.DoQuery(name, fileName, lineNo, colNo)
     elif queryType == 'def': # get a definition
+        name = ""
+        dbDir, fileName, lineNo, colNo = parseArg()
         defHandler = QueryHandlerDef(dbDir)
         defHandler.DoQuery(name, fileName, lineNo, colNo)
     elif queryType == 'override': # get override information
+        name = ""
+        dbDir, fileName, lineNo, colNo = parseArg()
         handler = QueryHandlerOverride(dbDir)
         handler.DoQuery(name, fileName, lineNo, colNo)
     elif queryType == 'overriden': # get overriden items
+        name = ""
+        dbDir, fileName, lineNo, colNo = parseArg()
         handler = QueryHandlerOverrideN(dbDir)
         handler.DoQuery(name, fileName, lineNo, colNo)
     elif queryType == 'name': # search a name
+        dbDir, name, fileName, lineNo, colNo = parseArgName()
         nameHandler = QueryHandlerName(dbDir)
-        nameHandler.DoQuery(name, fileName, lineNo, colNo)
+        nameHandler.DoQuery(name, fileName)
     else:
         print "ERROR: query type must be ref, decl, def, override, overriden or name"
         sys.exit(1)

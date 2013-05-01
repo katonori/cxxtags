@@ -14,8 +14,8 @@ def DbgPrint(msg):
     if gDebug != 0:
         print msg
 
-def QueryTestExecCommand(mode, name, fileName, line, col):
-    cmd = CXXTAGS_QUERY + " %s db %s -f %s -l %d -c %d"%(mode, name, fileName, line, col)
+def QueryTestExecCommand(mode, fileName, line, col):
+    cmd = CXXTAGS_QUERY + " %s db %s %d %d"%(mode, fileName, line, col)
     DbgPrint("$ " + cmd)
     result = commands.getoutput(cmd).split('\n')
     cmdResult = []
@@ -30,7 +30,7 @@ def DoDeclTest(test_data_list_decl, test_data_list_ref):
         resultList = []
         DbgPrint("decl test")
         #print test
-        usr, name, fileName, line, col, dummy, dummy, dummy, dummy = test
+        usr, dummy, fileName, line, col, dummy, dummy, dummy, dummy = test
         # search references
         for i in test_data_list_ref:
             refUsr, refName, refFileName, refLine, refCol, dummy, dummy, dummy, dummy = i
@@ -41,7 +41,7 @@ def DoDeclTest(test_data_list_decl, test_data_list_ref):
             continue
 
         # exec command
-        cmdResult = QueryTestExecCommand("ref", name, fileName, line, col)
+        cmdResult = QueryTestExecCommand("ref", fileName, line, col)
         DbgPrint(cmdResult)
         DbgPrint(resultList)
         cmdResult = sorted(cmdResult)
@@ -64,7 +64,7 @@ def DoRefTest(test_data_list_ref, test_data_list_decl):
         resultList = []
         DbgPrint("ref test")
         #print test
-        usr, name, fileName, line, col, kind, dummy, dummy, dummy = test
+        usr, dummy, fileName, line, col, kind, dummy, dummy, dummy = test
         # search declarations
         for i in test_data_list_decl:
             declUsr, declName, declFileName, declLine, declCol, dummy, dummy, dummy, dummy = i
@@ -75,7 +75,7 @@ def DoRefTest(test_data_list_ref, test_data_list_decl):
             continue
 
         # exec command
-        cmdResult = QueryTestExecCommand("decl", name, fileName, line, col)
+        cmdResult = QueryTestExecCommand("decl", fileName, line, col)
         DbgPrint(cmdResult)
         DbgPrint(resultList)
         cmdResult = sorted(cmdResult)

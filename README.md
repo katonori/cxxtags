@@ -95,11 +95,11 @@ As mentioned before, **cxxtags** needs compile options such as "-I" "-D" to get 
 and clang. So the only thing you need to do is replace compiler command with **cxxtags**. if you compile the
 source file like below,
 
-    g++ -I/your/headers -DYOUR_MACRO -c -o a.o a.cpp
+    $ g++ -I/your/headers -DYOUR_MACRO -c -o a.o a.cpp
 
 you can generate tag database by command below. The tag database "a.o" will be generated.
 
-    cxxtags -e /usr/include -I/your/headers -DYOUR_MACRO -c -o a.o a.cpp
+    $ cxxtags -e /usr/include -I/your/headers -DYOUR_MACRO -c -o a.o a.cpp
 
 Like compiler commands, **cxxtags** doesn't depend on a tagging process of other files. So you can tag several
 source files in parallel.
@@ -112,7 +112,7 @@ Some source packages can tag source codes by changing PATH search order like bel
 
 * step 1: configure source package as usual.
 
-        ./configure --prefix=/your/install/path
+        $ ./configure --prefix=/your/install/path
 
 * step 2: make pseudo compiler commands
     * edit /path/to/cxxtags/installed/g++ as shown below 
@@ -122,23 +122,38 @@ Some source packages can tag source codes by changing PATH search order like bel
 
     * set paermission and make aliases if needed. 
 
-            chmod +x /path/to/cxxtags/installed/g++
-            ln -s /path/to/cxxtags/installed/g++ /path/to/cxxtags/installed/gcc
+            $ chmod +x /path/to/cxxtags/installed/g++
+            $ ln -s /path/to/cxxtags/installed/g++ /path/to/cxxtags/installed/gcc
 
 * step 3: then start building
     
-        env PATH=/path/to/cxxtags/installed:${PATH} make
+        $ env PATH=/path/to/cxxtags/installed:${PATH} make
 
 * step 4: finaly, merge database files
 
-        cxxtags_merger db `find ./ -name "*.o"`
+        $ cxxtags_merger db `find ./ -name "*.o"`
+
+* step 5: dump or query
+
+        $ cxxtags_html_dumper db
+
+    or
+
+        $ cxxtags_query name db main
+
+To index LLVM source package, you may need to build as usual before step 3 to build tools used in build process such as "tblgen".
+Once you build as usual, then delete *only* obj files(except commands) by this command
+    
+    $ find . -name "*.o" -exec rm -fv {} \;
+
+and then resume from step 3.
 
 Example
 ------------------------
-You can find some examples at _test_ directory. You can generate tag database and html files by these commands.  
+* You can find some examples at _test_ directory. You can generate tag database and html files by these commands.  
 
-    $ cd ${CXXTAGS_REPOSITORY_ROOT}/test/ns/
-    $ make html
+        $ cd ${CXXTAGS_REPOSITORY_ROOT}/test/ns/
+        $ make html
 
-then a directory _${CXXTAGS_REPOSITORY_ROOT}/test/ns/html_ is generated. 
+  then a directory _${CXXTAGS_REPOSITORY_ROOT}/test/ns/html_ is generated. 
 

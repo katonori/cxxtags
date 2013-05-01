@@ -81,13 +81,13 @@ class HandlerBase:
         if db_list == []:
             print "ERROR: database file of \'%s\' not found:"%(fileName)
             sys.exit(1)
-        # if multiple hit occur even though absolute path is specified,
+        # If multiple hit occur when absolute path is specified,
         # choose the file found the first.
         if fileName[0] != '/':
+            # If file is a relative path and found multiple database files, treated as the file name is
+            # ambiguous.
             if len(db_list) != 1 and fileName.find('/') != 0:
-                print "ERROR: file name is ambiguous. candidates are:"
-                for i in db_list:
-                    print i
+                print "ERROR: file name \"%s\" is ambiguous. spcecify an absolute path."%(fileName)
                 sys.exit(1)
         fn = db_list[0]
         db = cxxtags_util.db_connect(fn)

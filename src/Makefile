@@ -3,6 +3,8 @@ LLVM_HOME=/pkg/llvm-3.2
 INCLUDES=-I${LLVM_HOME}/include/
 LIBS=-L${LLVM_HOME}/lib/ -L/usr/lib/ -lsqlite3 -lclang -lstdc++ 
 CXXFLAGS=-Wall -g -O2
+CXXTAGS = ./cxxtags -e /usr
+CXXTAGS_MERGER = ./cxxtags_merger
 
 all: cxxtags_core.cpp db.cpp
 	$(CXX) $(CXXFLAGS) cxxtags_core.cpp -c $(INCLUDES)
@@ -12,5 +14,9 @@ all: cxxtags_core.cpp db.cpp
 	cp cxxtags_core cxxtags cxxtags_merger cxxtags_html_dumper cxxtags_util.py cxxtags_query ../bin
 	chmod +x cxxtags cxxtags_merger cxxtags_html_dumper cxxtags_util.py cxxtags_query ../bin
 	strip ../bin/cxxtags_core
+index:
+	$(CXXTAGS) $(INCLUDES) cxxtags_core.cpp
+	$(CXXTAGS) $(INCLUDES) db.cpp
+	$(CXXTAGS_MERGER) db cxxtags_core.cpp.db db.cpp.db
 clean:
 	rm -f cxxtags_core.o db.o cxxtags_core

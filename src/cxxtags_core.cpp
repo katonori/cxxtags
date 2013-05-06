@@ -10,31 +10,32 @@
 #include <time.h>
 #include "db.h"
 
-std::vector<std::string > excludeList;
-std::map<std::string, std::string > fileMap;
-
-static std::string getCursorSource(CXCursor Cursor);
-static const char *curDir;
-
+namespace cxxtagsIndexer {
 /******************************************************************************/
 /* Utility functions.                                                         */
 /******************************************************************************/
 
 /** \brief Return the default parsing options. */
-static unsigned getDefaultParsingOptions() {
+static inline unsigned getDefaultParsingOptions() {
   unsigned options = CXTranslationUnit_DetailedPreprocessingRecord;
   return options;
 }
 
-/******************************************************************************/
-/* Pretty-printing.                                                           */
-/******************************************************************************/
+std::vector<std::string > excludeList;
+static inline int isInExcludeList(std::string fileName)
+{
+    std::vector<std::string >::iterator itrEnd = excludeList.end();
+    for(std::vector<std::string >::iterator itr = excludeList.begin();
+        itr != itrEnd;
+        itr++) {
+        if(fileName.find(*itr) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
 
-typedef struct {
-  const char *CommentSchemaFile;
-} CommentXMLValidationData;
-
-static std::string getName(const CXCursor& C)
+static inline std::string getName(const CXCursor& C)
 {
     //CXString cxName = clang_getCursorDisplayName(C);
     CXString cxName = clang_getCursorSpelling(C);
@@ -44,7 +45,7 @@ static std::string getName(const CXCursor& C)
     return name;
 }
 
-static std::string formatName(std::string name)
+static inline std::string formatName(std::string name)
 {
     std::string::size_type pos = name.find("class ");
     if(pos == 0) {
@@ -57,6 +58,32 @@ static std::string formatName(std::string name)
     return name;
 }
 
+// get source file name
+static std::string getCursorSource(CXCursor Cursor) {
+  CXSourceLocation Loc = clang_getCursorLocation(Cursor);
+  CXString source;
+  CXFile file;
+  clang_getExpansionLocation(Loc, &file, 0, 0, 0);
+  source = clang_getFileName(file);
+  CXString filename = clang_getFileName(file);
+  if (!clang_getCString(source)) {
+    clang_disposeString(source);
+    clang_disposeString(filename);
+    return std::string("");
+  }
+  else {
+    std::string b = std::string(clang_getCString(filename));
+    clang_disposeString(source);
+    clang_disposeString(filename);
+    return b;
+  }
+}
+
+typedef struct {
+  const char *CommentSchemaFile;
+} CommentXMLValidationData;
+
+// tables that keep allocated IDs.
 class IdTbl
 {
 public:
@@ -83,24 +110,26 @@ public:
         return mMap;
     }
 };
-class IdTbl fileIdTbl;
-class IdTbl usrIdTbl;
-class IdTbl nameIdTbl;
+class IdTbl *fileIdTbl;
+class IdTbl *usrIdTbl;
+class IdTbl *nameIdTbl;
 
-static int isInExcludeList(std::string fileName)
+// Table to keep which cursor types are to be tagged.
+#define AVAILABLE_TABLE_MAX 1024
+static char isCursorTypeAvailableTable[AVAILABLE_TABLE_MAX];
+static inline void setCursorTypeAvailable(int val)
 {
-    std::vector<std::string >::iterator itrEnd = excludeList.end();
-    for(std::vector<std::string >::iterator itr = excludeList.begin();
-        itr != itrEnd;
-        itr++) {
-        if(fileName.find(*itr) == 0) {
-            return 1;
-        }
-    }
-    return 0;
+    assert(val < AVAILABLE_TABLE_MAX); 
+    isCursorTypeAvailableTable[val] = 1;
 }
+static inline char isCursorTypeAvailable(int val)
+{
+    assert(val < AVAILABLE_TABLE_MAX); 
+    return isCursorTypeAvailableTable[val];
+}
+#undef AVAILABLE_TABLE_MAX
 
-static inline void PrintCursor(CXCursor Cursor) {
+static inline void ProcCursor(CXCursor Cursor) {
   CXCursorKind kind = Cursor.kind;
   if (clang_isInvalid(kind)) {
     CXString ks = clang_getCursorKindSpelling(kind);
@@ -108,36 +137,8 @@ static inline void PrintCursor(CXCursor Cursor) {
     clang_disposeString(ks);
   }
   else {
-    switch(kind) {
-        case CXCursor_EnumConstantDecl:
-        case CXCursor_TypedefDecl:
-        case CXCursor_ClassDecl:
-        case CXCursor_Namespace:
-        case CXCursor_StructDecl:
-        case CXCursor_UnionDecl:
-        case CXCursor_VarDecl:
-        case CXCursor_ParmDecl:
-        case CXCursor_FieldDecl:
-        case CXCursor_MacroDefinition:
-        case CXCursor_CXXMethod:
-        case CXCursor_FunctionDecl:
-        case CXCursor_Constructor:
-        case CXCursor_Destructor:
-        case CXCursor_DeclRefExpr:
-        case CXCursor_MemberRefExpr:
-        case CXCursor_TypeRef:
-        //case CXCursor_CXXBaseSpecifier:
-        case CXCursor_MemberRef:
-        case CXCursor_NamespaceRef:
-        case CXCursor_MacroExpansion:
-        case CXCursor_TemplateTypeParameter:
-        case CXCursor_FunctionTemplate:
-        case CXCursor_ClassTemplate:
-        case CXCursor_TemplateRef:
-        case CXCursor_OverloadedDeclRef:
-        break;
-        default:
-            return;
+    if(isCursorTypeAvailable(kind) == 0) {
+        return;
     }
     CXCursor Referenced;
     unsigned int line = 0;
@@ -163,8 +164,8 @@ static inline void PrintCursor(CXCursor Cursor) {
     if(isInExcludeList(fileName)) {
         return;
     }
-    int fileId = fileIdTbl.GetId(fileName);
-    int usrId = usrIdTbl.GetId(cUsr);
+    int fileId = fileIdTbl->GetId(fileName);
+    int usrId = usrIdTbl->GetId(cUsr);
     int nameId = -1;
 
     int isVirt = 0;
@@ -188,7 +189,7 @@ static inline void PrintCursor(CXCursor Cursor) {
         case CXCursor_MacroDefinition: {
             // is_def
             int isDef = clang_isCursorDefinition(Cursor);
-            nameId = nameIdTbl.GetId(name);
+            nameId = nameIdTbl->GetId(name);
             db::insert_decl_value(usrId, nameId, fileId, line, column, kind, val, 0, isDef);
             break;
         }
@@ -201,13 +202,13 @@ static inline void PrintCursor(CXCursor Cursor) {
             clang_getOverriddenCursors(Cursor, 
                     &cursorOverridden,
                     &numOverridden);
-            nameId = nameIdTbl.GetId(name);
+            nameId = nameIdTbl->GetId(name);
             for(unsigned int i = 0; i < numOverridden; i++) {
                 // usr
                 CXString cxRefUSR = clang_getCursorUSR(cursorOverridden[i]);
                 const char *cRefUsr = clang_getCString(cxRefUSR);
                 assert(cRefUsr);
-                int refUsrId = usrIdTbl.GetId(cRefUsr);
+                int refUsrId = usrIdTbl->GetId(cRefUsr);
                 db::insert_overriden_value(refUsrId, nameId, fileId, line, column, kind, usrId, isDef);
             }
             // fall through
@@ -217,7 +218,7 @@ static inline void PrintCursor(CXCursor Cursor) {
         case CXCursor_Destructor: {
             // is_def
             if(nameId == -1) {
-                nameId = nameIdTbl.GetId(name);
+                nameId = nameIdTbl->GetId(name);
             }
             int isDef = clang_isCursorDefinition(Cursor);
             db::insert_decl_value(usrId, nameId, fileId, line, column, kind, 0, isVirt, isDef);
@@ -252,10 +253,10 @@ static inline void PrintCursor(CXCursor Cursor) {
                     if(isInExcludeList(cRefFileName)) {
                         break;
                     }
-                    refFid = fileIdTbl.GetId(cRefFileName);
+                    refFid = fileIdTbl->GetId(cRefFileName);
                 }
-                int refUsrId = usrIdTbl.GetId(cUsr);
-                nameId = nameIdTbl.GetId(name);
+                int refUsrId = usrIdTbl->GetId(cUsr);
+                nameId = nameIdTbl->GetId(name);
                 db::insert_ref_value(refUsrId, nameId, fileId, line, column, kind, refFid, ref_line, ref_column);
                 clang_disposeString(cxRefUSR);
             }
@@ -265,32 +266,12 @@ static inline void PrintCursor(CXCursor Cursor) {
         case CXCursor_InclusionDirective:
             break;
         default:
+            assert(0);
             break;
     }
     clang_disposeString(cxUSR);
   }
   return;
-}
-
-// get source file name
-static std::string getCursorSource(CXCursor Cursor) {
-  CXSourceLocation Loc = clang_getCursorLocation(Cursor);
-  CXString source;
-  CXFile file;
-  clang_getExpansionLocation(Loc, &file, 0, 0, 0);
-  source = clang_getFileName(file);
-  CXString filename = clang_getFileName(file);
-  if (!clang_getCString(source)) {
-    clang_disposeString(source);
-    clang_disposeString(filename);
-    return std::string("");
-  }
-  else {
-    std::string b = std::string(clang_getCString(filename));
-    clang_disposeString(source);
-    clang_disposeString(filename);
-    return b;
-  }
 }
 
 /******************************************************************************/
@@ -344,38 +325,8 @@ typedef struct {
 enum CXChildVisitResult FilteredPrintingVisitor(CXCursor Cursor,
                                                 CXCursor Parent,
                                                 CXClientData ClientData) {
-  PrintCursor(Cursor);
+  ProcCursor(Cursor);
   return CXChildVisit_Recurse;
-}
-
-/******************************************************************************/
-/* Inclusion stack testing.                                                   */
-/******************************************************************************/
-
-void InclusionVisitor(CXFile includedFile, CXSourceLocation *includeStack,
-                      unsigned includeStackLen, CXClientData data) {
-
-  unsigned i;
-  CXString fname;
-
-  fname = clang_getFileName(includedFile);
-  printf("file: %s\nincluded by:\n", clang_getCString(fname));
-  clang_disposeString(fname);
-
-  for (i = 0; i < includeStackLen; ++i) {
-    CXFile includingFile;
-    unsigned line, column;
-    clang_getSpellingLocation(includeStack[i], &includingFile, &line,
-                              &column, 0);
-    fname = clang_getFileName(includingFile);
-    printf("  %s:%d:%d\n", clang_getCString(fname), line, column);
-    clang_disposeString(fname);
-  }
-  printf("\n");
-}
-
-void PrintInclusionStack(CXTranslationUnit TU) {
-  clang_getInclusions(TU, InclusionVisitor, NULL);
 }
 
 /******************************************************************************/
@@ -419,6 +370,37 @@ int perform_test_load_source(int argc, const char **argv,
   argv++;
   argc--;
 
+  // Set which cursor types are to be tagged.
+  setCursorTypeAvailable(CXCursor_EnumConstantDecl);
+  setCursorTypeAvailable(CXCursor_TypedefDecl);
+  setCursorTypeAvailable(CXCursor_ClassDecl);
+  setCursorTypeAvailable(CXCursor_Namespace);
+  setCursorTypeAvailable(CXCursor_StructDecl);
+  setCursorTypeAvailable(CXCursor_UnionDecl);
+  setCursorTypeAvailable(CXCursor_VarDecl);
+  setCursorTypeAvailable(CXCursor_ParmDecl);
+  setCursorTypeAvailable(CXCursor_FieldDecl);
+  setCursorTypeAvailable(CXCursor_MacroDefinition);
+  setCursorTypeAvailable(CXCursor_CXXMethod);
+  setCursorTypeAvailable(CXCursor_FunctionDecl);
+  setCursorTypeAvailable(CXCursor_Constructor);
+  setCursorTypeAvailable(CXCursor_Destructor);
+  setCursorTypeAvailable(CXCursor_DeclRefExpr);
+  setCursorTypeAvailable(CXCursor_MemberRefExpr);
+  setCursorTypeAvailable(CXCursor_TypeRef);
+  setCursorTypeAvailable(CXCursor_MemberRef);
+  setCursorTypeAvailable(CXCursor_NamespaceRef);
+  setCursorTypeAvailable(CXCursor_MacroExpansion);
+  setCursorTypeAvailable(CXCursor_TemplateTypeParameter);
+  setCursorTypeAvailable(CXCursor_FunctionTemplate);
+  setCursorTypeAvailable(CXCursor_ClassTemplate);
+  setCursorTypeAvailable(CXCursor_TemplateRef);
+  setCursorTypeAvailable(CXCursor_OverloadedDeclRef);
+
+  fileIdTbl = new IdTbl();
+  usrIdTbl = new IdTbl();
+  nameIdTbl = new IdTbl();
+
   db::init(out_file_name, in_file_name);
   
   Idx = clang_createIndex(/* excludeDeclsFromPCH */0,
@@ -439,7 +421,10 @@ int perform_test_load_source(int argc, const char **argv,
                              CommentSchemaFile);
 FUNC_END:
   clang_disposeIndex(Idx);
-  db::fin(fileIdTbl.GetTbl(), usrIdTbl.GetTbl(), nameIdTbl.GetTbl());
+  db::fin(fileIdTbl->GetTbl(), usrIdTbl->GetTbl(), nameIdTbl->GetTbl());
+  delete fileIdTbl;
+  delete usrIdTbl;
+  delete nameIdTbl;
   return result;
 }
 
@@ -447,10 +432,10 @@ FUNC_END:
 /* Command line processing.                                                   */
 /******************************************************************************/
 static void print_usage(void) {
-  fprintf(stderr, "usage: c-index-test [-e excludeList] cur_dir out_file in_file {<args>}*\n");
+  fprintf(stderr, "usage: cxxtags_core [-e excludeList] out_file in_file {<clang_args>}*\n");
 }
 
-static std::vector<std::string > split_string(std::string str)
+static std::vector<std::string > splitString(std::string str)
 {
     std::vector<std::string > list;
     std::string::size_type pos = 0;
@@ -469,19 +454,14 @@ static std::vector<std::string > split_string(std::string str)
     return list;
 }
 
-/***/
-
-int cindextest_main(int argc, const char **argv) {
+int indexSource(int argc, const char **argv) {
   //clang_enableStackTraces();
   if (argc >= 3) {
     if(0 == strncmp(argv[1], "-e", 2)) {
-        excludeList = split_string(argv[2]);
+        excludeList = splitString(argv[2]);
         argc-=2;
         argv+=2;
     }
-    curDir = argv[1];
-    argv++;
-    argc--;
     CXCursorVisitor I = FilteredPrintingVisitor;
     PostVisitTU postVisit = 0;
     if (I)
@@ -492,12 +472,8 @@ int cindextest_main(int argc, const char **argv) {
   return 1;
 }
 
-/***/
+};
 
-#if 1
 int main(int argc, const char **argv) {
-#else
-int c_index_test(int argc, const char **argv) {
-#endif
-  return cindextest_main(argc, argv);
+  return cxxtagsIndexer::indexSource(argc, argv);
 }

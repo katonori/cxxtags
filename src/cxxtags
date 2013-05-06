@@ -84,17 +84,11 @@ def main():
         sys.exit(1)
     in_file = os.path.abspath(in_file)
 
-    # get current directory
-    cur_dir = os.getcwd()
-    if cur_dir == "":
-        cur_dir = "."
-    cur_dir = os.path.abspath(cur_dir) + "/"
-
     if exclude_list != "":
         exclude_list = "-e " + exclude_list
     if os.path.exists(out_file):
         os.remove(out_file)
-    cmd = "%s/cxxtags_core %s %s %s %s "%(exe_dir, exclude_list, cur_dir, out_file, in_file)+string.join(argv)
+    cmd = "%s/cxxtags_core %s %s %s "%(exe_dir, exclude_list, out_file, in_file)+string.join(argv)
     #print(cmd)
     #time_list.append(time.time())
     rv = os.system(cmd)

@@ -4,10 +4,10 @@ cxxtags
 What is this?
 ------------------------
 **cxxtags** is a tool to tag(index) C/C++ source files based on clang. The major difference from ctags is
-C++ support. C++ syntax (ex. class, namespace, template, etc.) is supported(not fully yet though). And
-the generated tag file is a sqlite3 database file. So you can access tag information via sqlite3 queries.
+C++ support. C++ syntax (ex. class, namespace, template, etc.) is supported. And the generated tag file
+is a sqlite3 database file. So you can access tag information via sqlite3 queries.
 
-Several IDEs(Visual Studio, Eclipse, Xcode, etc.) have this tagging(indexing) feature though, it is tightly
+Several IDEs(Visual Studio, Eclipse, Xcode, etc.) already have this tagging(indexing) feature though, it is tightly
 built-in and not portable(even though Eclipse(CDT) is a open source project). **cxxtags** aims to be
 light-weight and portable source code tagging system.
 

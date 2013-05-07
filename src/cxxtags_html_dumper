@@ -143,7 +143,10 @@ g_num_things_todo = 0
 g_num_done = 0
 
 def path_regalizer(path):
-    path = path.replace('/', '<slash>')
+    path = re.sub("^c:", "", path)
+    path = path.replace('/', '.')
+    path = path.replace("#", ".")
+    path = path.replace("*", ".")
     return path
 
 # get file name by USR
@@ -163,13 +166,11 @@ def add_info_file(usr):
     if usr == None or usr == "":
         return None
     # generate file name from usr
-    fn = re.sub("^c:", "", usr)
-    fn = re.sub("#", ".", fn)
+    fn = path_regalizer(usr)
     # shorten file name
     fn_len = len(fn)
     if fn_len > 128:
         fn = "_" + fn[fn_len-128:]
-    fn = path_regalizer(fn)
     fn = "%s/%s.%d" % (REF_DIR, fn, g_file_cnt_ref)
     g_file_cnt_ref += 1
     g_info_file_dict[usr] = fn

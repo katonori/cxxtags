@@ -33,16 +33,13 @@ class HandlerBase:
     def GetUsrFromRefTable(self, db, fileName, lineNo, colNo):
         cur = db.cursor()
         q = 'SELECT usr_list.name, file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE file_list.name LIKE ? AND ref.line=? AND ref.col=?'
-        argList = ()
-        argList += ('%'+fileName,)
-        argList += (lineNo,)
-        argList += (colNo,)
+        argList = ('%'+fileName, lineNo, colNo)
         cur.execute(q, argList)
         result = cur.fetchall()
         usr = ""
         for row in result:
             resUsr, resFileName, resLine, resCol = row
-            if fileName == "" or re.search(fileName + '$', resFileName):
+            if re.search(fileName + '$', resFileName):
                 if usr == "":
                     usr = resUsr
                 elif usr != resUsr:
@@ -56,16 +53,13 @@ class HandlerBase:
     def GetUsrFromDeclTable(self, db, fileName, lineNo, colNo):
         cur = db.cursor()
         q = 'SELECT usr_list.name, file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE file_list.name LIKE ? AND decl.line=? AND decl.col=?'
-        argList = ()
-        argList += ('%'+fileName,)
-        argList += (lineNo,)
-        argList += (colNo,)
+        argList = ('%'+fileName, lineNo, colNo)
         cur.execute(q, argList)
         result = cur.fetchall()
         usr = ""
         for row in result:
             resUsr, resFileName, resLine, resCol = row
-            if fileName == "" or re.search(fileName + '$', resFileName):
+            if re.search(fileName + '$', resFileName):
                 if usr == "":
                     usr = resUsr
                 elif usr != resUsr:

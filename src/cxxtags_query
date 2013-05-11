@@ -1,8 +1,8 @@
 #!/usr/bin/python
 def usage():
-    print 'usage: cxxtags_query decl/def/ref database_dir file_name line_no column_no'
-    print '     : cxxtags_query         name database_dir item_name [-f file_name] [-l line_no] [-c column_no]'
-    print '     : cxxtags_query         dump database_dir table_name'
+    print 'usage: cxxtags_query decl/def/ref/type database_dir file_name line_no column_no'
+    print '     : cxxtags_query              name database_dir item_name [-f file_name] [-l line_no] [-c column_no]'
+    print '     : cxxtags_query              dump database_dir table_name'
 
 import sys
 import sqlite3
@@ -422,6 +422,67 @@ class QueryHandlerTable(HandlerBase):
             sys.exit(1)
         self.mTableName = sys.argv[3]
 
+class QueryHandlerType(HandlerBase):
+    #
+    # Handle Rquest for infomation about type
+    #
+
+    mFileName = ""
+    mLineNo = 0
+    mColNo = 0
+
+    def __init__(self, dbDir):
+        self.mDbDir = dbDir
+
+    def DoQuery(self):
+        usr = self.GetUsr(self.mFileName, self.mLineNo, self.mColNo)
+        if usr:
+            self.GetTypeInfo(usr, self.mFileName, self.mLineNo, self.mColNo)
+
+    def GetTypeInfo(self, usr, fileName, lineNo, colNo):
+        db = cxxtags_util.db_connect(self.mUsrDbName)
+        cur = db.cursor()
+        q = 'SELECT usr_list_type.name, decl.type_kind, decl.is_pointer FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name=? LIMIT 1'
+        cur.execute(q, (usr,))
+        result = cur.fetchone()
+        typeUsr, typeKind, isPointer = result
+        #print result
+        done_dict = {}
+        if typeUsr != "":
+            q = 'SELECT usr_list.name, name_list.name, file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name LIKE ? ORDER BY decl.is_def'
+            cur.execute(q, (typeUsr+'%',))
+            typeUsrPrint = typeUsr.replace("c:", "")
+            typeUsrPrint = typeUsrPrint.replace("@N@", "::")
+            typeUsrPrint = typeUsrPrint.replace("@C@", "::")
+            #print typeUsrPrint
+            result = cur.fetchall()
+            for i in result:
+                resultUsr, resultName, resultFileName, resultLine, resultCol = i
+                if done_dict.has_key(resultUsr):
+                    continue
+                done_dict[resultUsr] = 1
+                #print resultUsr
+                if resultUsr == typeUsr: # type
+                    self.PrintResult(resultName, resultFileName, resultLine, resultCol, "type")
+                if resultUsr.find(typeUsr+"@FI@") != -1: # val
+                    resultUsr = resultUsr.replace(typeUsr+"@FI@", "")
+                    self.PrintResult(resultName, resultFileName, resultLine, resultCol, "value")
+                elif resultUsr.find(typeUsr+"@F@") != -1: # function
+                    resultUsr = resultUsr.replace(typeUsr+"@F@", "")
+                    resultUsr = re.sub('#.*$', "", resultUsr)
+                    self.PrintResult(resultName, resultFileName, resultLine, resultCol, "function")
+                elif resultUsr.find(typeUsr+"@") != -1:
+                    self.PrintResult(resultUsr, resultFileName, resultLine, resultCol, "other")
+
+    def parseArg(self):
+        if len(sys.argv) != 6:
+            usage()
+            sys.exit(1)
+        self.mFileName, self.mLineNo, self.mColNo = sys.argv[3:]
+
+    def PrintResult(self, name, fileName, line, col, kind):
+        print name + OUTPUT_DELIMITER + fileName + OUTPUT_DELIMITER + str(line) + OUTPUT_DELIMITER + str(col) + OUTPUT_DELIMITER + kind + OUTPUT_DELIMITER + cxxtags_util.get_line_from_file(fileName, line)
+
 def main():
     result = []
     if len(sys.argv) <= 2:
@@ -457,8 +518,12 @@ def main():
         handler = QueryHandlerTable(dbDir)
         handler.parseArg()
         handler.DoQuery()
+    elif queryType == 'type': # get type info
+        handler = QueryHandlerType(dbDir)
+        handler.parseArg()
+        handler.DoQuery()
     else:
-        print "ERROR: query type must be ref, decl, def, override, overriden or name"
+        print "ERROR: query type must be ref, decl, def, override, overriden, name, dump or type"
         sys.exit(1)
 
 #######

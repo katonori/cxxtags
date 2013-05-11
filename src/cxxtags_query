@@ -282,7 +282,8 @@ class QueryHandlerName(HandlerBase):
                         cur.execute('SELECT file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_FILELIST_DECL + ' WHERE decl.name_id=?;', (resultId, ))
                     rows = cur.fetchall()
                     for i in rows:
-                        print resultName + ",", i
+                        resultFileName, resultLineNo, resultColNo = i
+                        print resultName + OUTPUT_DELIMITER + resultFileName + OUTPUT_DELIMITER + str(resultLineNo) + OUTPUT_DELIMITER + str(resultColNo) + OUTPUT_DELIMITER + cxxtags_util.get_line_from_file(resultFileName, resultLineNo)
                     resultList += rows
             db.close()
 

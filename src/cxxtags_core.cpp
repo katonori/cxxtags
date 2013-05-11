@@ -103,8 +103,9 @@ public:
             return mapItr->second;
         }
         mMap[str] = mCurId;
+        int rv = mCurId;
         mCurId++;
-        return mCurId - 1;
+        return rv;
     }
     const std::map<std::string, int >& GetTbl(void) const
     {
@@ -131,13 +132,18 @@ static inline char isCursorTypeAvailable(int val)
 #undef AVAILABLE_TABLE_MAX
 
 // get type information
-void getCXTypeInfo(CXCursor& typeCur, bool isPointer, const CXType& inType)
+void getCXTypeInfo(CXCursor& typeCur, int& typeUsrId, int& typeKind, int& isPointer, const CXType& inType)
 {
     CXType cxType = clang_getCanonicalType(inType);
     if(cxType.kind == CXType_Pointer) {
+        isPointer = 1;
         cxType = clang_getPointeeType(cxType);
     }
+    typeKind = cxType.kind;
     typeCur = clang_getTypeDeclaration(cxType);
+    CXString cxTypeUSR = clang_getCursorUSR(typeCur);
+    typeUsrId = usrIdTbl->GetId(clang_getCString(cxTypeUSR));
+    clang_disposeString(cxTypeUSR);
 }
 
 // process declarations other than function declarations.
@@ -149,13 +155,12 @@ static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::strin
     int usrId = usrIdTbl->GetId(cUsr);
     // get type information
     CXCursor typeCur;
-    bool isPointer = false;
-    getCXTypeInfo(typeCur, isPointer, clang_getCursorType(Cursor));
-    CXString cxTypeUSR = clang_getCursorUSR(typeCur);
-    const char *cTypeUsr = clang_getCString(cxTypeUSR);
+    int typeUsrId = 0;
+    int isPointer = 0;
+    int typeKind = 0;
+    getCXTypeInfo(typeCur, typeUsrId, typeKind, isPointer, clang_getCursorType(Cursor));
     // insert to database
-    db::insert_decl_value(usrId, nameId, fileId, line, column, kind, val, 0, isDef, cTypeUsr, isPointer);
-    clang_disposeString(cxTypeUSR);
+    db::insert_decl_value(usrId, nameId, fileId, line, column, kind, val, 0, isDef, typeUsrId, typeKind, isPointer);
 }
 
 // process declarations
@@ -167,13 +172,12 @@ static inline void procFuncDecl(const CXCursor& Cursor, const char* cUsr, std::s
     int isDef = clang_isCursorDefinition(Cursor);
     // get result type information
     CXCursor typeCur;
-    bool isPointer = false;
-    getCXTypeInfo(typeCur, isPointer, clang_getCursorResultType(Cursor));
-    CXString cxTypeUSR = clang_getCursorUSR(typeCur);
-    const char *cTypeUsr = clang_getCString(cxTypeUSR);
+    int typeUsrId = 0;
+    int isPointer = 0;
+    int typeKind = 0;
+    getCXTypeInfo(typeCur, typeUsrId, typeKind, isPointer, clang_getCursorResultType(Cursor));
     // insert to database
-    db::insert_decl_value(usrId, nameId, fileId, line, column, kind, 0, isVirt, isDef, cTypeUsr, isPointer);
-    clang_disposeString(cxTypeUSR);
+    db::insert_decl_value(usrId, nameId, fileId, line, column, kind, 0, isVirt, isDef, typeUsrId, typeKind, isPointer);
 }
 
 // process c++ method declarations

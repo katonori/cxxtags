@@ -31,7 +31,7 @@ void init(std::string db_file_name, std::string src_file_name)
     // ref
     sqlite3_exec(db, "CREATE TABLE ref(usr_id INTEGER, name_id INTEGER, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, ref_file_id INTEGER, ref_line INTEGER, ref_col INTEGER);", NULL, NULL, &err);
     // decl
-    sqlite3_exec(db, "CREATE TABLE decl(usr_id INTEGER, name_id INTEGER, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, val INTEGER, is_virtual INTEGER, is_def INTEGER, type_usr TEXT, is_pointer INTEGER);", NULL, NULL, &err);
+    sqlite3_exec(db, "CREATE TABLE decl(usr_id INTEGER, name_id INTEGER, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, val INTEGER, is_virtual INTEGER, is_def INTEGER, type_usr_id INTEGER, type_kind INTEGER, is_pointer);", NULL, NULL, &err);
     // overriden
     sqlite3_exec(db, "CREATE TABLE overriden(usr_id INTEGER, name_id INTEGER, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, overrider_usr_id INTEGER, is_def INTEGER);", NULL, NULL, &err);
 
@@ -66,9 +66,9 @@ void insert_ref_value(int usrId, int nameId, int fileId, int line, int col, int 
     return ;
 }
 
-void insert_decl_value(int usrId, int nameId, int fileId, int line, int col, int entityKind, int val, int isVirtual, int isDef, const char* typeUsr, int isPointer)
+void insert_decl_value(int usrId, int nameId, int fileId, int line, int col, int entityKind, int val, int isVirtual, int isDef, int typeUsrId, int typeKind, int isPointer)
 {
-    declMgr->InsertValue(usrId, nameId, fileId, line, col, entityKind, val, isVirtual, isDef, typeUsr, isPointer);
+    declMgr->InsertValue(usrId, nameId, fileId, line, col, entityKind, val, isVirtual, isDef, typeUsrId, typeKind, isPointer);
 }
 
 void insert_overriden_value(int usrId, int nameId, int fileId, int line, int col, int entityKind, int usrIdOverrider, int isDef)
@@ -169,7 +169,7 @@ void DBMgrRef::InsertValue(int usrId, int nameId, int fileId, int line, int col,
 }
 
 // DBMgrDecl
-void DBMgrDecl::InsertValue(int usrId, int nameId, int fid, int line, int col, int entityKind, int val, int isVirtual, int isDef, const char* typeUsr, int isPointer)
+void DBMgrDecl::InsertValue(int usrId, int nameId, int fid, int line, int col, int entityKind, int val, int isVirtual, int isDef, int typeUsrId, int typeKind, int isPointer)
 {
     sqlite3_reset(mSqlStmt);
     sqlite3_bind_int(mSqlStmt, 1, usrId);
@@ -181,8 +181,9 @@ void DBMgrDecl::InsertValue(int usrId, int nameId, int fid, int line, int col, i
     sqlite3_bind_int(mSqlStmt, 7, val);
     sqlite3_bind_int(mSqlStmt, 8, isVirtual);
     sqlite3_bind_int(mSqlStmt, 9, isDef);
-    sqlite3_bind_text(mSqlStmt, 10, typeUsr, -1, SQLITE_STATIC);
-    sqlite3_bind_int(mSqlStmt, 11, isPointer);
+    sqlite3_bind_int(mSqlStmt, 10, typeUsrId);
+    sqlite3_bind_int(mSqlStmt, 11, typeKind);
+    sqlite3_bind_int(mSqlStmt, 12, isPointer);
     tryStep(mSqlStmt);
 }
 

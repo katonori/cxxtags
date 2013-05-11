@@ -89,6 +89,6 @@ def pathCmp(pathFull, pathPart):
 QUERY_JOINED_TABLE_FILELIST_REF = 'ref, file_list ON ref.file_id=file_list.id'
 QUERY_JOINED_TABLE_REF = '(((ref, file_list ON ref.file_id=file_list.id), file_list AS ref_file_list ON ref.ref_file_id=ref_file_list.id),usr_list ON ref.usr_id=usr_list.id), name_list ON ref.name_id=name_list.id'
 QUERY_JOINED_TABLE_FILELIST_DECL = 'decl, file_list ON decl.file_id=file_list.id'
-QUERY_JOINED_TABLE_DECL = '((decl, file_list ON decl.file_id=file_list.id), usr_list ON decl.usr_id=usr_list.id), name_list ON decl.name_id=name_list.id'
+QUERY_JOINED_TABLE_DECL = '(((decl, file_list ON decl.file_id=file_list.id), usr_list ON decl.usr_id=usr_list.id), name_list ON decl.name_id=name_list.id), usr_list AS usr_list_type ON decl.type_usr_id=usr_list_type.id'
 QUERY_JOINED_TABLE_FILELIST_OVERRIDEN = 'overriden,file_list ON overriden.file_id=file_list.id'
 QUERY_JOINED_TABLE_OVERRIDEN = '(((overriden,file_list ON overriden.file_id=file_list.id), usr_list ON usr_list.id=overriden.usr_id), usr_list AS usr_list_overrider ON usr_list_overrider.id=overriden.overrider_usr_id), name_list ON overriden.name_id=name_list.id'

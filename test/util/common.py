@@ -1,6 +1,9 @@
 #!/usr/bin/python
 
+import sys
 import commands
+sys.path.append("../../src/")
+import cxxtags_util
 
 gDebug = 0
 CXXTAGS_QUERY = "../../bin/cxxtags_query"
@@ -20,8 +23,10 @@ def QueryTestExecCommand(mode, fileName, line, col):
     result = commands.getoutput(cmd).split('\n')
     cmdResult = []
     for i in result:
-        fn, line, col = i.split('|')
-        cmdResult.append((int(line), int(col), fn))
+        sp = i.split('|')
+        name, fn, line, col = sp[0:4]
+        lineStr = "".join(sp[4:])
+        cmdResult.append((name, int(line), int(col), fn, lineStr))
     return cmdResult
 
 def DoDeclTest(test_data_list_decl, test_data_list_ref):
@@ -30,12 +35,13 @@ def DoDeclTest(test_data_list_decl, test_data_list_ref):
         resultList = []
         DbgPrint("decl test")
         #print test
-        usr, dummy, fileName, line, col, dummy, dummy, dummy, dummy = test
+        usr, dummy, fileName, line, col, dummy, dummy, dummy = test[:8]
         # search references
         for i in test_data_list_ref:
-            refUsr, refName, refFileName, refLine, refCol, dummy, dummy, dummy, dummy = i
+            refUsr, refName, refFileName, refLine, refCol, dummy, dummy, dummy = i
+            lineStr = cxxtags_util.get_line_from_file(refFileName, refLine)
             if refUsr == usr:
-                resultList.append((refLine, refCol, refFileName))
+                resultList.append((refName, refLine, refCol, refFileName, lineStr))
 
         if len(resultList) == 0:
             continue
@@ -64,12 +70,13 @@ def DoRefTest(test_data_list_ref, test_data_list_decl):
         resultList = []
         DbgPrint("ref test")
         #print test
-        usr, dummy, fileName, line, col, kind, dummy, dummy, dummy = test
+        usr, dummy, fileName, line, col, kind, dummy, dummy = test
         # search declarations
         for i in test_data_list_decl:
-            declUsr, declName, declFileName, declLine, declCol, dummy, dummy, dummy, dummy = i
+            declUsr, declName, declFileName, declLine, declCol, dummy, dummy, dummy = i
+            lineStr = cxxtags_util.get_line_from_file(declFileName, declLine)
             if declUsr == usr:
-                resultList.append((declLine, declCol, declFileName ))
+                resultList.append((declName, declLine, declCol, declFileName, lineStr))
 
         if len(resultList) == 0:
             continue

@@ -27,7 +27,7 @@ class HandlerBase:
             self.mAllDbFileList = cxxtags_util.get_db_file_list(self.mDbDir)
         return self.mAllDbFileList
 
-    def GetUsrFromRefTable(self, db, name, fileName, lineNo, colNo):
+    def GetUsrFromRefTable(self, db, fileName, lineNo, colNo):
         cur = db.cursor()
         q = 'SELECT usr_list.name, file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE file_list.name LIKE ? AND ref.line=? AND ref.col=?'
         argList = ()
@@ -50,7 +50,7 @@ class HandlerBase:
                     return ""
         return usr
 
-    def GetUsrFromDeclTable(self, db, name, fileName, lineNo, colNo):
+    def GetUsrFromDeclTable(self, db, fileName, lineNo, colNo):
         cur = db.cursor()
         q = 'SELECT usr_list.name, file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE file_list.name LIKE ? AND decl.line=? AND decl.col=?'
         argList = ()
@@ -73,7 +73,7 @@ class HandlerBase:
                     return ""
         return usr
 
-    def GetUsr(self, name, fileName, lineNo, colNo):
+    def GetUsr(self, fileName, lineNo, colNo):
         if fileName == "":
             print "ERROR: specify file name"
             sys.exit(1)
@@ -91,9 +91,9 @@ class HandlerBase:
                 sys.exit(1)
         fn = db_list[0]
         db = cxxtags_util.db_connect(fn)
-        usr = self.GetUsrFromDeclTable(db, name, fileName, lineNo, colNo)
+        usr = self.GetUsrFromDeclTable(db, fileName, lineNo, colNo)
         if usr == "":
-            usr = self.GetUsrFromRefTable(db, name, fileName, lineNo, colNo)
+            usr = self.GetUsrFromRefTable(db, fileName, lineNo, colNo)
         db.close()
         if usr != "":
             self.mUsrDbName = fn
@@ -108,24 +108,27 @@ class HandlerBase:
         db.close()
         return result[0]
 
+    def PrintResult(self, name, fileName, line, col):
+        print name + OUTPUT_DELIMITER + fileName + OUTPUT_DELIMITER + str(line) + OUTPUT_DELIMITER + str(col) + OUTPUT_DELIMITER + cxxtags_util.get_line_from_file(fileName, line)
+
 class QueryHandlerDecl(HandlerBase):
     """ Handle Rquest for infomation about declarations """
 
     def __init__(self, dbDir):
         self.mDbDir = dbDir
 
-    def DoQuery(self, name, fileName, lineNo, colNo):
-        usr = self.GetUsr(name, fileName, lineNo, colNo)
+    def DoQuery(self, fileName, lineNo, colNo):
+        usr = self.GetUsr(fileName, lineNo, colNo)
         if usr:
             result = self.QueryDeclInfo(usr)
             if result:
-                resultName, resultLine, resultCol = result
-                print resultName + OUTPUT_DELIMITER + str(resultLine) + OUTPUT_DELIMITER + str(resultCol)
+                resultName, resultFileName, resultLine, resultCol = result
+                self.PrintResult(resultName, resultFileName, resultLine, resultCol)
 
     def QueryDeclInfo(self, usr):
         db = cxxtags_util.db_connect(self.mUsrDbName)
         cur = db.cursor()
-        cur.execute('SELECT file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name=? ORDER BY decl.is_def LIMIT 1', (usr,))
+        cur.execute('SELECT name_list.name, file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name=? ORDER BY decl.is_def LIMIT 1', (usr,))
         result = cur.fetchone()
         db.close()
         return result
@@ -136,19 +139,19 @@ class QueryHandlerDef(HandlerBase):
     def __init__(self, dbDir):
         self.mDbDir = dbDir
 
-    def DoQuery(self, name, fileName, lineNo, colNo):
-        usr = self.GetUsr(name, fileName, lineNo, colNo)
+    def DoQuery(self, fileName, lineNo, colNo):
+        usr = self.GetUsr(fileName, lineNo, colNo)
         if usr:
             result = self.GetDef(usr)
             if result:
-                resultName, resultLine, resultCol = result
-                print resultName + OUTPUT_DELIMITER + str(resultLine) + OUTPUT_DELIMITER + str(resultCol)
+                resultName, resultFileName, resultLine, resultCol = result
+                self.PrintResult(resultName, resultFileName, resultLine, resultCol)
 
     def GetDef(self, usr):
         for fn in self.GetAllDbFiles():
             db = cxxtags_util.db_connect(fn)
             cur = db.cursor()
-            cur.execute('SELECT file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name=? AND is_def=1 LIMIT 1;', (usr,))
+            cur.execute('SELECT name_list.name, file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name=? AND is_def=1 LIMIT 1;', (usr,))
             result = cur.fetchone()
             db.close()
             if result:
@@ -161,8 +164,8 @@ class QueryHandlerRef(HandlerBase):
     def __init__(self, dbDir):
         self.mDbDir = dbDir
 
-    def DoQuery(self, name, fileName, lineNo, colNo):
-        usr = self.GetUsr(name, fileName, lineNo, colNo)
+    def DoQuery(self, fileName, lineNo, colNo):
+        usr = self.GetUsr(fileName, lineNo, colNo)
         if usr:
             self.GetAllRefs(usr)
 
@@ -182,13 +185,13 @@ class QueryHandlerRef(HandlerBase):
             row = cur.fetchone()
             if row:
                 usrId = row[0]
-                cur.execute('SELECT file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_FILELIST_REF + ' WHERE ref.usr_id=?;', (usrId,))
+                cur.execute('SELECT name_list.name, file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE ref.usr_id=?;', (usrId,))
                 resultList += cur.fetchall()
             db.close()
         resultList = set(resultList)
         for i in resultList:
-            resultName, resultLine, resultCol = i
-            print resultName + OUTPUT_DELIMITER + str(resultLine) + OUTPUT_DELIMITER + str(resultCol)
+            resultName, resultFileName, resultLine, resultCol = i
+            self.PrintResult(resultName, resultFileName, resultLine, resultCol)
 
 class QueryHandlerOverride(HandlerBase):
     """ Handle Rquest for infomation about reference """
@@ -196,8 +199,8 @@ class QueryHandlerOverride(HandlerBase):
     def __init__(self, dbDir):
         self.mDbDir = dbDir
 
-    def DoQuery(self, name, fileName, lineNo, colNo):
-        usr = self.GetUsr(name, fileName, lineNo, colNo)
+    def DoQuery(self, fileName, lineNo, colNo):
+        usr = self.GetUsr(fileName, lineNo, colNo)
         if usr:
             self.GetAllOverrides(usr)
 
@@ -214,14 +217,14 @@ class QueryHandlerOverride(HandlerBase):
                 overriderUsrList = cur.fetchall()
                 for i in overriderUsrList:
                     overriderUsrId, overriderIsDef = i
-                    overriderRow = cur.execute('SELECT file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_FILELIST_DECL + ' WHERE decl.usr_id=? AND decl.is_def=?;', (overriderUsrId, overriderIsDef))
+                    overriderRow = cur.execute('SELECT name_list.name, file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE decl.usr_id=? AND decl.is_def=?;', (overriderUsrId, overriderIsDef))
                     result = overriderRow.fetchone()
                     resultList += (result,)
             db.close()
         resultList = set(resultList)
         for i in resultList:
-            resultName, resultLine, resultCol = i
-            print resultName + OUTPUT_DELIMITER + str(resultLine) + OUTPUT_DELIMITER + str(resultCol)
+            resultName, resultFileName, resultLine, resultCol = i
+            self.PrintResult(resultName, resultFileName, resultLine, resultCol)
 
 class QueryHandlerOverrideN(HandlerBase):
     """ Handle Rquest for infomation about reference """
@@ -229,8 +232,8 @@ class QueryHandlerOverrideN(HandlerBase):
     def __init__(self, dbDir):
         self.mDbDir = dbDir
 
-    def DoQuery(self, name, fileName, lineNo, colNo):
-        usr = self.GetUsr(name, fileName, lineNo, colNo)
+    def DoQuery(self, fileName, lineNo, colNo):
+        usr = self.GetUsr(fileName, lineNo, colNo)
         if usr:
             self.GetAllOverriders(usr)
 
@@ -243,13 +246,13 @@ class QueryHandlerOverrideN(HandlerBase):
             row = cur.fetchone()
             if row:
                 usrId = row[0]
-                cur.execute('SELECT file_list.name, overriden.line, overriden.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_FILELIST_OVERRIDEN + ' WHERE overriden.usr_id=?;', (usrId,))
+                cur.execute('SELECT name_list.name, file_list.name, overriden.line, overriden.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_OVERRIDEN + ' WHERE overriden.usr_id=?;', (usrId,))
                 resultList += cur.fetchall()
             db.close()
         resultList = set(resultList)
         for i in resultList:
-            resultName, resultLine, resultCol = i
-            print resultName + OUTPUT_DELIMITER + str(resultLine) + OUTPUT_DELIMITER + str(resultCol)
+            resultName, resultFileName, resultLine, resultCol = i
+            self.PrintResult(resultName, resultFileName, resultLine, resultCol)
 
 class QueryHandlerName(HandlerBase):
     """ Handle Rquest for infomation about name """
@@ -283,7 +286,7 @@ class QueryHandlerName(HandlerBase):
                     rows = cur.fetchall()
                     for i in rows:
                         resultFileName, resultLineNo, resultColNo = i
-                        print resultName + OUTPUT_DELIMITER + resultFileName + OUTPUT_DELIMITER + str(resultLineNo) + OUTPUT_DELIMITER + str(resultColNo) + OUTPUT_DELIMITER + cxxtags_util.get_line_from_file(resultFileName, resultLineNo)
+                        self.PrintResult(resultName, resultFileName, resultLineNo, resultColNo)
                     resultList += rows
             db.close()
 
@@ -325,30 +328,25 @@ def main():
         sys.exit(1)
     queryType = sys.argv[1]
     if queryType == 'ref': # get all references
-        name = ""
         dbDir, fileName, lineNo, colNo = parseArg()
         refHandler = QueryHandlerRef(dbDir)
-        refHandler.DoQuery(name, fileName, lineNo, colNo)
+        refHandler.DoQuery(fileName, lineNo, colNo)
     elif queryType == 'decl': # get a declaration or definition
-        name = ""
         dbDir, fileName, lineNo, colNo = parseArg()
         declHandler = QueryHandlerDecl(dbDir)
-        declHandler.DoQuery(name, fileName, lineNo, colNo)
+        declHandler.DoQuery(fileName, lineNo, colNo)
     elif queryType == 'def': # get a definition
-        name = ""
         dbDir, fileName, lineNo, colNo = parseArg()
         defHandler = QueryHandlerDef(dbDir)
-        defHandler.DoQuery(name, fileName, lineNo, colNo)
+        defHandler.DoQuery(fileName, lineNo, colNo)
     elif queryType == 'override': # get override information
-        name = ""
         dbDir, fileName, lineNo, colNo = parseArg()
         handler = QueryHandlerOverride(dbDir)
-        handler.DoQuery(name, fileName, lineNo, colNo)
+        handler.DoQuery(fileName, lineNo, colNo)
     elif queryType == 'overriden': # get overriden items
-        name = ""
         dbDir, fileName, lineNo, colNo = parseArg()
         handler = QueryHandlerOverrideN(dbDir)
-        handler.DoQuery(name, fileName, lineNo, colNo)
+        handler.DoQuery(fileName, lineNo, colNo)
     elif queryType == 'name': # search a name
         dbDir, name, fileName, lineNo, colNo = parseArgName()
         nameHandler = QueryHandlerName(dbDir)

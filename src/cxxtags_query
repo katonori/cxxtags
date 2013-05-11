@@ -2,6 +2,7 @@
 def usage():
     print 'usage: cxxtags_query decl/def/ref database_dir file_name line_no column_no'
     print '     : cxxtags_query         name database_dir item_name [-f file_name] [-l line_no] [-c column_no]'
+    print '     : cxxtags_query         dump database_dir table_name'
 
 import sys
 import sqlite3
@@ -290,8 +291,39 @@ class QueryHandlerName(HandlerBase):
                     resultList += rows
             db.close()
 
+class QueryHandlerTable(HandlerBase):
+    """ Handle Rquest for dumping the contents of a table """
+
+    def __init__(self, dbDir):
+        self.mDbDir = dbDir
+
+    def DoQuery(self, tableName):
+        dbList = self.GetAllDbFiles()
+        tableQueryStr = ""
+        if tableName == "decl":
+            tableQueryStr = cxxtags_util.QUERY_JOINED_TABLE_DECL
+        elif tableName == "ref":
+            tableQueryStr = cxxtags_util.QUERY_JOINED_TABLE_REF
+        else:
+            print "ERROR: not such table: " + tableName
+            return
+        for fn in dbList:
+            db = cxxtags_util.db_connect(fn)
+            cur = db.cursor()
+            cur.execute('SELECT * FROM ' + tableQueryStr)
+            result = cur.fetchall()
+            for i in result:
+                print i
+            db.close()
+
 def parseArg():
     if len(sys.argv) != 6:
+        usage()
+        sys.exit(1)
+    return sys.argv[2:]
+
+def parseArgTable():
+    if len(sys.argv) != 4:
         usage()
         sys.exit(1)
     return sys.argv[2:]
@@ -351,6 +383,10 @@ def main():
         dbDir, name, fileName, lineNo, colNo = parseArgName()
         nameHandler = QueryHandlerName(dbDir)
         nameHandler.DoQuery(name, fileName)
+    elif queryType == 'dump': # dump the contents of a table
+        dbDir, tableName = parseArgTable()
+        handler = QueryHandlerTable(dbDir)
+        handler.DoQuery(tableName)
     else:
         print "ERROR: query type must be ref, decl, def, override, overriden or name"
         sys.exit(1)

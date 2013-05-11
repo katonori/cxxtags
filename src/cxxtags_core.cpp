@@ -47,6 +47,7 @@ static inline std::string getName(const CXCursor& C)
 
 static inline std::string formatName(std::string name)
 {
+
     std::string::size_type pos = name.find("class ");
     if(pos == 0) {
         name = name.substr(6, name.size()-6);
@@ -59,11 +60,11 @@ static inline std::string formatName(std::string name)
 }
 
 // get source file name
-static std::string getCursorSource(CXCursor Cursor) {
+static std::string getCursorSourceLocation(unsigned int& line, unsigned int& column, const CXCursor& Cursor) {
   CXSourceLocation Loc = clang_getCursorLocation(Cursor);
   CXString source;
   CXFile file;
-  clang_getExpansionLocation(Loc, &file, 0, 0, 0);
+  clang_getExpansionLocation(Loc, &file, &line, &column, 0);
   source = clang_getFileName(file);
   CXString filename = clang_getFileName(file);
   if (!clang_getCString(source)) {
@@ -130,7 +131,7 @@ static inline char isCursorTypeAvailable(int val)
 #undef AVAILABLE_TABLE_MAX
 
 // get type information
-void getCXTypeInfo(CXCursor& typeCur, bool isPointer, CXType inType)
+void getCXTypeInfo(CXCursor& typeCur, bool isPointer, const CXType& inType)
 {
     CXType cxType = clang_getCanonicalType(inType);
     if(cxType.kind == CXType_Pointer) {
@@ -139,7 +140,103 @@ void getCXTypeInfo(CXCursor& typeCur, bool isPointer, CXType inType)
     typeCur = clang_getTypeDeclaration(cxType);
 }
 
-static inline void ProcCursor(CXCursor Cursor) {
+// process declarations other than function declarations.
+static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column, int kind, int val)
+{
+    int isDef = clang_isCursorDefinition(Cursor);
+    int nameId = nameIdTbl->GetId(name);
+    int fileId = fileIdTbl->GetId(fileName);
+    int usrId = usrIdTbl->GetId(cUsr);
+    // get type information
+    CXCursor typeCur;
+    bool isPointer = false;
+    getCXTypeInfo(typeCur, isPointer, clang_getCursorType(Cursor));
+    CXString cxTypeUSR = clang_getCursorUSR(typeCur);
+    const char *cTypeUsr = clang_getCString(cxTypeUSR);
+    // insert to database
+    db::insert_decl_value(usrId, nameId, fileId, line, column, kind, val, 0, isDef, cTypeUsr, isPointer);
+    clang_disposeString(cxTypeUSR);
+}
+
+// process declarations
+static inline void procFuncDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column, int kind, int isVirt)
+{
+    int nameId = nameIdTbl->GetId(name);
+    int fileId = fileIdTbl->GetId(fileName);
+    int usrId = usrIdTbl->GetId(cUsr);
+    int isDef = clang_isCursorDefinition(Cursor);
+    // get result type information
+    CXCursor typeCur;
+    bool isPointer = false;
+    getCXTypeInfo(typeCur, isPointer, clang_getCursorResultType(Cursor));
+    CXString cxTypeUSR = clang_getCursorUSR(typeCur);
+    const char *cTypeUsr = clang_getCString(cxTypeUSR);
+    // insert to database
+    db::insert_decl_value(usrId, nameId, fileId, line, column, kind, 0, isVirt, isDef, cTypeUsr, isPointer);
+    clang_disposeString(cxTypeUSR);
+}
+
+// process c++ method declarations
+static inline void procCXXMethodDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column, int kind)
+{
+    int isDef = clang_isCursorDefinition(Cursor);
+    int fileId = fileIdTbl->GetId(fileName);
+    int usrId = usrIdTbl->GetId(cUsr);
+    int isVirt = clang_CXXMethod_isVirtual(Cursor);
+    unsigned int numOverridden = 0;
+    CXCursor *cursorOverridden;
+    clang_getOverriddenCursors(Cursor, 
+            &cursorOverridden,
+            &numOverridden);
+    int nameId = nameIdTbl->GetId(name);
+    for(unsigned int i = 0; i < numOverridden; i++) {
+        CXString cxRefUSR = clang_getCursorUSR(cursorOverridden[i]);
+        const char *cRefUsr = clang_getCString(cxRefUSR);
+        assert(cRefUsr);
+        int refUsrId = usrIdTbl->GetId(cRefUsr);
+        // insert information about overrides to database
+        db::insert_overriden_value(refUsrId, nameId, fileId, line, column, kind, usrId, isDef);
+    }
+    // process as a function declaration is also done. 
+    procFuncDecl(Cursor, cUsr, name, fileName, line, column, kind, isVirt);
+}
+
+// process c++ references.
+static inline void procRef(const CXCursor& Cursor, std::string name, std::string fileName, int line, int column, int kind)
+{
+    const char* cUsr = "";
+    unsigned int ref_line = 0;
+    unsigned int ref_column = 0;
+    int fileId = fileIdTbl->GetId(fileName);
+    CXCursor refCur = clang_getCursorReferenced(Cursor);
+    if (!clang_equalCursors(refCur, clang_getNullCursor())) {
+        // ref_usr
+        CXString cxRefUSR = clang_getCursorUSR(refCur);
+        cUsr = clang_getCString(cxRefUSR);
+        assert(cUsr);
+        // refered location
+        CXFile ref_file;
+        CXSourceLocation ref_loc = clang_getCursorLocation(refCur);
+        clang_getSpellingLocation(ref_loc, &ref_file, &ref_line, &ref_column, 0);
+        int refFid = 0;
+        if(ref_file) {
+            CXString cxRefFileName = clang_getFileName(ref_file);
+            std::string cRefFileName = clang_getCString(cxRefFileName);
+            clang_disposeString(cxRefFileName);
+            if(isInExcludeList(cRefFileName)) {
+                return;
+            }
+            refFid = fileIdTbl->GetId(cRefFileName);
+        }
+        int refUsrId = usrIdTbl->GetId(cUsr);
+        int nameId = nameIdTbl->GetId(name);
+        // insert to database.
+        db::insert_ref_value(refUsrId, nameId, fileId, line, column, kind, refFid, ref_line, ref_column);
+        clang_disposeString(cxRefUSR);
+    }
+}
+
+static inline void procCursor(const CXCursor& Cursor) {
   CXCursorKind kind = Cursor.kind;
   if (!clang_isInvalid(kind)) {
     if(isCursorTypeAvailable(kind) == 0) {
@@ -147,11 +244,13 @@ static inline void ProcCursor(CXCursor Cursor) {
     }
     unsigned int line = 0;
     unsigned int column = 0;
-    unsigned int ref_line = 0;
-    unsigned int ref_column = 0;
-    CXSourceLocation Loc = clang_getCursorLocation(Cursor);
-    clang_getExpansionLocation(Loc, 0, &line, &column, 0);
 
+    // file_name
+    std::string fileName = getCursorSourceLocation(line, column, Cursor);
+    // decide if this Cursor info is to be registered to db.
+    if(isInExcludeList(fileName)) {
+        return;
+    }
     // name
     std::string name = getName(Cursor);
     if(name == "") {
@@ -162,17 +261,7 @@ static inline void ProcCursor(CXCursor Cursor) {
     CXString cxUSR = clang_getCursorUSR(Cursor);
     const char *cUsr = clang_getCString(cxUSR);
     assert(cUsr);
-    // file_name
-    std::string fileName = getCursorSource(Cursor);
-    // decide if this Cursor info is to be registered to db.
-    if(isInExcludeList(fileName)) {
-        return;
-    }
-    int fileId = fileIdTbl->GetId(fileName);
-    int usrId = usrIdTbl->GetId(cUsr);
-    int nameId = -1;
 
-    int isVirt = 0;
     int val = 0;
     switch(kind) {
         case CXCursor_EnumConstantDecl:
@@ -191,58 +280,17 @@ static inline void ProcCursor(CXCursor Cursor) {
         case CXCursor_ParmDecl:
         case CXCursor_FieldDecl:
         case CXCursor_MacroDefinition: {
-            // is_def
-            int isDef = clang_isCursorDefinition(Cursor);
-            nameId = nameIdTbl->GetId(name);
-            // get type information
-            CXCursor typeCur;
-            bool isPointer = false;
-            getCXTypeInfo(typeCur, isPointer, clang_getCursorType(Cursor));
-            CXString cxTypeUSR = clang_getCursorUSR(typeCur);
-            const char *cTypeUsr = clang_getCString(cxTypeUSR);
-            //printf("type: %s\n", cTypeUsr);
-            db::insert_decl_value(usrId, nameId, fileId, line, column, kind, val, 0, isDef, cTypeUsr, isPointer);
-            clang_disposeString(cxTypeUSR);
+            procDecl(Cursor, cUsr, name, fileName, line, column, kind, val);
             break;
         }
         case CXCursor_CXXMethod: {
-            // is_def
-            int isDef = clang_isCursorDefinition(Cursor);
-            isVirt = clang_CXXMethod_isVirtual(Cursor);
-            unsigned int numOverridden = 0;
-            CXCursor *cursorOverridden;
-            clang_getOverriddenCursors(Cursor, 
-                    &cursorOverridden,
-                    &numOverridden);
-            nameId = nameIdTbl->GetId(name);
-            for(unsigned int i = 0; i < numOverridden; i++) {
-                // usr
-                CXString cxRefUSR = clang_getCursorUSR(cursorOverridden[i]);
-                const char *cRefUsr = clang_getCString(cxRefUSR);
-                assert(cRefUsr);
-                int refUsrId = usrIdTbl->GetId(cRefUsr);
-                db::insert_overriden_value(refUsrId, nameId, fileId, line, column, kind, usrId, isDef);
-            }
-            // fall through
+            procCXXMethodDecl(Cursor, cUsr, name, fileName, line, column, kind);
+            break;
         }
         case CXCursor_FunctionDecl:
         case CXCursor_Constructor:
         case CXCursor_Destructor: {
-            // is_def
-            if(nameId == -1) {
-                nameId = nameIdTbl->GetId(name);
-            }
-            int isDef = clang_isCursorDefinition(Cursor);
-            // get result type information
-            CXCursor typeCur;
-            bool isPointer = false;
-            //printf("result type:00: %d\n", clang_getCursorResultType(Cursor).kind);
-            getCXTypeInfo(typeCur, isPointer, clang_getCursorResultType(Cursor));
-            CXString cxTypeUSR = clang_getCursorUSR(typeCur);
-            const char *cTypeUsr = clang_getCString(cxTypeUSR);
-            //printf("result type: %s\n", cTypeUsr);
-            db::insert_decl_value(usrId, nameId, fileId, line, column, kind, 0, isVirt, isDef, cTypeUsr, isPointer);
-            clang_disposeString(cxTypeUSR);
+            procFuncDecl(Cursor, cUsr, name, fileName, line, column, kind, 0);
             break;
         }
         case CXCursor_DeclRefExpr:
@@ -254,33 +302,7 @@ static inline void ProcCursor(CXCursor Cursor) {
         case CXCursor_TemplateRef:
         case CXCursor_OverloadedDeclRef:
         case CXCursor_MacroExpansion: {
-            cUsr = "";
-            std::string refFileName = "";
-            CXCursor refCur = clang_getCursorReferenced(Cursor);
-            if (!clang_equalCursors(refCur, clang_getNullCursor())) {
-                // ref_usr
-                CXString cxRefUSR = clang_getCursorUSR(refCur);
-                cUsr = clang_getCString(cxRefUSR);
-                assert(cUsr);
-                // ref location
-                CXFile ref_file;
-                CXSourceLocation ref_loc = clang_getCursorLocation(refCur);
-                clang_getSpellingLocation(ref_loc, &ref_file, &ref_line, &ref_column, 0);
-                int refFid = 0;
-                if(ref_file) {
-                    CXString cxRefFileName = clang_getFileName(ref_file);
-                    std::string cRefFileName = clang_getCString(cxRefFileName);
-                    clang_disposeString(cxRefFileName);
-                    if(isInExcludeList(cRefFileName)) {
-                        break;
-                    }
-                    refFid = fileIdTbl->GetId(cRefFileName);
-                }
-                int refUsrId = usrIdTbl->GetId(cUsr);
-                nameId = nameIdTbl->GetId(name);
-                db::insert_ref_value(refUsrId, nameId, fileId, line, column, kind, refFid, ref_line, ref_column);
-                clang_disposeString(cxRefUSR);
-            }
+            procRef(Cursor, name, fileName, line, column, kind);
             break;
         }
         // TODO:
@@ -301,7 +323,7 @@ static inline void ProcCursor(CXCursor Cursor) {
 
 typedef void (*PostVisitTU)(CXTranslationUnit);
 
-void PrintDiagnostic(CXDiagnostic Diagnostic) {
+void PrintDiagnostic(const CXDiagnostic& Diagnostic) {
   CXString Msg;
   unsigned display_opts = CXDiagnostic_DisplaySourceLocation
     | CXDiagnostic_DisplayColumn | CXDiagnostic_DisplaySourceRanges
@@ -315,7 +337,7 @@ void PrintDiagnostic(CXDiagnostic Diagnostic) {
   clang_disposeString(Msg);
 }
 
-void PrintDiagnosticSet(CXDiagnosticSet Set) {
+void PrintDiagnosticSet(const CXDiagnosticSet& Set) {
   int i = 0, n = clang_getNumDiagnosticsInSet(Set);
   for ( ; i != n ; ++i) {
     CXDiagnostic Diag = clang_getDiagnosticInSet(Set, i);
@@ -343,10 +365,10 @@ typedef struct {
   CommentXMLValidationData ValidationData;
 } VisitorData;
 
-enum CXChildVisitResult FilteredPrintingVisitor(CXCursor Cursor,
+enum CXChildVisitResult printingVisitor(CXCursor Cursor,
                                                 CXCursor Parent,
                                                 CXClientData ClientData) {
-  ProcCursor(Cursor);
+  procCursor(Cursor);
   return CXChildVisit_Recurse;
 }
 
@@ -483,7 +505,7 @@ int indexSource(int argc, const char **argv) {
         argc-=2;
         argv+=2;
     }
-    CXCursorVisitor I = FilteredPrintingVisitor;
+    CXCursorVisitor I = printingVisitor;
     PostVisitTU postVisit = 0;
     if (I)
       return perform_test_load_source(argc - 1, argv + 1, I,

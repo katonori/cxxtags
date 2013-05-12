@@ -8,7 +8,7 @@ MERGER_OUT = db
 DB_FILES = ns0.db ns1.db main.db
 
 $(MERGER_OUT): $(DB_FILES)
-	$(MERGER) $@ $^
+	$(MERGER) add $@ $^
 
 test: $(MERGER_OUT)
 	./test.py $<

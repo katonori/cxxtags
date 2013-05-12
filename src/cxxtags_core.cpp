@@ -8,9 +8,11 @@
 #include <string.h>
 #include <assert.h>
 #include <time.h>
+#include <unistd.h>
 #include "db.h"
 
 namespace cxxtagsIndexer {
+int gIsPartial = 0;
 /******************************************************************************/
 /* Utility functions.                                                         */
 /******************************************************************************/
@@ -21,11 +23,12 @@ static inline unsigned getDefaultParsingOptions() {
   return options;
 }
 
-std::vector<std::string > excludeList;
+std::vector<std::string > gExcludeList;
+std::string gExcludeListStr;
 static inline int isInExcludeList(std::string fileName)
 {
-    std::vector<std::string >::iterator itrEnd = excludeList.end();
-    for(std::vector<std::string >::iterator itr = excludeList.begin();
+    std::vector<std::string >::iterator itrEnd = gExcludeList.end();
+    for(std::vector<std::string >::iterator itr = gExcludeList.begin();
         itr != itrEnd;
         itr++) {
         if(fileName.find(*itr) == 0) {
@@ -132,7 +135,7 @@ static inline char isCursorTypeAvailable(int val)
 #undef AVAILABLE_TABLE_MAX
 
 // get type information
-void getCXTypeInfo(CXCursor& typeCur, int& typeUsrId, int& typeKind, int& isPointer, const CXType& inType)
+static void getCXTypeInfo(CXCursor& typeCur, int& typeUsrId, int& typeKind, int& isPointer, const CXType& inType)
 {
     CXType cxType = clang_getCanonicalType(inType);
     if(cxType.kind == CXType_Pointer) {
@@ -146,10 +149,29 @@ void getCXTypeInfo(CXCursor& typeCur, int& typeUsrId, int& typeKind, int& isPoin
     clang_disposeString(cxTypeUSR);
 }
 
+static int canSkip(int isDef, const char* cUsr)
+{
+    if(gIsPartial) {
+        if(strncmp(cUsr, "c:macro", 7) == 0) { // macro is declaration but should be processed
+            return 0;
+        }
+        if(isDef == 0) { // is not definition
+            return 1;
+        }
+        if(strncmp(cUsr, "c:@", 3) != 0) { // is not global symbol 
+            return 1;
+        }
+    }
+    return 0;
+}
+
 // process declarations other than function declarations.
 static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column, int kind, int val)
 {
     int isDef = clang_isCursorDefinition(Cursor);
+    if(canSkip(isDef, cUsr)) {
+        return ;
+    }
     int nameId = nameIdTbl->GetId(name);
     int fileId = fileIdTbl->GetId(fileName);
     int usrId = usrIdTbl->GetId(cUsr);
@@ -166,10 +188,13 @@ static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::strin
 // process declarations
 static inline void procFuncDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column, int kind, int isVirt)
 {
+    int isDef = clang_isCursorDefinition(Cursor);
+    if(canSkip(isDef, cUsr)) {
+        return ;
+    }
     int nameId = nameIdTbl->GetId(name);
     int fileId = fileIdTbl->GetId(fileName);
     int usrId = usrIdTbl->GetId(cUsr);
-    int isDef = clang_isCursorDefinition(Cursor);
     // get result type information
     CXCursor typeCur;
     int typeUsrId = 0;
@@ -184,6 +209,9 @@ static inline void procFuncDecl(const CXCursor& Cursor, const char* cUsr, std::s
 static inline void procCXXMethodDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column, int kind)
 {
     int isDef = clang_isCursorDefinition(Cursor);
+    if(canSkip(isDef, cUsr)) {
+        return ;
+    }
     int fileId = fileIdTbl->GetId(fileName);
     int usrId = usrIdTbl->GetId(cUsr);
     int isVirt = clang_CXXMethod_isVirtual(Cursor);
@@ -218,6 +246,11 @@ static inline void procRef(const CXCursor& Cursor, std::string name, std::string
         CXString cxRefUSR = clang_getCursorUSR(refCur);
         cUsr = clang_getCString(cxRefUSR);
         assert(cUsr);
+        if(gIsPartial) {
+            if(strncmp(cUsr, "c:@", 3) != 0) {
+                return ;
+            }
+        }
         // refered location
         CXFile ref_file;
         CXSourceLocation ref_loc = clang_getCursorLocation(refCur);
@@ -327,7 +360,7 @@ static inline void procCursor(const CXCursor& Cursor) {
 
 typedef void (*PostVisitTU)(CXTranslationUnit);
 
-void PrintDiagnostic(const CXDiagnostic& Diagnostic) {
+static void PrintDiagnostic(const CXDiagnostic& Diagnostic) {
   CXString Msg;
   unsigned display_opts = CXDiagnostic_DisplaySourceLocation
     | CXDiagnostic_DisplayColumn | CXDiagnostic_DisplaySourceRanges
@@ -341,7 +374,7 @@ void PrintDiagnostic(const CXDiagnostic& Diagnostic) {
   clang_disposeString(Msg);
 }
 
-void PrintDiagnosticSet(const CXDiagnosticSet& Set) {
+static void PrintDiagnosticSet(const CXDiagnosticSet& Set) {
   int i = 0, n = clang_getNumDiagnosticsInSet(Set);
   for ( ; i != n ; ++i) {
     CXDiagnostic Diag = clang_getDiagnosticInSet(Set, i);
@@ -352,7 +385,7 @@ void PrintDiagnosticSet(const CXDiagnosticSet& Set) {
   }  
 }
 
-void PrintDiagnostics(CXTranslationUnit TU) {
+static void PrintDiagnostics(CXTranslationUnit TU) {
   CXDiagnosticSet TUSet = clang_getDiagnosticSetFromTU(TU);
   PrintDiagnosticSet(TUSet);
   clang_disposeDiagnosticSet(TUSet);
@@ -403,19 +436,18 @@ static int perform_test_load(CXIndex Idx, CXTranslationUnit TU,
   return 0;
 }
 
-int perform_test_load_source(int argc, const char **argv,
+static int perform_test_load_source(int argc, const char **argv,
                              CXCursorVisitor Visitor,
                              PostVisitTU PV) {
   CXIndex Idx;
   CXTranslationUnit TU;
   const char *CommentSchemaFile = NULL;
-  struct CXUnsavedFile *unsaved_files = 0;
-  int num_unsaved_files = 0;
   int result;
-  const char *out_file_name = argv[0];
-  const char *in_file_name = argv[1];
-  argv++;
-  argc--;
+  const char *cur_dir = argv[0];
+  const char *out_file_name = argv[1];
+  const char *in_file_name = argv[2];
+  argv+=2;
+  argc-=2;
 
   // Set which cursor types are to be tagged.
   setCursorTypeAvailable(CXCursor_EnumConstantDecl);
@@ -448,15 +480,15 @@ int perform_test_load_source(int argc, const char **argv,
   usrIdTbl = new IdTbl();
   nameIdTbl = new IdTbl();
 
-  db::init(out_file_name, in_file_name);
+  db::init(out_file_name, in_file_name, gExcludeListStr, gIsPartial, cur_dir, argc-1, argv+1);
   
   Idx = clang_createIndex(/* excludeDeclsFromPCH */0,
                           /* displayDiagnosics=*/0);
 
   TU = clang_parseTranslationUnit(Idx, 0,
-                                  argv + num_unsaved_files,
-                                  argc - num_unsaved_files,
-                                  unsaved_files, num_unsaved_files, 
+                                  argv,
+                                  argc,
+                                  0, 0, 
                                   getDefaultParsingOptions());
   if (!TU) {
     fprintf(stderr, "Unable to load translation unit!\n");
@@ -479,7 +511,7 @@ FUNC_END:
 /* Command line processing.                                                   */
 /******************************************************************************/
 static void print_usage(void) {
-  fprintf(stderr, "usage: cxxtags_core [-e excludeList] out_file in_file {<clang_args>}*\n");
+  fprintf(stderr, "usage: cxxtags_core [-p] [-e excludeList] cur_dir out_file in_file {<clang_args>}*\n");
 }
 
 static std::vector<std::string > splitString(std::string str)
@@ -501,22 +533,32 @@ static std::vector<std::string > splitString(std::string str)
     return list;
 }
 
-int indexSource(int argc, const char **argv) {
-  //clang_enableStackTraces();
-  if (argc >= 3) {
-    if(0 == strncmp(argv[1], "-e", 2)) {
-        excludeList = splitString(argv[2]);
-        argc-=2;
-        argv+=2;
+static int indexSource(int argc, const char **argv) {
+    //clang_enableStackTraces();
+    if (argc >= 3) {
+        int result;
+        while((result = getopt(argc, (char*const*)argv, "pe:")) !=- 1){
+            switch(result){
+            case 'e':
+                gExcludeListStr = optarg;
+                gExcludeList = splitString(gExcludeListStr);
+                argc-=2;
+            break;
+            case 'p':
+                gIsPartial = 1;
+                argc--;
+            break;
+            }
+        }
+        CXCursorVisitor I = printingVisitor;
+        PostVisitTU postVisit = 0;
+        if (I) {
+            return perform_test_load_source(argc - 1, &argv[optind], I,
+                    postVisit);
+        }
     }
-    CXCursorVisitor I = printingVisitor;
-    PostVisitTU postVisit = 0;
-    if (I)
-      return perform_test_load_source(argc - 1, argv + 1, I,
-                                      postVisit);
-  }
-  print_usage();
-  return 1;
+    print_usage();
+    return 1;
 }
 
 };

@@ -9,7 +9,7 @@ DB_FILES = inhe.db
 vpath %.cpp ./:../inheritance
 
 $(MERGER_OUT): $(DB_FILES)
-	$(MERGER) $@ $^
+	$(MERGER) add $@ $^
 test: clean $(MERGER_OUT)
 	./test.py $(MERGER_OUT)
 html: $(MERGER_OUT)

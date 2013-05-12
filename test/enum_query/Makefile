@@ -8,7 +8,7 @@ DB_FILES = main.db
 vpath %.cpp ./:../enum
 
 $(MERGER_OUT): $(DB_FILES)
-	$(MERGER) $@ $^
+	$(MERGER) add $@ $^
 test: clean $(MERGER_OUT)
 	./test.py $(MERGER_OUT)
 html: $(MERGER_OUT)

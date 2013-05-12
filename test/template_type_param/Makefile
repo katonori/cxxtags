@@ -11,7 +11,7 @@ test: $(MERGER_OUT)
 main.cpp.db:
 	$(CXXTAGS) main.cpp -o $@
 $(MERGER_OUT): $(DB_FILES)
-	$(MERGER) $@ $^
+	$(MERGER) add $@ $^
 html: $(MERGER_OUT)
 	$(DUMPER) $<
 clean:

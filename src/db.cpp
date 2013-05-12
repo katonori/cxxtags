@@ -11,17 +11,31 @@ static DBMgrDecl* declMgr;
 static DBMgrOverriden* overridenMgr;
 static DBMgrRef* refMgr;
 
-void init(std::string db_file_name, std::string src_file_name)
+void init(std::string db_file_name, std::string src_file_name, std::string excludeList, int isPartial, const char* curDir, int argc, const char** argv)
 {
     char *err=NULL;
     if(sqlite3_open(db_file_name.c_str(), &db ) != SQLITE_OK) {
         printf("ERROR: failt to open db");
         exit(1);
     }
+
+    // format build options
+    std::string build_opt = "";
+    for(int i = 0; i < argc; i++) {
+        build_opt += argv[i];
+        build_opt += " ";
+    }
+    if(!build_opt.empty()) {
+        build_opt = build_opt.substr(0, build_opt.length()-1);
+    }
+
     // begin transaction
     sqlite3_exec(db, "BEGIN EXCLUSIVE;", NULL, NULL, NULL);
+    //
     // db_info
-    sqlite3_exec(db, "CREATE TABLE db_info(db_format INTEGER, src_file_name TEXT);", NULL, NULL, &err);
+    // contained_part| 0:full, 1:partial
+    //
+    sqlite3_exec(db, "CREATE TABLE db_info(db_format INTEGER, src_file_name TEXT, exclude_list TEXT, contained_part INTEGER, build_dir TEXT, build_options);", NULL, NULL, &err);
     // file_list
     sqlite3_exec(db, "CREATE TABLE file_list(id INTEGER, name TEXT);", NULL, NULL, &err);
     // usr_list
@@ -35,8 +49,10 @@ void init(std::string db_file_name, std::string src_file_name)
     // overriden
     sqlite3_exec(db, "CREATE TABLE overriden(usr_id INTEGER, name_id INTEGER, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, overrider_usr_id INTEGER, is_def INTEGER);", NULL, NULL, &err);
 
+    // register databasee information
     std::ostringstream os;
-    os << "INSERT INTO db_info VALUES(" << DB_VER << ", '" << src_file_name << "');";
+    int contained_part = isPartial ? CONTAINED_PART_PARTIAL : CONTAINED_PART_FULL;
+    os << "INSERT INTO db_info VALUES(" << DB_VER << ", '" << src_file_name << "','" << excludeList << "'," << contained_part << ", '" << curDir << "','" << build_opt << "');";
     sqlite3_exec(db, os.str().c_str(), NULL, NULL, &err);
 
     // instantiate

@@ -5,16 +5,20 @@ import os
 #import time
 import shutil
 import sqlite3
+import cxxtags_util
 
-DB_VER = 5
+DB_VER = 6
+CONTAINED_PART_FULL = 0
+CONTAINED_PART_PARTIAL = 1
 
-def usage():
-    print "usage: cxxtags_merger output_dir input_file [...]"
+def print_usage():
+    print "usage: cxxtags_manager add     database_dir input_files [...]"
+    print "     :                 rebuild database_dir src_file_name"
 
-########## main ###########
-def main():
-    output_dir = sys.argv[1]
-    input_files = sys.argv[2:]
+########## add ###########
+def add(funcArgv):
+    output_dir = funcArgv[0]
+    input_files = funcArgv[1:]
     file_index = output_dir + "/file_index.db"
     # make output dir
     if not os.path.exists(output_dir):
@@ -39,6 +43,7 @@ def main():
             cur_idx.execute("INSERT INTO db_info VALUES('%d');"%(DB_VER))
     except sqlite3.Error, e:
         print "ERROR: file_index: ", e.args[0]
+        db_idx.close()
         sys.exit(1)
 
     for fn in input_files:
@@ -88,12 +93,118 @@ def main():
             cur_idx.executemany("INSERT INTO file_index VALUES(?, ?, ?);", value_list)
             db_in.close()
         except sqlite3.Error, e:
-            print fn
             print "ERROR: input db: %s:"%(fn), e.args[0]
             sys.exit(1)
 
     cur_idx.execute("CREATE INDEX IF NOT EXISTS file_name_idx ON file_index(file_name);")
     db_idx.commit()
     db_idx.close()
-##########
+
+########## rebuild ###########
+class rebuildHandler():
+    mDatabaseDir = "" 
+    mInSrcFileName = "" 
+    mActualSrcFileName = "" 
+    mFileIndex = ""
+    mDbFile = ""
+
+    def ParseArg(self, args):
+        self.mDatabaseDir = args[0]
+        if not os.path.exists(self.mDatabaseDir):
+            print "ERROR: database dir \"%s\" does not exists."%(self.mDatabaseDir)
+            sys.exit(1) 
+        self.mInSrcFileName = args[1]
+        self.mFileIndex = self.mDatabaseDir + "/file_index.db"
+        #print "ParseArg: %s, %s"%(self.mInSrcFileName, self.mFileIndex)
+
+    def GetDbFileFromSrcName(self):
+        try:
+            db_idx = sqlite3.connect(self.mFileIndex, isolation_level='EXCLUSIVE')
+            cur_idx = db_idx.cursor()
+            cur_idx.execute("SELECT file_name, db_file FROM file_index WHERE file_name LIKE ?", ('%'+self.mInSrcFileName,))
+            dbFileName = ""
+            lastSrcFileName = ""
+            for i in cur_idx.fetchall():
+                resFileName, resDbFile = i
+                if cxxtags_util.pathCmp(resFileName, self.mInSrcFileName):
+                    if lastSrcFileName != "" and lastSrcFileName != resFileName:
+                        print "ERROR: file name is ambiguous. specify as absolute path."
+                        sys.exit(1)
+                    lastSrcFileName = resFileName
+                    dbFileName = self.mDatabaseDir + "/" + resDbFile
+            self.mActualSrcFileName = lastSrcFileName 
+            db_idx.close()
+            #print "dbFileName: %s"%(dbFileName)
+            self.mDbFile = dbFileName
+            return self.mDbFile
+        except sqlite3.Error, e:
+            print "ERROR: get file name: ", e.args[0]
+            db_idx.close()
+            sys.exit(1)
+
+            import os
+            import tempfile
+
+    def GetBuildOption(self):
+        try:
+            db = sqlite3.connect(self.mDbFile, isolation_level='EXCLUSIVE')
+            cur = db.cursor()
+            cur.execute("SELECT exclude_list, contained_part, build_dir, build_options FROM db_info")
+            row = cur.fetchone()
+            if row:
+                db.close()
+                return row
+            db.close()
+            return None
+        except sqlite3.Error, e:
+            print "ERROR: get build option: " + self.mDbFile + ": " + e.args[0]
+            db.close()
+            sys.exit(1)
+
+    def DoRebuild(self, excludeList, buildDir, buildOptions):
+        tmpfile = "/tmp/cxxtags.tmp.o." + str(os.getpid())
+        if excludeList != "":
+            excludeList = "-e " + excludeList
+        cmd = "cd " + buildDir + " && cxxtags " + excludeList + " " + self.mActualSrcFileName + " -o " + tmpfile + " " + buildOptions
+        #print cmd
+        rv = -1
+        try:
+            rv = os.system(cmd)
+        finally:
+            if rv != 0:
+                print "ERROR: build failed: " + cmd
+                shutil.remove(tmpfile)
+                sys.exit(1)
+        shutil.move(tmpfile, self.mDbFile)
+        return 0
+
+    def Run(self, args):
+        self.ParseArg(args)
+
+        if "" == self.GetDbFileFromSrcName():
+            print "ERROR: counld not find database file."
+            sys.exit(1)
+        res = self.GetBuildOption()
+        if res:
+            excludeList, containedPart, buildDir, buildOptions = res
+            if containedPart == CONTAINED_PART_FULL:
+                print "INFO: database file already has all information."
+                return 
+            self.DoRebuild(excludeList, buildDir, buildOptions)
+
+########## main ###########
+def main():
+    if len(sys.argv) <= 2:
+        print_usage()
+        sys.exit(1)
+    mode = sys.argv[1]
+    if mode == "add":
+        add(sys.argv[2:])
+    elif mode == "rebuild":
+        handler = rebuildHandler()
+        handler.Run(sys.argv[2:])
+    else:
+        print_usage()
+        sys.exit(1)
+######
 main()

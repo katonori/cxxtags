@@ -8,7 +8,7 @@ MERGER_OUT = db
 DB_FILES = inhe.db
 
 $(MERGER_OUT): $(DB_FILES)
-	$(MERGER) $@ $^
+	$(MERGER) add $@ $^
 test: $(MERGER_OUT)
 	./test.py $(MERGER_OUT)
 html: $(MERGER_OUT)

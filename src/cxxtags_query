@@ -394,8 +394,12 @@ class QueryHandlerTable(HandlerBase):
     def DoQuery(self):
         dbList = self.GetAllDbFiles()
         tableQueryStr = ""
+        tableQueryCondStr = ""
         if self.mTableName == "decl":
             tableQueryStr = cxxtags_util.QUERY_JOINED_TABLE_DECL
+        elif self.mTableName == "def":
+            tableQueryStr = cxxtags_util.QUERY_JOINED_TABLE_DECL
+            tableQueryCondStr = "WHERE decl.is_def=1"
         elif self.mTableName == "ref":
             tableQueryStr = cxxtags_util.QUERY_JOINED_TABLE_REF
         else:
@@ -404,7 +408,7 @@ class QueryHandlerTable(HandlerBase):
         for fn in dbList:
             db = cxxtags_util.db_connect(fn)
             cur = db.cursor()
-            cur.execute('SELECT * FROM ' + tableQueryStr)
+            cur.execute('SELECT * FROM ' + tableQueryStr + ' ' + tableQueryCondStr)
             result = cur.fetchall()
             for i in result:
                 print i

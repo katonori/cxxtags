@@ -120,7 +120,6 @@ class rebuildHandler():
                 print "ERROR: no such option: " + opt
                 print_usage()
                 sys.exit(1)
-            print "ARG: " + args[0]
         self.mDatabaseDir = args[0]
         if not os.path.exists(self.mDatabaseDir):
             print "ERROR: database dir \"%s\" does not exists."%(self.mDatabaseDir)

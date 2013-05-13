@@ -9,6 +9,7 @@
 #include <assert.h>
 #include <time.h>
 #include <unistd.h>
+#include <getopt.h>
 #include "db.h"
 
 namespace cxxtagsIndexer {
@@ -446,11 +447,9 @@ static int perform_test_load_source(int argc, const char **argv,
   const char *cur_dir = argv[0];
   const char *out_file_name = argv[1];
   const char *in_file_name = argv[2];
-  // argv[3] is "--"
-  // reorder args to pass clang
-  argv[3] = argv[2];
-  argv+=3;
-  argc-=3;
+  // increment argv to pass clang
+  argv+=2;
+  argc-=2;
 
   // Set which cursor types are to be tagged.
   setCursorTypeAvailable(CXCursor_EnumConstantDecl);
@@ -538,32 +537,29 @@ static std::vector<std::string > splitString(std::string str)
 
 static int indexSource(int argc, const char **argv) {
     //clang_enableStackTraces();
+    argv++; // increment for command name
     argc--; // decrement for command name
     if (argc >= 3) {
-        int c = 0;
-        while((c = getopt(argc, (char*const*)argv, "e:p")) != -1) {
-            switch (c) {
-                case 'e':
-                    gExcludeListStr = optarg;
-                    gExcludeList = splitString(gExcludeListStr);
-                    argc-=2;
-                    break;
-                case 'p':
-                    gIsPartial = 1;
-                    argc--;
-                    break;
-                case '?':
-                    printf("ERROR: unknown option: -%c", optopt);
-                    return 1;
-                default:
-                    assert(0);
+        while(argc) {
+            if(strncmp(*argv, "-e", 2) == 0) { 
+                gExcludeListStr = argv[1];
+                gExcludeList = splitString(gExcludeListStr);
+                argv+=2;
+                argc-=2;
+            }
+            else if(strncmp(*argv, "-p", 2) == 0) {
+                gIsPartial = 1;
+                argv++;
+                argc--;
+            }
+            else {
+                break;
             }
         }
         CXCursorVisitor I = printingVisitor;
         PostVisitTU postVisit = 0;
         if (I) {
-            return perform_test_load_source(argc, &argv[optind], I,
-                    postVisit);
+            return perform_test_load_source(argc, argv, I, postVisit);
         }
     }
     print_usage();

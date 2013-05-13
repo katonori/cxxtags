@@ -95,8 +95,8 @@ def main():
         gExcludeList = "-e " + gExcludeList
     if os.path.exists(gOutFile):
         os.remove(gOutFile)
-    cmd = "%s/cxxtags_core %s %s %s %s %s -- "%(exe_dir, gOptPartial, gExcludeList, cur_dir, gOutFile, in_file)+string.join(argv)
-    print(cmd)
+    cmd = "%s/cxxtags_core %s %s %s %s %s "%(exe_dir, gOptPartial, gExcludeList, cur_dir, gOutFile, in_file)+string.join(argv)
+    #print(cmd)
     #gTimeList.append(time.time())
     rv = os.system(cmd)
     if rv != 0:

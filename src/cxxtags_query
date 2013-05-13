@@ -402,6 +402,8 @@ class QueryHandlerTable(HandlerBase):
             tableQueryCondStr = "WHERE decl.is_def=1"
         elif self.mTableName == "ref":
             tableQueryStr = cxxtags_util.QUERY_JOINED_TABLE_REF
+        elif self.mTableName == "base_class":
+            tableQueryStr = cxxtags_util.QUERY_JOINED_TABLE_BASE_CLASS
         else:
             print "ERROR: not such table: " + self.mTableName
             return

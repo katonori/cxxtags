@@ -7,9 +7,10 @@
 
 namespace db {
 static sqlite3 *db;
+static DBMgrRef* refMgr;
 static DBMgrDecl* declMgr;
 static DBMgrOverriden* overridenMgr;
-static DBMgrRef* refMgr;
+static DBMgrBaseClass* baseClassMgr;
 
 void init(std::string db_file_name, std::string src_file_name, std::string excludeList, int isPartial, const char* curDir, int argc, const char** argv)
 {
@@ -33,6 +34,7 @@ void init(std::string db_file_name, std::string src_file_name, std::string exclu
     sqlite3_exec(db, "BEGIN EXCLUSIVE;", NULL, NULL, NULL);
     //
     // db_info
+    //
     // contained_part| 0:full, 1:partial
     //
     sqlite3_exec(db, "CREATE TABLE db_info(db_format INTEGER, src_file_name TEXT, exclude_list TEXT, contained_part INTEGER, build_dir TEXT, build_options);", NULL, NULL, &err);
@@ -48,6 +50,12 @@ void init(std::string db_file_name, std::string src_file_name, std::string exclu
     sqlite3_exec(db, "CREATE TABLE decl(usr_id INTEGER, name_id INTEGER, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, val INTEGER, is_virtual INTEGER, is_def INTEGER, type_usr_id INTEGER, type_kind INTEGER, is_pointer);", NULL, NULL, &err);
     // overriden
     sqlite3_exec(db, "CREATE TABLE overriden(usr_id INTEGER, name_id INTEGER, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, overrider_usr_id INTEGER, is_def INTEGER);", NULL, NULL, &err);
+    //
+    // base class info
+    //
+    // accessibility| 0: invalid, 1: public, 2: protected, 3: private
+    //
+    sqlite3_exec(db, "CREATE TABLE base_class(class_usr_id INTEGER, base_class_usr_id INTEGER, line INTEGER, col INTEGER, accessibility INTEGER);", NULL, NULL, &err);
 
     // register databasee information
     std::ostringstream os;
@@ -59,11 +67,13 @@ void init(std::string db_file_name, std::string src_file_name, std::string exclu
     refMgr = new(DBMgrRef);
     declMgr = new(DBMgrDecl);
     overridenMgr = new(DBMgrOverriden);
+    baseClassMgr = new(DBMgrBaseClass);
 
     // prepare queries
     refMgr->InitDb(db);
     declMgr->InitDb(db);
     overridenMgr->InitDb(db);
+    baseClassMgr->InitDb(db);
 }
 
 static void tryStep(sqlite3_stmt *stmt)
@@ -90,6 +100,12 @@ void insert_decl_value(int usrId, int nameId, int fileId, int line, int col, int
 void insert_overriden_value(int usrId, int nameId, int fileId, int line, int col, int entityKind, int usrIdOverrider, int isDef)
 {
     overridenMgr->InsertValue(usrId, nameId, fileId, line, col, entityKind, usrIdOverrider, isDef);
+    return ;
+}
+
+void insert_base_class_value(int classUsrId, int baseClassUsrId, int line, int col, int accessibility)
+{
+    baseClassMgr->InsertValue(classUsrId, baseClassUsrId, line, col, accessibility);
     return ;
 }
 
@@ -127,9 +143,11 @@ void fin(const std::map<std::string, int >& fileMap, const std::map<std::string,
     refMgr->FinDb(db);
     declMgr->FinDb(db);
     overridenMgr->FinDb(db);
+    baseClassMgr->FinDb(db);
     delete refMgr;
     delete declMgr;
     delete overridenMgr;
+    delete baseClassMgr;
 
     // create indices
     sqlite3_exec(db, "CREATE INDEX file_list_index0 ON file_list(id);", NULL, NULL, NULL);
@@ -218,4 +236,15 @@ void DBMgrOverriden::InsertValue(int usrId, int nameId, int fid, int line, int c
     tryStep(mSqlStmt);
 }
 
+// DBMgrBaseClass
+void DBMgrBaseClass::InsertValue(int classUsrId, int baseClassUsrId, int line, int col, int accessibility)
+{
+    sqlite3_reset(mSqlStmt);
+    sqlite3_bind_int(mSqlStmt, 1, classUsrId);
+    sqlite3_bind_int(mSqlStmt, 2, baseClassUsrId);
+    sqlite3_bind_int(mSqlStmt, 3, line);
+    sqlite3_bind_int(mSqlStmt, 4, col);
+    sqlite3_bind_int(mSqlStmt, 5, accessibility);
+    tryStep(mSqlStmt);
+}
 };

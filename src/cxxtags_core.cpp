@@ -13,7 +13,8 @@
 #include "db.h"
 
 namespace cxxtagsIndexer {
-int gIsPartial = 0;
+static int gIsPartial = 0;
+static std::string gLastClassUsr = "";
 /******************************************************************************/
 /* Utility functions.                                                         */
 /******************************************************************************/
@@ -24,8 +25,8 @@ static inline unsigned getDefaultParsingOptions() {
   return options;
 }
 
-std::vector<std::string > gExcludeList;
-std::string gExcludeListStr;
+static std::vector<std::string > gExcludeList;
+static std::string gExcludeListStr;
 static inline int isInExcludeList(std::string fileName)
 {
     std::vector<std::string >::iterator itrEnd = gExcludeList.end();
@@ -116,9 +117,9 @@ public:
         return mMap;
     }
 };
-class IdTbl *fileIdTbl;
-class IdTbl *usrIdTbl;
-class IdTbl *nameIdTbl;
+static IdTbl *fileIdTbl;
+static IdTbl *usrIdTbl;
+static IdTbl *nameIdTbl;
 
 // Table to keep which cursor types are to be tagged.
 #define AVAILABLE_TABLE_MAX 1024
@@ -230,6 +231,7 @@ static inline void procCXXMethodDecl(const CXCursor& Cursor, const char* cUsr, s
         // insert information about overrides to database
         db::insert_overriden_value(refUsrId, nameId, fileId, line, column, kind, usrId, isDef);
     }
+    clang_disposeOverriddenCursors(cursorOverridden);
     // process as a function declaration is also done. 
     procFuncDecl(Cursor, cUsr, name, fileName, line, column, kind, isVirt);
 }
@@ -274,6 +276,25 @@ static inline void procRef(const CXCursor& Cursor, std::string name, std::string
     }
 }
 
+// process c++ base class informations
+static inline void procCXXBaseClassInfo(const CXCursor& Cursor, std::string name, std::string fileName, int line, int column, int kind)
+{
+    // USR of class
+    CXString cxBaseUsr = clang_getCursorUSR(Cursor);
+    const char* cBaseUsr = clang_getCString(cxBaseUsr);
+    // USR of base class
+    CXCursor refCur = clang_getCursorReferenced(Cursor);
+    cxBaseUsr = clang_getCursorUSR(refCur);
+    cBaseUsr = clang_getCString(cxBaseUsr);
+    int accessibility = clang_getCXXAccessSpecifier(Cursor);
+    // convert to ID
+    int classUsrId = usrIdTbl->GetId(gLastClassUsr);
+    int baseClassUsrId = usrIdTbl->GetId(cBaseUsr);
+    // insert to database
+    db::insert_base_class_value(classUsrId, baseClassUsrId, line, column, accessibility);
+    clang_disposeString(cxBaseUsr);
+}
+
 static inline void procCursor(const CXCursor& Cursor) {
   CXCursorKind kind = Cursor.kind;
   if (!clang_isInvalid(kind)) {
@@ -310,14 +331,18 @@ static inline void procCursor(const CXCursor& Cursor) {
         case CXCursor_TemplateTypeParameter:
         case CXCursor_FunctionTemplate:
         case CXCursor_ClassTemplate:
-        case CXCursor_ClassDecl:
         case CXCursor_Namespace:
-        case CXCursor_StructDecl:
         case CXCursor_UnionDecl:
         case CXCursor_VarDecl:
         case CXCursor_ParmDecl:
         case CXCursor_FieldDecl:
         case CXCursor_MacroDefinition: {
+            procDecl(Cursor, cUsr, name, fileName, line, column, kind, val);
+            break;
+        }
+        case CXCursor_StructDecl:
+        case CXCursor_ClassDecl: {
+            gLastClassUsr = cUsr;
             procDecl(Cursor, cUsr, name, fileName, line, column, kind, val);
             break;
         }
@@ -331,10 +356,13 @@ static inline void procCursor(const CXCursor& Cursor) {
             procFuncDecl(Cursor, cUsr, name, fileName, line, column, kind, 0);
             break;
         }
+        case CXCursor_CXXBaseSpecifier: {
+            procCXXBaseClassInfo(Cursor, name, fileName, line, column, kind);
+            break;
+        }
         case CXCursor_DeclRefExpr:
         case CXCursor_MemberRefExpr:
         case CXCursor_TypeRef:
-        //case CXCursor_CXXBaseSpecifier:
         case CXCursor_MemberRef:
         case CXCursor_NamespaceRef:
         case CXCursor_TemplateRef:
@@ -403,7 +431,7 @@ typedef struct {
   CommentXMLValidationData ValidationData;
 } VisitorData;
 
-enum CXChildVisitResult printingVisitor(CXCursor Cursor,
+static enum CXChildVisitResult printingVisitor(CXCursor Cursor,
                                                 CXCursor Parent,
                                                 CXClientData ClientData) {
   procCursor(Cursor);
@@ -477,6 +505,7 @@ static int perform_test_load_source(int argc, const char **argv,
   setCursorTypeAvailable(CXCursor_ClassTemplate);
   setCursorTypeAvailable(CXCursor_TemplateRef);
   setCursorTypeAvailable(CXCursor_OverloadedDeclRef);
+  setCursorTypeAvailable(CXCursor_CXXBaseSpecifier);
 
   fileIdTbl = new IdTbl();
   usrIdTbl = new IdTbl();

@@ -15,7 +15,7 @@ void init(std::string db_file_name, std::string src_file_name, std::string exclu
 {
     char *err=NULL;
     if(sqlite3_open(db_file_name.c_str(), &db ) != SQLITE_OK) {
-        printf("ERROR: failt to open db");
+        printf("ERROR: faild to open db: %s", db_file_name.c_str());
         exit(1);
     }
 

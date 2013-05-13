@@ -6,6 +6,7 @@ import os
 import shutil
 import sqlite3
 import cxxtags_util
+import getopt
 
 DB_VER = 6
 CONTAINED_PART_FULL = 0
@@ -107,8 +108,19 @@ class rebuildHandler():
     mActualSrcFileName = "" 
     mFileIndex = ""
     mDbFile = ""
+    mIsForce = 0
 
     def ParseArg(self, args):
+        optlist, args = getopt.getopt(args, '', ['force',])
+        for i in optlist:
+            opt, val = i
+            if opt == "--force":
+                self.mIsForce = 1
+            else:
+                print "ERROR: no such option: " + opt
+                print_usage()
+                sys.exit(1)
+            print "ARG: " + args[0]
         self.mDatabaseDir = args[0]
         if not os.path.exists(self.mDatabaseDir):
             print "ERROR: database dir \"%s\" does not exists."%(self.mDatabaseDir)
@@ -141,9 +153,6 @@ class rebuildHandler():
             print "ERROR: get file name: ", e.args[0]
             db_idx.close()
             sys.exit(1)
-
-            import os
-            import tempfile
 
     def GetBuildOption(self):
         try:
@@ -187,7 +196,7 @@ class rebuildHandler():
         res = self.GetBuildOption()
         if res:
             excludeList, containedPart, buildDir, buildOptions = res
-            if containedPart == CONTAINED_PART_FULL:
+            if self.mIsForce == 0 and containedPart == CONTAINED_PART_FULL:
                 print "INFO: database file already has all information."
                 return 
             self.DoRebuild(excludeList, buildDir, buildOptions)

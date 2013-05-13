@@ -1,6 +1,7 @@
 CXX=g++
 LLVM_HOME=/pkg/llvm-3.2
 INCLUDES=-I${LLVM_HOME}/include/
+CXXTAGS_INCLUDES=-I${LLVM_HOME}/include/ -I${LLVM_HOME}/lib/clang/3.2/include
 LIBS=-L${LLVM_HOME}/lib/ -L/usr/lib/ -lsqlite3 -lclang -lstdc++ 
 CXXFLAGS=-Wall -g -O2
 CXXTAGS = ./cxxtags
@@ -15,8 +16,8 @@ all: cxxtags_core.cpp db.cpp
 	chmod +x cxxtags cxxtags_merger cxxtags_html_dumper cxxtags_util.py cxxtags_query ../bin
 	strip ../bin/cxxtags_core
 index:
-	$(CXXTAGS) $(INCLUDES) cxxtags_core.cpp
-	$(CXXTAGS) $(INCLUDES) db.cpp
+	$(CXXTAGS) $(CXXTAGS_INCLUDES) cxxtags_core.cpp
+	$(CXXTAGS) $(CXXTAGS_INCLUDES) db.cpp
 	$(CXXTAGS_MERGER) add db cxxtags_core.cpp.db db.cpp.db
 clean:
 	rm -f cxxtags_core.o db.o cxxtags_core

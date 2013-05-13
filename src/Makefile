@@ -17,6 +17,6 @@ all: cxxtags_core.cpp db.cpp
 index:
 	$(CXXTAGS) $(INCLUDES) cxxtags_core.cpp
 	$(CXXTAGS) $(INCLUDES) db.cpp
-	$(CXXTAGS_MERGER) db cxxtags_core.cpp.db db.cpp.db
+	$(CXXTAGS_MERGER) add db cxxtags_core.cpp.db db.cpp.db
 clean:
 	rm -f cxxtags_core.o db.o cxxtags_core

@@ -446,8 +446,11 @@ static int perform_test_load_source(int argc, const char **argv,
   const char *cur_dir = argv[0];
   const char *out_file_name = argv[1];
   const char *in_file_name = argv[2];
-  argv+=2;
-  argc-=2;
+  // argv[3] is "--"
+  // reorder args to pass clang
+  argv[3] = argv[2];
+  argv+=3;
+  argc-=3;
 
   // Set which cursor types are to be tagged.
   setCursorTypeAvailable(CXCursor_EnumConstantDecl);
@@ -511,7 +514,7 @@ FUNC_END:
 /* Command line processing.                                                   */
 /******************************************************************************/
 static void print_usage(void) {
-  fprintf(stderr, "usage: cxxtags_core [-p] [-e excludeList] cur_dir out_file in_file {<clang_args>}*\n");
+  fprintf(stderr, "usage: cxxtags_core [-p] [-e excludeList] cur_dir out_file in_file -- {<clang_args>}*\n");
 }
 
 static std::vector<std::string > splitString(std::string str)
@@ -535,25 +538,31 @@ static std::vector<std::string > splitString(std::string str)
 
 static int indexSource(int argc, const char **argv) {
     //clang_enableStackTraces();
+    argc--; // decrement for command name
     if (argc >= 3) {
-        int result;
-        while((result = getopt(argc, (char*const*)argv, "pe:")) !=- 1){
-            switch(result){
-            case 'e':
-                gExcludeListStr = optarg;
-                gExcludeList = splitString(gExcludeListStr);
-                argc-=2;
-            break;
-            case 'p':
-                gIsPartial = 1;
-                argc--;
-            break;
+        int c = 0;
+        while((c = getopt(argc, (char*const*)argv, "e:p")) != -1) {
+            switch (c) {
+                case 'e':
+                    gExcludeListStr = optarg;
+                    gExcludeList = splitString(gExcludeListStr);
+                    argc-=2;
+                    break;
+                case 'p':
+                    gIsPartial = 1;
+                    argc--;
+                    break;
+                case '?':
+                    printf("ERROR: unknown option: -%c", optopt);
+                    return 1;
+                default:
+                    assert(0);
             }
         }
         CXCursorVisitor I = printingVisitor;
         PostVisitTU postVisit = 0;
         if (I) {
-            return perform_test_load_source(argc - 1, &argv[optind], I,
+            return perform_test_load_source(argc, &argv[optind], I,
                     postVisit);
         }
     }

@@ -2,14 +2,14 @@ PROJ_ROOT = ../../
 include ../util/common.mk
 
 MERGER_OUT = db
-.PHONY: clean
+.PHONY: clean check
 .SUFFIXES: .db .cpp
 
 DB_FILES = inhe.db
 
 $(MERGER_OUT): $(DB_FILES)
 	$(MERGER) add $@ $^
-test: $(MERGER_OUT)
+test: check $(MERGER_OUT)
 	./test.py $(MERGER_OUT)
 html: $(MERGER_OUT)
 	$(DUMPER) $(MERGER_OUT)
@@ -18,4 +18,5 @@ prog: inhe.cpp
 clean:
 	rm -rf html $(MERGER_OUT) $(DB_FILES)
 .cpp.db:
-	$(CXXTAGS) $< -o $*.db
+	$(CXXTAGS) $(CXXTAGS_INCLUDES) $< -o $*.db
+include ../util/common_rule.mk

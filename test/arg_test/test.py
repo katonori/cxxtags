@@ -3,8 +3,15 @@
 import os
 import commands
 import shutil
+import sys
+
+LLVM_HOME =os.environ.get("LLVM_HOME")
+if LLVM_HOME == None:
+    print "ERROR: set LLVM_HOME"
+    sys.exit(1)
 
 CXXTAGS = "../../src/cxxtags"
+CXXTAGS_INCLUDES = "-I%s/lib/clang/3.2/include"%(LLVM_HOME)
 DB_INFO_COLS = 6
 DB_VER = 6
 err = 0
@@ -53,7 +60,7 @@ def test(cmd, in0, in1, buildOption0, buildOption1, excludeList0, excludeList1):
     return 0
 
 # make ref
-buildOptRef = "-I./subdir"
+buildOptRef = "-I./subdir " + CXXTAGS_INCLUDES
 excludeListRef = "/usr/include"
 os.system(CXXTAGS + " main.cpp "+buildOptRef)
 res = commands.getoutput("sqlite3 main.cpp.db \"select * from decl\" | wc -l")
@@ -86,7 +93,7 @@ err += test(CXXTAGS + " -e "+excludeList+" "+buildOptRef+" main.cpp", "main.cpp.
 err += test(CXXTAGS + " "+buildOptRef+" main.cpp -e "+excludeListRef, "main.cpp.db", "ref.db", buildOptRef, buildOptRef, excludeListRef, excludeListRef)
 err += test(CXXTAGS + " -o a.db "+buildOptRef+" main.cpp -e "+excludeListRef, "a.db", "ref.db", buildOptRef, buildOptRef, excludeListRef, excludeListRef)
 err += test(CXXTAGS + " "+buildOptRef+" main.cpp -e "+excludeListRef+" -o a.db", "a.db", "ref.db", buildOptRef, buildOptRef, excludeListRef, excludeListRef)
-buildOpt = "-I ./subdir"
+buildOpt = "-I ./subdir " + CXXTAGS_INCLUDES
 err += test(CXXTAGS + " "+buildOpt+" main.cpp -e "+excludeListRef+" -o a.db", "a.db", "ref.db", buildOpt, buildOptRef, excludeListRef, excludeListRef)
 
 if err == 0:

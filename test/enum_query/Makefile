@@ -2,14 +2,14 @@ PROJ_ROOT = ../../
 include ../util/common.mk
 
 MERGER_OUT = db
-.PHONY: clean
+.PHONY: clean check
 .SUFFIXES: .db .cpp
 DB_FILES = main.db
 vpath %.cpp ./:../enum
 
 $(MERGER_OUT): $(DB_FILES)
 	$(MERGER) add $@ $^
-test: clean $(MERGER_OUT)
+test: check clean $(MERGER_OUT)
 	./test.py $(MERGER_OUT)
 html: $(MERGER_OUT)
 	$(DUMPER) $(MERGER_OUT)
@@ -19,4 +19,5 @@ clean:
 	rm -rf html $(MERGER_OUT) $(DB_FILES)
 
 .cpp.db:
-	$(CXXTAGS) $< -o $*.db
+	$(CXXTAGS) $(CXXTAGS_INCLUDES) $< -o $*.db
+include ../util/common_rule.mk

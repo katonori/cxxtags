@@ -9,15 +9,10 @@ DB_FILES = ns0.db ns1.db main.db
 
 $(MERGER_OUT): $(DB_FILES)
 	$(MERGER) add $@ $^
-
-test: $(MERGER_OUT)
-	./test.py $<
-
+test: check $(MERGER_OUT)
+	./test.py $(MERGER_OUT)
 ns1.db:
-	$(CXXTAGS) ./subdir/ns1.cpp -I. -o ns1.db
-index:
-	$(CXXTAGS) ns0.cpp -I./subdir
-	$(CXXTAGS) main.cpp -I./subdir
+	$(CXXTAGS) $(CXXTAGS_INCLUDES) ./subdir/ns1.cpp -I. -o ns1.db
 html: $(MERGER_OUT)
 	$(DUMPER) $(MERGER_OUT)
 prog:
@@ -28,4 +23,5 @@ prog:
 clean:
 	rm -rf $(MERGER_OUT) html $(DB_FILES)
 .cpp.db:
-	$(CXXTAGS) -I./subdir $< -o $*.db
+	$(CXXTAGS) $(CXXTAGS_INCLUDES) -I./subdir $< -o $*.db
+include ../util/common_rule.mk

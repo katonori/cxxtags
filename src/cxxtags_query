@@ -437,42 +437,81 @@ class QueryHandlerType(HandlerBase):
     def DoQuery(self):
         usr = self.GetUsr(self.mFileName, self.mLineNo, self.mColNo)
         if usr:
-            self.GetTypeInfo(usr, self.mFileName, self.mLineNo, self.mColNo)
+            typeUsr = self.GetTypeUsr(usr, self.mFileName, self.mLineNo, self.mColNo)
+            usrList = self.GetBaseClassInfo(typeUsr)
+            if usrList:
+                for i in usrList:
+                    baseUsr, accessibility = i
+                    self.GetTypeInfo(baseUsr, self.mFileName, self.mLineNo, self.mColNo)
+            self.GetTypeInfo(typeUsr, self.mFileName, self.mLineNo, self.mColNo)
 
-    def GetTypeInfo(self, usr, fileName, lineNo, colNo):
-        db = cxxtags_util.db_connect(self.mUsrDbName)
-        cur = db.cursor()
-        q = 'SELECT usr_list_type.name, decl.type_kind, decl.is_pointer FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name=? LIMIT 1'
-        cur.execute(q, (usr,))
-        result = cur.fetchone()
-        typeUsr, typeKind, isPointer = result
-        #print result
+    def GetTypeInfo(self, typeUsr, fileName, lineNo, colNo):
         done_dict = {}
         if typeUsr != "":
-            q = 'SELECT usr_list.name, name_list.name, file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name LIKE ? ORDER BY decl.is_def'
-            cur.execute(q, (typeUsr+'%',))
+            try:
+                db = cxxtags_util.db_connect(self.mUsrDbName)
+                cur = db.cursor()
+                # get type name
+                q = 'SELECT name_list.name FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name=?'
+                cur.execute(q, (typeUsr,))
+                result = cur.fetchone()
+                typeName = ""
+                if result:
+                    typeName, = result
+                q = 'SELECT usr_list.name, name_list.name, file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name LIKE ? ORDER BY decl.is_def'
+                cur.execute(q, (typeUsr+'%',))
+                result = cur.fetchall()
+            except sqlite3.Error, e:
+                print "ERROR: type info: ", e.args[0]
+                sys.exit(1)
+            finally:
+                db.close()
             typeUsrPrint = typeUsr.replace("c:", "")
             typeUsrPrint = typeUsrPrint.replace("@N@", "::")
             typeUsrPrint = typeUsrPrint.replace("@C@", "::")
-            #print typeUsrPrint
-            result = cur.fetchall()
             for i in result:
                 resultUsr, resultName, resultFileName, resultLine, resultCol = i
                 if done_dict.has_key(resultUsr):
                     continue
                 done_dict[resultUsr] = 1
-                #print resultUsr
-                if resultUsr == typeUsr: # type
-                    self.PrintResult(resultName, resultFileName, resultLine, resultCol, "type")
                 if resultUsr.find(typeUsr+"@FI@") != -1: # val
                     resultUsr = resultUsr.replace(typeUsr+"@FI@", "")
-                    self.PrintResult(resultName, resultFileName, resultLine, resultCol, "value")
+                    self.PrintResult(resultName, typeName, resultFileName, resultLine, resultCol, "value")
                 elif resultUsr.find(typeUsr+"@F@") != -1: # function
                     resultUsr = resultUsr.replace(typeUsr+"@F@", "")
                     resultUsr = re.sub('#.*$', "", resultUsr)
-                    self.PrintResult(resultName, resultFileName, resultLine, resultCol, "function")
+                    self.PrintResult(resultName, typeName, resultFileName, resultLine, resultCol, "function")
                 elif resultUsr.find(typeUsr+"@") != -1:
-                    self.PrintResult(resultUsr, resultFileName, resultLine, resultCol, "other")
+                    self.PrintResult(resultUsr, typeName, resultFileName, resultLine, resultCol, "other")
+
+    def GetTypeUsr(self, usr, fileName, lineNo, colNo):
+        try:
+            db = cxxtags_util.db_connect(self.mUsrDbName)
+            cur = db.cursor()
+            q = 'SELECT usr_list_type.name FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name=? LIMIT 1'
+            cur.execute(q, (usr,))
+            result = cur.fetchone()
+        except sqlite3.Error, e:
+            print "ERROR: GetTypeUsr: ", e.args[0]
+            sys.exit(1)
+        finally:
+            db.close()
+        typeUsr, = result
+        return typeUsr
+
+    def GetBaseClassInfo(self, usr):
+        try:
+            db = cxxtags_util.db_connect(self.mUsrDbName)
+            cur = db.cursor()
+            q = 'SELECT usr_list_base.name, base_class.accessibility FROM '+ cxxtags_util.QUERY_JOINED_TABLE_BASE_CLASS + ' WHERE usr_list.name=?'
+            cur.execute(q, (usr,))
+            result = cur.fetchall()
+        except sqlite3.Error, e:
+            print "ERROR: type info: ", e.args[0]
+            sys.exit(1)
+        finally:
+            db.close()
+        return result
 
     def parseArg(self):
         if len(sys.argv) != 6:
@@ -480,8 +519,8 @@ class QueryHandlerType(HandlerBase):
             sys.exit(1)
         self.mFileName, self.mLineNo, self.mColNo = sys.argv[3:]
 
-    def PrintResult(self, name, fileName, line, col, kind):
-        print name + OUTPUT_DELIMITER + fileName + OUTPUT_DELIMITER + str(line) + OUTPUT_DELIMITER + str(col) + OUTPUT_DELIMITER + kind + OUTPUT_DELIMITER + cxxtags_util.get_line_from_file(fileName, line)
+    def PrintResult(self, name, typeName, fileName, line, col, kind):
+        print typeName + OUTPUT_DELIMITER + name + OUTPUT_DELIMITER + fileName + OUTPUT_DELIMITER + str(line) + OUTPUT_DELIMITER + str(col) + OUTPUT_DELIMITER + kind + OUTPUT_DELIMITER + cxxtags_util.get_line_from_file(fileName, line)
 
 def main():
     result = []

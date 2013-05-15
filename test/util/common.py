@@ -20,8 +20,11 @@ def DbgPrint(msg):
 def QueryTestExecCommand(mode, fileName, line, col):
     cmd = CXXTAGS_QUERY + " %s db %s %d %d"%(mode, fileName, line, col)
     DbgPrint("$ " + cmd)
-    result = commands.getoutput(cmd).split('\n')
     cmdResult = []
+    result = commands.getoutput(cmd)
+    if result == "":
+        return []
+    result = result.split('\n')
     for i in result:
         sp = i.split('|')
         name, fn, line, col = sp[0:4]

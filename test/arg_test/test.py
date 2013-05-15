@@ -18,7 +18,6 @@ DB_VER = 6
 err = 0
 
 def msgTest(cmd, refMsg, refRv):
-    #commands.getoutput(
     rv = commands.getoutput("(%s > /dev/null 2>&1); echo $?"%(cmd))
     if rv != str(refRv):
         print "ERROR: return value: ",rv

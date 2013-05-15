@@ -18,7 +18,4 @@ prog: main.cpp
 	$(CXX) main.cpp -o prog
 clean:
 	rm -rf html $(MERGER_OUT) $(DB_FILES)
-
-.cpp.db:
-	$(CXXTAGS) $(CXXTAGS_INCLUDES) $< -o $*.db
 include ../util/common_rule.mk

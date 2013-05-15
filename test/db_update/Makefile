@@ -30,6 +30,4 @@ prog: main.cpp
 	$(CXX) main.cpp -o prog
 clean:
 	rm -rf html $(MERGER_OUT) $(DB_FILES) test.c file_index0.txt file_index1.txt
-
-.c.db:
-	$(CXXTAGS) $< -o $*.db
+include ../util/common_rule.mk

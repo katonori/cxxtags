@@ -14,6 +14,4 @@ html: $(MERGER_OUT)
 	$(DUMPER) $<
 clean:
 	rm -rf main.cpp.db html $(MERGER_OUT)
-.cpp.db:
-	$(CXXTAGS) $(CXXTAGS_INCLUDES) $< -o $*.db
 include ../util/common_rule.mk

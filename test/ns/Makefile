@@ -22,6 +22,7 @@ prog:
 	$(CXX) ns0.o ns1.o main.o -o prog
 clean:
 	rm -rf $(MERGER_OUT) html $(DB_FILES)
+include ../util/common_rule.mk
+# override rule
 .cpp.db:
 	$(CXXTAGS) $(CXXTAGS_INCLUDES) -I./subdir $< -o $*.db
-include ../util/common_rule.mk

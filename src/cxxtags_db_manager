@@ -14,7 +14,7 @@ CONTAINED_PART_PARTIAL = 1
 
 def print_usage():
     print "usage: cxxtags_db_manager add     database_dir input_files [...]"
-    print "     :                    rebuild database_dir src_file_name"
+    print "     :                    rebuild [-f,--force] [-p,--partial] database_dir src_file_name"
 
 ########## add ###########
 def add(funcArgv):
@@ -109,13 +109,16 @@ class rebuildHandler():
     mFileIndex = ""
     mDbFile = ""
     mIsForce = 0
+    mIsPartial = 0
 
     def ParseArg(self, args):
-        optlist, args = getopt.getopt(args, '', ['force',])
+        optlist, args = getopt.getopt(args, 'fp', ['force','partial'])
         for i in optlist:
             opt, val = i
-            if opt == "--force":
+            if opt == "--force" or opt == "-f":
                 self.mIsForce = 1
+            elif opt == "--partial" or opt == "-p":
+                self.mIsPartial = 1
             else:
                 print "ERROR: no such option: " + opt
                 print_usage()
@@ -173,7 +176,10 @@ class rebuildHandler():
         tmpfile = "/tmp/cxxtags.tmp.o." + str(os.getpid())
         if excludeList != "":
             excludeList = "-e " + excludeList
-        cmd = "cd " + buildDir + " && cxxtags " + excludeList + " " + self.mActualSrcFileName + " -o " + tmpfile + " " + buildOptions
+        partialOpt = ""
+        if self.mIsPartial:
+            partialOpt = "-p"
+        cmd = "cd " + buildDir + " && cxxtags " + partialOpt + " " + excludeList + " " + self.mActualSrcFileName + " -o " + tmpfile + " " + buildOptions
         #print cmd
         rv = -1
         try:
@@ -195,8 +201,13 @@ class rebuildHandler():
         res = self.GetBuildOption()
         if res:
             excludeList, containedPart, buildDir, buildOptions = res
-            if self.mIsForce == 0 and containedPart == CONTAINED_PART_FULL:
-                print "INFO: database file already has all information."
+            after = 0
+            if self.mIsPartial:
+                after = CONTAINED_PART_PARTIAL
+            else:
+                after = CONTAINED_PART_FULL
+            if self.mIsForce == 0 and (containedPart == after):
+                print "INFO: database was not updated."
                 return 
             self.DoRebuild(excludeList, buildDir, buildOptions)
 

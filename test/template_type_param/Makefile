@@ -9,7 +9,7 @@ DB_FILES = main.db
 test: check $(MERGER_OUT)
 	./test.py db
 $(MERGER_OUT): $(DB_FILES)
-	$(MERGER) add $@ $^
+	$(CXXTAGS_DB_MANAGER) add $@ $^
 html: $(MERGER_OUT)
 	$(DUMPER) $<
 clean:

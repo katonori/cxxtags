@@ -8,7 +8,7 @@ MERGER_OUT = db
 DB_FILES = main.db
 
 $(MERGER_OUT): $(DB_FILES)
-	$(MERGER) $@ $^
+	$(CXXTAGS_DB_MANAGER) $@ $^
 test: $(MERGER_OUT)
 	./test.py $<
 html: $(MERGER_OUT)

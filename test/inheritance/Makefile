@@ -8,7 +8,7 @@ MERGER_OUT = db
 DB_FILES = inhe.db
 
 $(MERGER_OUT): $(DB_FILES)
-	$(MERGER) add $@ $^
+	$(CXXTAGS_DB_MANAGER) add $@ $^
 test: check $(MERGER_OUT)
 	./test.py $(MERGER_OUT)
 html: $(MERGER_OUT)

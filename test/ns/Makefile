@@ -8,7 +8,7 @@ MERGER_OUT = db
 DB_FILES = ns0.db ns1.db main.db
 
 $(MERGER_OUT): $(DB_FILES)
-	$(MERGER) add $@ $^
+	$(CXXTAGS_DB_MANAGER) add $@ $^
 test: check $(MERGER_OUT)
 	./test.py $(MERGER_OUT)
 ns1.db:

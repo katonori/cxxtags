@@ -1,5 +1,5 @@
+include ../utils/common.mk
 CXXTAGS = ../../src/cxxtags -e /usr/include
-MERGER = ../../src/cxxtags_merger
 DUMPER = ../../src/cxxtags_html_dumper
 .PHONY: dump clean
 
@@ -10,7 +10,7 @@ test: index merge
 index:
 	$(CXXTAGS) ../enum/main.cpp
 merge: 
-	$(MERGER) index.db main.cpp.db
+	$(CXXTAGS_DB_MANAGER) index.db main.cpp.db
 html: index merge
 	$(DUMPER) index.db
 dump:

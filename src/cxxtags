@@ -14,15 +14,18 @@ gInFileList = []
 gOutFile = ""
 gTimeList = []
 
-def usage():
+def printUsage():
     print "usage: cxxtags [-p, --partial] [-e,--exclude exclude_list] [-o out_file] input_file [compiler_arguments]"
 
 # parse arguments.
-def parse_args(argv):
+def parseArgs(argv):
     global gExcludeList
     global gInFileList
     global gOutFile
     global gOptPartial
+    if len(argv) < 2:
+        printUsage()
+        sys.exit(1)
     i = 0
     while 1:
         if i >= len(argv):
@@ -65,12 +68,12 @@ def main():
     cur_dir = os.getcwd()
 
     # process args
-    argv = parse_args(sys.argv[1:])
+    argv = parseArgs(sys.argv[1:])
     if argv == None:
-        usage()
+        printUsage()
         sys.exit(1)
     if len(gInFileList) == 0:
-        print "ERROR: no input files are specified"
+        printUsage()
         sys.exit(1)
     in_file = gInFileList[0]
     if gOutFile == "":

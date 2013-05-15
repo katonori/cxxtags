@@ -12,9 +12,22 @@ if LLVM_HOME == None:
 
 CXXTAGS = "../../src/cxxtags"
 CXXTAGS_INCLUDES = "-I%s/lib/clang/3.2/include"%(LLVM_HOME)
+USAGE = "usage: cxxtags [-p, --partial] [-e,--exclude exclude_list] [-o out_file] input_file [compiler_arguments]"
 DB_INFO_COLS = 6
 DB_VER = 6
 err = 0
+
+def msgTest(cmd, refMsg, refRv):
+    #commands.getoutput(
+    rv = commands.getoutput("(%s > /dev/null 2>&1); echo $?"%(cmd))
+    if rv != str(refRv):
+        print "ERROR: return value: ",rv
+        return 1
+    out = commands.getoutput("%s"%(cmd))
+    if out != refMsg:
+        print "ERROR: message: ",out
+        return 1
+    return 0
 
 def test(cmd, in0, in1, buildOption0, buildOption1, excludeList0, excludeList1):
     print cmd
@@ -87,6 +100,7 @@ if res != "":
     err += 1
 
 # argument tests
+err += msgTest(CXXTAGS, USAGE, 1)
 excludeList = "/usr/niclude"
 err += test(CXXTAGS + " -e "+excludeList+" main.cpp "+buildOptRef, "main.cpp.db", "ref.full.db", buildOptRef, buildOptRef, excludeList, '')
 err += test(CXXTAGS + " -e "+excludeList+" "+buildOptRef+" main.cpp", "main.cpp.db", "ref.full.db", buildOptRef, buildOptRef, excludeList, '')

@@ -47,7 +47,7 @@ void init(std::string db_file_name, std::string src_file_name, std::string exclu
     // ref
     sqlite3_exec(db, "CREATE TABLE ref(usr_id INTEGER, name_id INTEGER, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, ref_file_id INTEGER, ref_line INTEGER, ref_col INTEGER);", NULL, NULL, &err);
     // decl
-    sqlite3_exec(db, "CREATE TABLE decl(usr_id INTEGER, name_id INTEGER, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, val INTEGER, is_virtual INTEGER, is_def INTEGER, type_usr_id INTEGER, type_kind INTEGER, is_pointer);", NULL, NULL, &err);
+    sqlite3_exec(db, "CREATE TABLE decl(usr_id INTEGER, name_id INTEGER, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, val INTEGER, is_virtual INTEGER, is_def INTEGER, type_usr_id INTEGER, type_kind INTEGER, is_pointer, accessibility INTEGER);", NULL, NULL, &err);
     // overriden
     sqlite3_exec(db, "CREATE TABLE overriden(usr_id INTEGER, name_id INTEGER, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, overrider_usr_id INTEGER, is_def INTEGER);", NULL, NULL, &err);
     //
@@ -218,6 +218,7 @@ void DBMgrDecl::InsertValue(int usrId, int nameId, int fid, int line, int col, i
     sqlite3_bind_int(mSqlStmt, 10, typeUsrId);
     sqlite3_bind_int(mSqlStmt, 11, typeKind);
     sqlite3_bind_int(mSqlStmt, 12, isPointer);
+    sqlite3_bind_int(mSqlStmt, 13, 0); // accessibility
     tryStep(mSqlStmt);
 }
 

@@ -46,7 +46,7 @@ class DBMgrDecl
     : public DBMgrBase {
 public:
     DBMgrDecl(void)
-        : DBMgrBase("INSERT INTO decl VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);")
+        : DBMgrBase("INSERT INTO decl VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);")
     {}
     void InsertValue(int usrId, int nameId, int fileId, int line, int col, int entityKind, int val, int is_virtual, int isDef, int typeUsrId, int typeKind, int isPointer);
 };

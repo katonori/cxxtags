@@ -56,6 +56,8 @@ void init(std::string db_file_name, std::string src_file_name, std::string exclu
     // accessibility| 0: invalid, 1: public, 2: protected, 3: private
     //
     sqlite3_exec(db, "CREATE TABLE base_class(class_usr_id INTEGER, base_class_usr_id INTEGER, line INTEGER, col INTEGER, accessibility INTEGER);", NULL, NULL, &err);
+    // include
+    sqlite3_exec(db, "CREATE TABLE include(file_id INTEGER, included_file_id INTEGER, line INTEGER, col INTEGER);", NULL, NULL, &err);
 
     // register databasee information
     std::ostringstream os;

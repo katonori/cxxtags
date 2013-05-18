@@ -70,6 +70,9 @@ class HandlerBase:
                     return ""
         return usr
 
+    #
+    # get USR from location information.
+    #
     def GetUsr(self, fileName, lineNo, colNo):
         if fileName == "":
             print "ERROR: specify file name"

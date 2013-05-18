@@ -48,7 +48,6 @@ def add(funcArgv):
         sys.exit(1)
 
     for fn in input_files:
-
         src_file = ""
         try:
             # open db
@@ -156,6 +155,9 @@ class rebuildHandler():
             db_idx.close()
             sys.exit(1)
 
+    #
+    # get build options from database.
+    #
     def GetBuildOption(self):
         try:
             db = sqlite3.connect(self.mDbFile, isolation_level='EXCLUSIVE')

@@ -67,19 +67,15 @@ static inline std::string formatName(std::string name)
 // get source file name
 static std::string getCursorSourceLocation(unsigned int& line, unsigned int& column, const CXCursor& Cursor) {
   CXSourceLocation Loc = clang_getCursorLocation(Cursor);
-  CXString source;
   CXFile file;
   clang_getExpansionLocation(Loc, &file, &line, &column, 0);
-  source = clang_getFileName(file);
   CXString filename = clang_getFileName(file);
-  if (!clang_getCString(source)) {
-    clang_disposeString(source);
+  if (!clang_getCString(filename)) {
     clang_disposeString(filename);
     return std::string("");
   }
   else {
     std::string b = std::string(clang_getCString(filename));
-    clang_disposeString(source);
     clang_disposeString(filename);
     return b;
   }
@@ -542,7 +538,7 @@ FUNC_END:
 /* Command line processing.                                                   */
 /******************************************************************************/
 static void print_usage(void) {
-  fprintf(stderr, "usage: cxxtags_core [-p] [-e excludeList] cur_dir out_file in_file -- {<clang_args>}*\n");
+    fprintf(stderr, "usage: cxxtags_core [-p] [-e excludeList] cur_dir out_file in_file -- {<clang_args>}*\n");
 }
 
 static std::vector<std::string > splitString(std::string str)
@@ -598,5 +594,5 @@ static int indexSource(int argc, const char **argv) {
 };
 
 int main(int argc, const char **argv) {
-  return cxxtagsIndexer::indexSource(argc, argv);
+    return cxxtagsIndexer::indexSource(argc, argv);
 }

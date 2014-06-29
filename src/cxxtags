@@ -66,7 +66,7 @@ class CxxTagsCoreWrapper:
             elffile = ELFFile(f)
             cl = elffile.get_section_by_name(".GCC.command.line")
             lines = cl.data().split('\0')
-            print lines
+            #print lines
             opts = []
             for l in lines:
                 if re.match('-[ID]', l):
@@ -123,7 +123,7 @@ class CxxTagsCoreWrapper:
             cmd = "%s/cxxtags_core %s %s %s %s %s "%(exe_dir, self.mOptPartial, self.mExcludeList, cur_dir, outfile, in_file)+string.join(argv)
         else:
             cmd = "%s/cxxtags_core %s %s %s %s "%(exe_dir, self.mOptPartial, self.mExcludeList, cur_dir, outfile)+opt
-        print(cmd)
+        #print(cmd)
         #self.mTimeList.append(time.time())
         rv = os.system(cmd)
         if rv != 0:

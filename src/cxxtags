@@ -7,6 +7,7 @@ import string
 import time
 import sqlite3
 import cxxtags_util
+from elftools.elf.elffile import ELFFile
 
 class CxxTagsCoreWrapper:
     mExcludeList = ""
@@ -14,6 +15,7 @@ class CxxTagsCoreWrapper:
     mInFileList = []
     mOutFile = ""
     mTimeList = []
+    mGuessOptions = 0
 
     def printUsage(self):
         print "usage: cxxtags [-p, --partial] [-e,--exclude exclude_list] [-o out_file] input_file [compiler_arguments]"
@@ -42,6 +44,11 @@ class CxxTagsCoreWrapper:
                 # ignore "-I path" options
                 # "-Ipath" format is treated as another option.
                 i += 2
+            elif arg == "-g":
+                # guess compile options from DWARF information.
+                # the input file must be an object file compile with -grecord-gcc-switches option.
+                self.mGuessOptions = 1
+                i += 1
             elif arg == "-x" or arg == "-MF" or arg == "-MT":
                 # ignore options that take an additional argument.
                 i += 2
@@ -53,6 +60,25 @@ class CxxTagsCoreWrapper:
                 i+=1
         return argv
 
+    def getBuildOptions(self, filename):
+        try:
+            f = open(filename, 'rb')
+            elffile = ELFFile(f)
+            cl = elffile.get_section_by_name(".GCC.command.line")
+            lines = cl.data().split('\0')
+            print lines
+            opts = []
+            for l in lines:
+                if re.match('-[ID]', l):
+                    opts.append(l)
+                elif re.match('[^-]', l):
+                    opts.append(l)
+        except IOError, (errno, strerror):
+            raise IOError(errno, strerror + ": " + filename)
+        except:
+            return None
+        return ' '.join(opts)
+
     def run(self):
         in_file = ""
         exe_dir = os.path.dirname(sys.argv[0])
@@ -60,7 +86,6 @@ class CxxTagsCoreWrapper:
 
         # process args
         argv = self.parseArgs(sys.argv[1:])
-        outfile = self.mOutFile
         if argv == None:
             self.printUsage()
             sys.exit(1)
@@ -68,6 +93,7 @@ class CxxTagsCoreWrapper:
             self.printUsage()
             sys.exit(1)
         in_file = self.mInFileList[0]
+        outfile = self.mOutFile
         if outfile == "":
             outfile = os.path.basename(in_file) + ".db"
         if len(self.mInFileList) > 1:
@@ -75,11 +101,14 @@ class CxxTagsCoreWrapper:
             fo = open(outfile, 'a+') # touch file
             fo.close()
             sys.exit(0)
-        if re.match("^.+.o$", in_file):
-            print "INFO: ignore input \"%s\". empty file \"%s\" is generated."%(in_file, outfile)
-            fo = open(outfile, 'a+') # touch file
-            fo.close()
-            sys.exit(0)
+        opt = ""
+        if self.mGuessOptions != 0:
+            opt = self.getBuildOptions(in_file)
+            if opt:
+                print "BuildOption: " + opt
+            else:
+                print("ERROR: could not build option from elf information")
+                sys.exit(1)
 
         if not os.path.exists(in_file):
             print "ERROR: file not found: %s\n"%(in_file)
@@ -90,8 +119,11 @@ class CxxTagsCoreWrapper:
             self.mExcludeList = "-e " + self.mExcludeList
         if os.path.exists(outfile):
             os.remove(outfile)
-        cmd = "%s/cxxtags_core %s %s %s %s %s "%(exe_dir, self.mOptPartial, self.mExcludeList, cur_dir, outfile, in_file)+string.join(argv)
-        #print(cmd)
+        if self.mGuessOptions == 0:
+            cmd = "%s/cxxtags_core %s %s %s %s %s "%(exe_dir, self.mOptPartial, self.mExcludeList, cur_dir, outfile, in_file)+string.join(argv)
+        else:
+            cmd = "%s/cxxtags_core %s %s %s %s "%(exe_dir, self.mOptPartial, self.mExcludeList, cur_dir, outfile)+opt
+        print(cmd)
         #self.mTimeList.append(time.time())
         rv = os.system(cmd)
         if rv != 0:
@@ -113,6 +145,5 @@ class CxxTagsCoreWrapper:
         #print "time:"
         #print "    proc0: ", self.mTimeList[1]-self.mTimeList[0]
 
-###########
 cxxtags = CxxTagsCoreWrapper()
 cxxtags.run()

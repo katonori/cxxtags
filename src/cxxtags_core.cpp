@@ -15,6 +15,7 @@
 namespace cxxtagsIndexer {
 static int gIsPartial = 0;
 static std::string gLastClassUsr = "";
+cxxtags::IndexDb* gDb;
 /******************************************************************************/
 /* Utility functions.                                                         */
 /******************************************************************************/
@@ -180,7 +181,7 @@ static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::strin
     int typeKind = 0;
     getCXTypeInfo(typeCur, typeUsrId, typeKind, isPointer, clang_getCursorType(Cursor));
     // insert to database
-    db::insert_decl_value(usrId, nameId, fileId, line, column, kind, val, 0, isDef, typeUsrId, typeKind, isPointer);
+    gDb->insert_decl_value(usrId, nameId, fileId, line, column, kind, val, 0, isDef, typeUsrId, typeKind, isPointer);
 }
 
 // process declarations
@@ -200,7 +201,7 @@ static inline void procFuncDecl(const CXCursor& Cursor, const char* cUsr, std::s
     int typeKind = 0;
     getCXTypeInfo(typeCur, typeUsrId, typeKind, isPointer, clang_getCursorResultType(Cursor));
     // insert to database
-    db::insert_decl_value(usrId, nameId, fileId, line, column, kind, 0, isVirt, isDef, typeUsrId, typeKind, isPointer);
+    gDb->insert_decl_value(usrId, nameId, fileId, line, column, kind, 0, isVirt, isDef, typeUsrId, typeKind, isPointer);
 }
 
 // process c++ method declarations
@@ -225,7 +226,7 @@ static inline void procCXXMethodDecl(const CXCursor& Cursor, const char* cUsr, s
         assert(cRefUsr);
         int refUsrId = usrIdTbl->GetId(cRefUsr);
         // insert information about overrides to database
-        db::insert_overriden_value(refUsrId, nameId, fileId, line, column, kind, usrId, isDef);
+        gDb->insert_overriden_value(refUsrId, nameId, fileId, line, column, kind, usrId, isDef);
     }
     clang_disposeOverriddenCursors(cursorOverridden);
     // process as a function declaration is also done. 
@@ -267,7 +268,7 @@ static inline void procRef(const CXCursor& Cursor, std::string name, std::string
         int refUsrId = usrIdTbl->GetId(cUsr);
         int nameId = nameIdTbl->GetId(name);
         // insert to database.
-        db::insert_ref_value(refUsrId, nameId, fileId, line, column, kind, refFid, ref_line, ref_column);
+        gDb->insert_ref_value(refUsrId, nameId, fileId, line, column, kind, refFid, ref_line, ref_column);
         clang_disposeString(cxRefUSR);
     }
 }
@@ -287,7 +288,7 @@ static inline void procCXXBaseClassInfo(const CXCursor& Cursor, std::string name
     int classUsrId = usrIdTbl->GetId(gLastClassUsr);
     int baseClassUsrId = usrIdTbl->GetId(cBaseUsr);
     // insert to database
-    db::insert_base_class_value(classUsrId, baseClassUsrId, line, column, accessibility);
+    gDb->insert_base_class_value(classUsrId, baseClassUsrId, line, column, accessibility);
     clang_disposeString(cxBaseUsr);
 }
 
@@ -507,7 +508,8 @@ static int perform_test_load_source(int argc, const char **argv,
   usrIdTbl = new IdTbl();
   nameIdTbl = new IdTbl();
 
-  db::init(out_file_name, in_file_name, gExcludeListStr, gIsPartial, cur_dir, argc-1, argv+1);
+  gDb = new cxxtags::IndexDb();
+  gDb->init(out_file_name, in_file_name, gExcludeListStr, gIsPartial, cur_dir, argc-1, argv+1);
   
   Idx = clang_createIndex(/* excludeDeclsFromPCH */0,
                           /* displayDiagnosics=*/0);
@@ -527,7 +529,7 @@ static int perform_test_load_source(int argc, const char **argv,
                              CommentSchemaFile);
 FUNC_END:
   clang_disposeIndex(Idx);
-  db::fin(fileIdTbl->GetTbl(), usrIdTbl->GetTbl(), nameIdTbl->GetTbl());
+  gDb->fin(fileIdTbl->GetTbl(), usrIdTbl->GetTbl(), nameIdTbl->GetTbl());
   delete fileIdTbl;
   delete usrIdTbl;
   delete nameIdTbl;

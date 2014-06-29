@@ -5,17 +5,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-namespace db {
-static sqlite3 *db;
-static DBMgrRef* refMgr;
-static DBMgrDecl* declMgr;
-static DBMgrOverriden* overridenMgr;
-static DBMgrBaseClass* baseClassMgr;
+namespace cxxtags {
+static const int STEP_MAX_TRY_NUM = 1024;
+static void tryStep(sqlite3_stmt *stmt)
+{
+    for(int i = 0; SQLITE_DONE != sqlite3_step(stmt); i++) {
+        if(i > STEP_MAX_TRY_NUM) {
+            printf("ERROR: SQLITE3: step\n");
+            exit(1);
+        }
+    }
+}
 
-void init(std::string db_file_name, std::string src_file_name, std::string excludeList, int isPartial, const char* curDir, int argc, const char** argv)
+void IndexDb::init(std::string db_file_name, std::string src_file_name, std::string excludeList, int isPartial, const char* curDir, int argc, const char** argv)
 {
     char *err=NULL;
-    if(sqlite3_open(db_file_name.c_str(), &db ) != SQLITE_OK) {
+    if(sqlite3_open(db_file_name.c_str(), &mDb ) != SQLITE_OK) {
         printf("ERROR: faild to open db: %s", db_file_name.c_str());
         exit(1);
     }
@@ -31,94 +36,84 @@ void init(std::string db_file_name, std::string src_file_name, std::string exclu
     }
 
     // begin transaction
-    sqlite3_exec(db, "BEGIN EXCLUSIVE;", NULL, NULL, NULL);
+    sqlite3_exec(mDb, "BEGIN EXCLUSIVE;", NULL, NULL, NULL);
     //
     // db_info
     //
     // contained_part| 0:full, 1:partial
     //
-    sqlite3_exec(db, "CREATE TABLE db_info(db_format INTEGER, src_file_name TEXT, exclude_list TEXT, contained_part INTEGER, build_dir TEXT, build_options);", NULL, NULL, &err);
+    sqlite3_exec(mDb, "CREATE TABLE db_info(db_format INTEGER, src_file_name TEXT, exclude_list TEXT, contained_part INTEGER, build_dir TEXT, build_options);", NULL, NULL, &err);
     // file_list
-    sqlite3_exec(db, "CREATE TABLE file_list(id INTEGER, name TEXT);", NULL, NULL, &err);
+    sqlite3_exec(mDb, "CREATE TABLE file_list(id INTEGER, name TEXT);", NULL, NULL, &err);
     // usr_list
-    sqlite3_exec(db, "CREATE TABLE usr_list(id INTEGER, name TEXT);", NULL, NULL, &err);
+    sqlite3_exec(mDb, "CREATE TABLE usr_list(id INTEGER, name TEXT);", NULL, NULL, &err);
     // name_list
-    sqlite3_exec(db, "CREATE TABLE name_list(id INTEGER, name TEXT);", NULL, NULL, &err);
+    sqlite3_exec(mDb, "CREATE TABLE name_list(id INTEGER, name TEXT);", NULL, NULL, &err);
     // ref
-    sqlite3_exec(db, "CREATE TABLE ref(usr_id INTEGER, name_id INTEGER, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, ref_file_id INTEGER, ref_line INTEGER, ref_col INTEGER);", NULL, NULL, &err);
+    sqlite3_exec(mDb, "CREATE TABLE ref(usr_id INTEGER, name_id INTEGER, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, ref_file_id INTEGER, ref_line INTEGER, ref_col INTEGER);", NULL, NULL, &err);
     // decl
-    sqlite3_exec(db, "CREATE TABLE decl(usr_id INTEGER, name_id INTEGER, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, val INTEGER, is_virtual INTEGER, is_def INTEGER, type_usr_id INTEGER, type_kind INTEGER, is_pointer, accessibility INTEGER);", NULL, NULL, &err);
+    sqlite3_exec(mDb, "CREATE TABLE decl(usr_id INTEGER, name_id INTEGER, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, val INTEGER, is_virtual INTEGER, is_def INTEGER, type_usr_id INTEGER, type_kind INTEGER, is_pointer, accessibility INTEGER);", NULL, NULL, &err);
     // overriden
-    sqlite3_exec(db, "CREATE TABLE overriden(usr_id INTEGER, name_id INTEGER, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, overrider_usr_id INTEGER, is_def INTEGER);", NULL, NULL, &err);
+    sqlite3_exec(mDb, "CREATE TABLE overriden(usr_id INTEGER, name_id INTEGER, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, overrider_usr_id INTEGER, is_def INTEGER);", NULL, NULL, &err);
     //
     // base class info
     //
     // accessibility| 0: invalid, 1: public, 2: protected, 3: private
     //
-    sqlite3_exec(db, "CREATE TABLE base_class(class_usr_id INTEGER, base_class_usr_id INTEGER, line INTEGER, col INTEGER, accessibility INTEGER);", NULL, NULL, &err);
+    sqlite3_exec(mDb, "CREATE TABLE base_class(class_usr_id INTEGER, base_class_usr_id INTEGER, line INTEGER, col INTEGER, accessibility INTEGER);", NULL, NULL, &err);
     // include
-    sqlite3_exec(db, "CREATE TABLE include(file_id INTEGER, included_file_id INTEGER, line INTEGER, col INTEGER);", NULL, NULL, &err);
+    sqlite3_exec(mDb, "CREATE TABLE include(file_id INTEGER, included_file_id INTEGER, line INTEGER, col INTEGER);", NULL, NULL, &err);
 
     // register databasee information
     std::ostringstream os;
     int contained_part = isPartial ? CONTAINED_PART_PARTIAL : CONTAINED_PART_FULL;
     os << "INSERT INTO db_info VALUES(" << DB_VER << ", '" << src_file_name << "','" << excludeList << "'," << contained_part << ", '" << curDir << "','" << build_opt << "');";
-    sqlite3_exec(db, os.str().c_str(), NULL, NULL, &err);
+    sqlite3_exec(mDb, os.str().c_str(), NULL, NULL, &err);
 
     // instantiate
-    refMgr = new(DBMgrRef);
-    declMgr = new(DBMgrDecl);
+    mRefMgr = new(DBMgrRef);
+    mDeclMgr = new(DBMgrDecl);
     overridenMgr = new(DBMgrOverriden);
     baseClassMgr = new(DBMgrBaseClass);
 
     // prepare queries
-    refMgr->InitDb(db);
-    declMgr->InitDb(db);
-    overridenMgr->InitDb(db);
-    baseClassMgr->InitDb(db);
+    mRefMgr->InitDb(mDb);
+    mDeclMgr->InitDb(mDb);
+    overridenMgr->InitDb(mDb);
+    baseClassMgr->InitDb(mDb);
 }
 
-static void tryStep(sqlite3_stmt *stmt)
+void IndexDb::insert_ref_value(int usrId, int nameId, int fileId, int line, int col, int kind, int refFileId, int refLine, int refCol)
 {
-    for(int i = 0; SQLITE_DONE != sqlite3_step(stmt); i++) {
-        if(i > STEP_MAX_TRY_NUM) {
-            printf("ERROR: SQLITE3: step\n");
-            exit(1);
-        }
-    }
-}
-
-void insert_ref_value(int usrId, int nameId, int fileId, int line, int col, int kind, int refFileId, int refLine, int refCol)
-{
-    refMgr->InsertValue(usrId, nameId, fileId, line, col, kind, refFileId, refLine, refCol);
+    mRefMgr->InsertValue(usrId, nameId, fileId, line, col, kind, refFileId, refLine, refCol);
     return ;
 }
 
-void insert_decl_value(int usrId, int nameId, int fileId, int line, int col, int entityKind, int val, int isVirtual, int isDef, int typeUsrId, int typeKind, int isPointer)
+void IndexDb::insert_decl_value(int usrId, int nameId, int fileId, int line, int col, int entityKind, int val, int isVirtual, int isDef, int typeUsrId, int typeKind, int isPointer)
 {
-    declMgr->InsertValue(usrId, nameId, fileId, line, col, entityKind, val, isVirtual, isDef, typeUsrId, typeKind, isPointer);
+    mDeclMgr->InsertValue(usrId, nameId, fileId, line, col, entityKind, val, isVirtual, isDef, typeUsrId, typeKind, isPointer);
 }
 
-void insert_overriden_value(int usrId, int nameId, int fileId, int line, int col, int entityKind, int usrIdOverrider, int isDef)
+void IndexDb::insert_overriden_value(int usrId, int nameId, int fileId, int line, int col, int entityKind, int usrIdOverrider, int isDef)
 {
     overridenMgr->InsertValue(usrId, nameId, fileId, line, col, entityKind, usrIdOverrider, isDef);
     return ;
 }
 
-void insert_base_class_value(int classUsrId, int baseClassUsrId, int line, int col, int accessibility)
+void IndexDb::insert_base_class_value(int classUsrId, int baseClassUsrId, int line, int col, int accessibility)
 {
     baseClassMgr->InsertValue(classUsrId, baseClassUsrId, line, col, accessibility);
     return ;
 }
 
-static void addIdList(const std::map<std::string, int >& inMap, std::string tableName)
+void IndexDb::addIdList(const std::map<std::string, int >& inMap, std::string tableName)
 {
     const char *err=NULL;
     sqlite3_stmt* stmt;
     std::ostringstream os;
     os << "INSERT INTO " << tableName << " VALUES(?, ?);";
-    if(SQLITE_OK != sqlite3_prepare_v2(db, os.str().c_str(), -1, &stmt, &err)) {
-        fprintf(stderr, "ERROR: prepare: %s\n", sqlite3_errmsg(db));
+    if(SQLITE_OK != sqlite3_prepare_v2(mDb, os.str().c_str(), -1, &stmt, &err)) {
+        fprintf(stderr, "ERROR: prepare: %s\n", sqlite3_errmsg(mDb));
         exit(1);
     }
 
@@ -136,45 +131,45 @@ static void addIdList(const std::map<std::string, int >& inMap, std::string tabl
     return ;
 }
 
-void fin(const std::map<std::string, int >& fileMap, const std::map<std::string, int >& usrMap, const std::map<std::string, int >& nameMap)
+void IndexDb::fin(const std::map<std::string, int >& fileMap, const std::map<std::string, int >& usrMap, const std::map<std::string, int >& nameMap)
 {
     addIdList(fileMap, "file_list");
     addIdList(usrMap, "usr_list");
     addIdList(nameMap, "name_list");
 
-    refMgr->FinDb(db);
-    declMgr->FinDb(db);
-    overridenMgr->FinDb(db);
-    baseClassMgr->FinDb(db);
-    delete refMgr;
-    delete declMgr;
+    mRefMgr->FinDb(mDb);
+    mDeclMgr->FinDb(mDb);
+    overridenMgr->FinDb(mDb);
+    baseClassMgr->FinDb(mDb);
+    delete mRefMgr;
+    delete mDeclMgr;
     delete overridenMgr;
     delete baseClassMgr;
 
     // create indices
-    sqlite3_exec(db, "CREATE INDEX file_list_index0 ON file_list(id);", NULL, NULL, NULL);
-    sqlite3_exec(db, "CREATE INDEX file_list_index1 ON file_list(name);", NULL, NULL, NULL);
-    sqlite3_exec(db, "CREATE INDEX usr_list_index0 ON usr_list(id);", NULL, NULL, NULL);
-    sqlite3_exec(db, "CREATE INDEX usr_list_index1 ON usr_list(name);", NULL, NULL, NULL);
-    sqlite3_exec(db, "CREATE INDEX name_list_index0 ON name_list(id);", NULL, NULL, NULL);
-    sqlite3_exec(db, "CREATE INDEX name_list_index1 ON name_list(name);", NULL, NULL, NULL);
-    sqlite3_exec(db, "CREATE INDEX ref_index0 ON ref(file_id, name_id, line, col);", NULL, NULL, NULL);
-    sqlite3_exec(db, "CREATE INDEX ref_index1 ON ref(file_id);", NULL, NULL, NULL);
-    sqlite3_exec(db, "CREATE INDEX ref_index2 ON ref(usr_id);", NULL, NULL, NULL);
-    sqlite3_exec(db, "CREATE INDEX decl_index0 ON decl(file_id, name_id, line, col);", NULL, NULL, NULL);
-    sqlite3_exec(db, "CREATE INDEX decl_index1 ON decl(file_id)", NULL, NULL, NULL);
-    sqlite3_exec(db, "CREATE INDEX decl_index2 ON decl(usr_id)", NULL, NULL, NULL);
-    sqlite3_exec(db, "CREATE INDEX decl_index3 ON decl(usr_id, is_def)", NULL, NULL, NULL);
+    sqlite3_exec(mDb, "CREATE INDEX file_list_index0 ON file_list(id);", NULL, NULL, NULL);
+    sqlite3_exec(mDb, "CREATE INDEX file_list_index1 ON file_list(name);", NULL, NULL, NULL);
+    sqlite3_exec(mDb, "CREATE INDEX usr_list_index0 ON usr_list(id);", NULL, NULL, NULL);
+    sqlite3_exec(mDb, "CREATE INDEX usr_list_index1 ON usr_list(name);", NULL, NULL, NULL);
+    sqlite3_exec(mDb, "CREATE INDEX name_list_index0 ON name_list(id);", NULL, NULL, NULL);
+    sqlite3_exec(mDb, "CREATE INDEX name_list_index1 ON name_list(name);", NULL, NULL, NULL);
+    sqlite3_exec(mDb, "CREATE INDEX ref_index0 ON ref(file_id, name_id, line, col);", NULL, NULL, NULL);
+    sqlite3_exec(mDb, "CREATE INDEX ref_index1 ON ref(file_id);", NULL, NULL, NULL);
+    sqlite3_exec(mDb, "CREATE INDEX ref_index2 ON ref(usr_id);", NULL, NULL, NULL);
+    sqlite3_exec(mDb, "CREATE INDEX decl_index0 ON decl(file_id, name_id, line, col);", NULL, NULL, NULL);
+    sqlite3_exec(mDb, "CREATE INDEX decl_index1 ON decl(file_id)", NULL, NULL, NULL);
+    sqlite3_exec(mDb, "CREATE INDEX decl_index2 ON decl(usr_id)", NULL, NULL, NULL);
+    sqlite3_exec(mDb, "CREATE INDEX decl_index3 ON decl(usr_id, is_def)", NULL, NULL, NULL);
     // end transaction
-    sqlite3_exec(db, "END TRANSACTION;", NULL, NULL, NULL);
-    if(SQLITE_OK != sqlite3_close(db)) {
-        fprintf(stderr, "ERROR: %s\n", sqlite3_errmsg(db));
+    sqlite3_exec(mDb, "END TRANSACTION;", NULL, NULL, NULL);
+    if(SQLITE_OK != sqlite3_close(mDb)) {
+        fprintf(stderr, "ERROR: %s\n", sqlite3_errmsg(mDb));
         exit(1);
     }
 }
 
 // DBMgrBase
-void DBMgrBase::InitDb(sqlite3* db)
+void IndexDb::DBMgrBase::InitDb(sqlite3* db)
 {
     const char* err = NULL;
     if(SQLITE_OK != sqlite3_prepare_v2(db, mQueryInsertTmpl, -1, &mSqlStmt, &err)) {
@@ -183,13 +178,13 @@ void DBMgrBase::InitDb(sqlite3* db)
     }
 }
 
-void DBMgrBase::FinDb(sqlite3* db)
+void IndexDb::DBMgrBase::FinDb(sqlite3* db)
 {
     sqlite3_finalize(mSqlStmt);
 }
 
 // DBMgrRef
-void DBMgrRef::InsertValue(int usrId, int nameId, int fileId, int line, int col, int kind, int refFileId, int refLine, int refCol)
+void IndexDb::DBMgrRef::InsertValue(int usrId, int nameId, int fileId, int line, int col, int kind, int refFileId, int refLine, int refCol)
 {
     sqlite3_reset(mSqlStmt);
     sqlite3_bind_int(mSqlStmt, 1, usrId);
@@ -205,7 +200,7 @@ void DBMgrRef::InsertValue(int usrId, int nameId, int fileId, int line, int col,
 }
 
 // DBMgrDecl
-void DBMgrDecl::InsertValue(int usrId, int nameId, int fid, int line, int col, int entityKind, int val, int isVirtual, int isDef, int typeUsrId, int typeKind, int isPointer)
+void IndexDb::DBMgrDecl::InsertValue(int usrId, int nameId, int fid, int line, int col, int entityKind, int val, int isVirtual, int isDef, int typeUsrId, int typeKind, int isPointer)
 {
     sqlite3_reset(mSqlStmt);
     sqlite3_bind_int(mSqlStmt, 1, usrId);
@@ -225,7 +220,7 @@ void DBMgrDecl::InsertValue(int usrId, int nameId, int fid, int line, int col, i
 }
 
 // DBMgrOverriden
-void DBMgrOverriden::InsertValue(int usrId, int nameId, int fid, int line, int col, int entityKind, int overriderUsrId, int isDef)
+void IndexDb::DBMgrOverriden::InsertValue(int usrId, int nameId, int fid, int line, int col, int entityKind, int overriderUsrId, int isDef)
 {
     sqlite3_reset(mSqlStmt);
     sqlite3_bind_int(mSqlStmt, 1, usrId);
@@ -240,7 +235,7 @@ void DBMgrOverriden::InsertValue(int usrId, int nameId, int fid, int line, int c
 }
 
 // DBMgrBaseClass
-void DBMgrBaseClass::InsertValue(int classUsrId, int baseClassUsrId, int line, int col, int accessibility)
+void IndexDb::DBMgrBaseClass::InsertValue(int classUsrId, int baseClassUsrId, int line, int col, int accessibility)
 {
     sqlite3_reset(mSqlStmt);
     sqlite3_bind_int(mSqlStmt, 1, classUsrId);

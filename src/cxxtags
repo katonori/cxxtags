@@ -8,118 +8,111 @@ import time
 import sqlite3
 import cxxtags_util
 
-gExcludeList = ""
-gOptPartial = ""
-gInFileList = []
-gOutFile = ""
-gTimeList = []
+class CxxTagsCoreWrapper:
+    mExcludeList = ""
+    mOptPartial = ""
+    mInFileList = []
+    mOutFile = ""
+    mTimeList = []
 
-def printUsage():
-    print "usage: cxxtags [-p, --partial] [-e,--exclude exclude_list] [-o out_file] input_file [compiler_arguments]"
+    def printUsage(self):
+        print "usage: cxxtags [-p, --partial] [-e,--exclude exclude_list] [-o out_file] input_file [compiler_arguments]"
 
-# parse arguments.
-def parseArgs(argv):
-    global gExcludeList
-    global gInFileList
-    global gOutFile
-    global gOptPartial
-    if len(argv) < 2:
-        printUsage()
-        sys.exit(1)
-    i = 0
-    while 1:
-        if i >= len(argv):
-            break
-        arg = argv[i]
-        if arg == "-e" or arg == "--exclude":
-            gExcludeList = argv[i+1]
-            del argv[i:i+2]
-        elif arg == "-p" or arg == "--partial":
-            gOptPartial = "-p"
-            del argv[i]
-        elif arg == "-o":
-            gOutFile = argv[i+1]
-            #print "-o: "+gOutFile
-            del argv[i:i+2]
-        elif arg == "-I":
-            # ignore "-I path" options
-            # "-Ipath" format is treated as another option.
-            i += 2
-        elif arg == "-x" or arg == "-MF" or arg == "-MT":
-            # ignore options that take an additional argument.
-            i += 2
-        elif re.search("^[^-]", arg):
-            gInFileList.append(argv[i])
-            #print "infile: "+in_file
-            del argv[i]
-        else:
-            i+=1
-    return argv
+    # parse arguments.
+    def parseArgs(self, argv):
+        if len(argv) < 2:
+            self.printUsage()
+            sys.exit(1)
+        i = 0
+        while 1:
+            if i >= len(argv):
+                break
+            arg = argv[i]
+            if arg == "-e" or arg == "--exclude":
+                self.mExcludeList = argv[i+1]
+                del argv[i:i+2]
+            elif arg == "-p" or arg == "--partial":
+                self.mOptPartial = "-p"
+                del argv[i]
+            elif arg == "-o":
+                self.mOutFile = argv[i+1]
+                #print "-o: "+self.mOutFile
+                del argv[i:i+2]
+            elif arg == "-I":
+                # ignore "-I path" options
+                # "-Ipath" format is treated as another option.
+                i += 2
+            elif arg == "-x" or arg == "-MF" or arg == "-MT":
+                # ignore options that take an additional argument.
+                i += 2
+            elif re.search("^[^-]", arg):
+                self.mInFileList.append(argv[i])
+                #print "infile: "+in_file
+                del argv[i]
+            else:
+                i+=1
+        return argv
 
-########################################################
-def main():
-    global gExcludeList
-    global gInFileList
-    global gOutFile
-    global gTimeList
-    global gOptPartial
-    in_file = ""
-    exe_dir = os.path.dirname(sys.argv[0])
-    cur_dir = os.getcwd()
+    def run(self):
+        in_file = ""
+        exe_dir = os.path.dirname(sys.argv[0])
+        cur_dir = os.getcwd()
 
-    # process args
-    argv = parseArgs(sys.argv[1:])
-    if argv == None:
-        printUsage()
-        sys.exit(1)
-    if len(gInFileList) == 0:
-        printUsage()
-        sys.exit(1)
-    in_file = gInFileList[0]
-    if gOutFile == "":
-        gOutFile = os.path.basename(in_file) + ".db"
-    if len(gInFileList) > 1:
-        print "INFO: multiple input file are specified. empty file \"%s\" is generated."%(gOutFile)
-        fo = open(gOutFile, 'a+') # touch file
-        fo.close()
-        sys.exit(0)
-    if re.match("^.+.o$", in_file):
-        print "INFO: ignore input \"%s\". empty file \"%s\" is generated."%(in_file, gOutFile)
-        fo = open(gOutFile, 'a+') # touch file
-        fo.close()
-        sys.exit(0)
+        # process args
+        argv = self.parseArgs(sys.argv[1:])
+        outfile = self.mOutFile
+        if argv == None:
+            self.printUsage()
+            sys.exit(1)
+        if len(self.mInFileList) == 0:
+            self.printUsage()
+            sys.exit(1)
+        in_file = self.mInFileList[0]
+        if outfile == "":
+            outfile = os.path.basename(in_file) + ".db"
+        if len(self.mInFileList) > 1:
+            print "INFO: multiple input file are specified. empty file \"%s\" is generated."%(outfile)
+            fo = open(outfile, 'a+') # touch file
+            fo.close()
+            sys.exit(0)
+        if re.match("^.+.o$", in_file):
+            print "INFO: ignore input \"%s\". empty file \"%s\" is generated."%(in_file, outfile)
+            fo = open(outfile, 'a+') # touch file
+            fo.close()
+            sys.exit(0)
 
-    if not os.path.exists(in_file):
-        print "ERROR: file not found: %s\n"%(in_file)
-        sys.exit(1)
-    in_file = os.path.abspath(in_file)
+        if not os.path.exists(in_file):
+            print "ERROR: file not found: %s\n"%(in_file)
+            sys.exit(1)
+        in_file = os.path.abspath(in_file)
 
-    if gExcludeList != "":
-        gExcludeList = "-e " + gExcludeList
-    if os.path.exists(gOutFile):
-        os.remove(gOutFile)
-    cmd = "%s/cxxtags_core %s %s %s %s %s "%(exe_dir, gOptPartial, gExcludeList, cur_dir, gOutFile, in_file)+string.join(argv)
-    #print(cmd)
-    #gTimeList.append(time.time())
-    rv = os.system(cmd)
-    if rv != 0:
-        sys.exit(1)
-    #gTimeList.append(time.time())
+        if self.mExcludeList != "":
+            self.mExcludeList = "-e " + self.mExcludeList
+        if os.path.exists(outfile):
+            os.remove(outfile)
+        cmd = "%s/cxxtags_core %s %s %s %s %s "%(exe_dir, self.mOptPartial, self.mExcludeList, cur_dir, outfile, in_file)+string.join(argv)
+        #print(cmd)
+        #self.mTimeList.append(time.time())
+        rv = os.system(cmd)
+        if rv != 0:
+            sys.exit(1)
+        #self.mTimeList.append(time.time())
 
-    # normalize paths
-    db = cxxtags_util.db_connect(gOutFile)
-    cur = db.cursor()
-    cur.execute("SELECT * FROM file_list;")
-    new_file_list = []
-    for row in cur.fetchall():
-        num, fn = row
-        if fn != '':
-            new_file_list.append((os.path.abspath(fn), num))
-    cur.executemany(u"UPDATE file_list SET name=? WHERE id=?;", new_file_list)
-    db.commit()
-    db.close()
-    #print "time:"
-    #print "    proc0: ", gTimeList[1]-gTimeList[0]
+        # normalize paths
+        db = cxxtags_util.db_connect(outfile)
+        cur = db.cursor()
+        cur.execute("SELECT * FROM file_list;")
+        new_file_list = []
+        for row in cur.fetchall():
+            num, fn = row
+            if fn != '':
+                new_file_list.append((os.path.abspath(fn), num))
+        cur.executemany(u"UPDATE file_list SET name=? WHERE id=?;", new_file_list)
+        db.commit()
+        db.close()
+        #print "time:"
+        #print "    proc0: ", self.mTimeList[1]-self.mTimeList[0]
 
 ###########
-main()
+cxxtags = CxxTagsCoreWrapper()
+cxxtags.run()

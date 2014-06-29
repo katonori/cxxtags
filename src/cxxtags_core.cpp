@@ -148,29 +148,11 @@ static void getCXTypeInfo(CXCursor& typeCur, int& typeUsrId, int& typeKind, int&
     clang_disposeString(cxTypeUSR);
 }
 
-static int canSkip(int isDef, const char* cUsr)
-{
-    if(gIsPartial) {
-        if(strncmp(cUsr, "c:macro", 7) == 0) { // macro is declaration but should be processed
-            return 0;
-        }
-        if(isDef == 0) { // is not definition
-            return 1;
-        }
-        if(strncmp(cUsr, "c:@", 3) != 0) { // is not global symbol 
-            return 1;
-        }
-    }
-    return 0;
-}
-
 // process declarations other than function declarations.
 static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column, int kind, int val)
 {
     int isDef = clang_isCursorDefinition(Cursor);
-    if(canSkip(isDef, cUsr)) {
-        return ;
-    }
+    //printf("decl: %s: %s, %s, %d, %d\n", cUsr, name.c_str(), fileName.c_str(), line, column);
     int nameId = nameIdTbl->GetId(name);
     int fileId = fileIdTbl->GetId(fileName);
     int usrId = usrIdTbl->GetId(cUsr);
@@ -188,9 +170,6 @@ static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::strin
 static inline void procFuncDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column, int kind, int isVirt)
 {
     int isDef = clang_isCursorDefinition(Cursor);
-    if(canSkip(isDef, cUsr)) {
-        return ;
-    }
     int nameId = nameIdTbl->GetId(name);
     int fileId = fileIdTbl->GetId(fileName);
     int usrId = usrIdTbl->GetId(cUsr);
@@ -208,9 +187,6 @@ static inline void procFuncDecl(const CXCursor& Cursor, const char* cUsr, std::s
 static inline void procCXXMethodDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column, int kind)
 {
     int isDef = clang_isCursorDefinition(Cursor);
-    if(canSkip(isDef, cUsr)) {
-        return ;
-    }
     int fileId = fileIdTbl->GetId(fileName);
     int usrId = usrIdTbl->GetId(cUsr);
     int isVirt = clang_CXXMethod_isVirtual(Cursor);
@@ -246,8 +222,18 @@ static inline void procRef(const CXCursor& Cursor, std::string name, std::string
         CXString cxRefUSR = clang_getCursorUSR(refCur);
         cUsr = clang_getCString(cxRefUSR);
         assert(cUsr);
+        //printf("ref: %s: %d, %d\n", cUsr, line, column);
         if(gIsPartial) {
-            if(strncmp(cUsr, "c:@", 3) != 0) {
+            unsigned int pos = fileName.rfind('/', fileName.size()-1);
+            std::string substr;
+            if(pos == std::string::npos) {
+                substr = fileName;
+            }
+            else {
+                substr = fileName.substr(pos+1);
+            }
+            std::string cmpStr = "c:" + substr;
+            if(strncmp(cUsr, cmpStr.c_str(), 2+substr.size()) == 0) {
                 return ;
             }
         }

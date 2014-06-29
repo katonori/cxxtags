@@ -6,8 +6,8 @@
 #include <stdlib.h>
 
 namespace cxxtags {
-static const int STEP_MAX_TRY_NUM = 1024;
-static void tryStep(sqlite3_stmt *stmt)
+
+void IndexDb::tryStep(sqlite3_stmt *stmt)
 {
     for(int i = 0; SQLITE_DONE != sqlite3_step(stmt); i++) {
         if(i > STEP_MAX_TRY_NUM) {
@@ -15,6 +15,20 @@ static void tryStep(sqlite3_stmt *stmt)
             exit(1);
         }
     }
+}
+
+void IndexDb::prepareStatement(const char* queryInsertTmpl, sqlite3_stmt **sqlStmt)
+{
+    const char* err = NULL;
+    if(SQLITE_OK != sqlite3_prepare_v2(mDb, queryInsertTmpl, -1, sqlStmt, &err)) {
+        fprintf(stderr, "ERROR: initDb(): prepare: %s\n", sqlite3_errmsg(mDb));
+        exit(1);
+    }
+}
+
+void IndexDb::finDb(sqlite3_stmt *sqlStmt)
+{
+    sqlite3_finalize(sqlStmt);
 }
 
 void IndexDb::init(std::string db_file_name, std::string src_file_name, std::string excludeList, int isPartial, const char* curDir, int argc, const char** argv)
@@ -70,40 +84,70 @@ void IndexDb::init(std::string db_file_name, std::string src_file_name, std::str
     os << "INSERT INTO db_info VALUES(" << DB_VER << ", '" << src_file_name << "','" << excludeList << "'," << contained_part << ", '" << curDir << "','" << build_opt << "');";
     sqlite3_exec(mDb, os.str().c_str(), NULL, NULL, &err);
 
-    // instantiate
-    mRefMgr = new(DBMgrRef);
-    mDeclMgr = new(DBMgrDecl);
-    overridenMgr = new(DBMgrOverriden);
-    baseClassMgr = new(DBMgrBaseClass);
-
     // prepare queries
-    mRefMgr->InitDb(mDb);
-    mDeclMgr->InitDb(mDb);
-    overridenMgr->InitDb(mDb);
-    baseClassMgr->InitDb(mDb);
+    prepareStatement("INSERT INTO ref VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);", &mSqlStmtRef);
+    prepareStatement("INSERT INTO decl VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", &mSqlStmtDecl);
+    prepareStatement("INSERT INTO overriden VALUES (?, ?, ?, ?, ?, ?, ?, ? );", &mSqlStmtOverriden);
+    prepareStatement("INSERT INTO base_class VALUES (?, ?, ?, ?, ?);", &mSqlStmtBaseClass);
 }
 
 void IndexDb::insert_ref_value(int usrId, int nameId, int fileId, int line, int col, int kind, int refFileId, int refLine, int refCol)
 {
-    mRefMgr->InsertValue(usrId, nameId, fileId, line, col, kind, refFileId, refLine, refCol);
-    return ;
+    sqlite3_reset(mSqlStmtRef);
+    sqlite3_bind_int(mSqlStmtRef, 1, usrId);
+    sqlite3_bind_int(mSqlStmtRef, 2, nameId);
+    sqlite3_bind_int(mSqlStmtRef, 3, fileId);
+    sqlite3_bind_int(mSqlStmtRef, 4, line);
+    sqlite3_bind_int(mSqlStmtRef, 5, col);
+    sqlite3_bind_int(mSqlStmtRef, 6, kind);
+    sqlite3_bind_int(mSqlStmtRef, 7, refFileId);
+    sqlite3_bind_int(mSqlStmtRef, 8, refLine);
+    sqlite3_bind_int(mSqlStmtRef, 9, refCol);
+    tryStep(mSqlStmtRef);
 }
 
 void IndexDb::insert_decl_value(int usrId, int nameId, int fileId, int line, int col, int entityKind, int val, int isVirtual, int isDef, int typeUsrId, int typeKind, int isPointer)
 {
-    mDeclMgr->InsertValue(usrId, nameId, fileId, line, col, entityKind, val, isVirtual, isDef, typeUsrId, typeKind, isPointer);
+    sqlite3_reset(mSqlStmtDecl);
+    sqlite3_bind_int(mSqlStmtDecl, 1, usrId);
+    sqlite3_bind_int(mSqlStmtDecl, 2, nameId);
+    sqlite3_bind_int(mSqlStmtDecl, 3, fileId);
+    sqlite3_bind_int(mSqlStmtDecl, 4, line);
+    sqlite3_bind_int(mSqlStmtDecl, 5, col);
+    sqlite3_bind_int(mSqlStmtDecl, 6, entityKind);
+    sqlite3_bind_int(mSqlStmtDecl, 7, val);
+    sqlite3_bind_int(mSqlStmtDecl, 8, isVirtual);
+    sqlite3_bind_int(mSqlStmtDecl, 9, isDef);
+    sqlite3_bind_int(mSqlStmtDecl, 10, typeUsrId);
+    sqlite3_bind_int(mSqlStmtDecl, 11, typeKind);
+    sqlite3_bind_int(mSqlStmtDecl, 12, isPointer);
+    sqlite3_bind_int(mSqlStmtDecl, 13, 0); // accessibility
+    tryStep(mSqlStmtDecl);
 }
 
 void IndexDb::insert_overriden_value(int usrId, int nameId, int fileId, int line, int col, int entityKind, int usrIdOverrider, int isDef)
 {
-    overridenMgr->InsertValue(usrId, nameId, fileId, line, col, entityKind, usrIdOverrider, isDef);
-    return ;
+    sqlite3_reset(mSqlStmtOverriden);
+    sqlite3_bind_int(mSqlStmtOverriden, 1, usrId);
+    sqlite3_bind_int(mSqlStmtOverriden, 2, nameId);
+    sqlite3_bind_int(mSqlStmtOverriden, 3, fileId);
+    sqlite3_bind_int(mSqlStmtOverriden, 4, line);
+    sqlite3_bind_int(mSqlStmtOverriden, 5, col);
+    sqlite3_bind_int(mSqlStmtOverriden, 6, entityKind);
+    sqlite3_bind_int(mSqlStmtOverriden, 7, usrIdOverrider);
+    sqlite3_bind_int(mSqlStmtOverriden, 8, isDef);
+    tryStep(mSqlStmtOverriden);
 }
 
 void IndexDb::insert_base_class_value(int classUsrId, int baseClassUsrId, int line, int col, int accessibility)
 {
-    baseClassMgr->InsertValue(classUsrId, baseClassUsrId, line, col, accessibility);
-    return ;
+    sqlite3_reset(mSqlStmtBaseClass);
+    sqlite3_bind_int(mSqlStmtBaseClass, 1, classUsrId);
+    sqlite3_bind_int(mSqlStmtBaseClass, 2, baseClassUsrId);
+    sqlite3_bind_int(mSqlStmtBaseClass, 3, line);
+    sqlite3_bind_int(mSqlStmtBaseClass, 4, col);
+    sqlite3_bind_int(mSqlStmtBaseClass, 5, accessibility);
+    tryStep(mSqlStmtBaseClass);
 }
 
 void IndexDb::addIdList(const std::map<std::string, int >& inMap, std::string tableName)
@@ -137,14 +181,10 @@ void IndexDb::fin(const std::map<std::string, int >& fileMap, const std::map<std
     addIdList(usrMap, "usr_list");
     addIdList(nameMap, "name_list");
 
-    mRefMgr->FinDb(mDb);
-    mDeclMgr->FinDb(mDb);
-    overridenMgr->FinDb(mDb);
-    baseClassMgr->FinDb(mDb);
-    delete mRefMgr;
-    delete mDeclMgr;
-    delete overridenMgr;
-    delete baseClassMgr;
+    finDb(mSqlStmtRef);
+    finDb(mSqlStmtDecl);
+    finDb(mSqlStmtOverriden);
+    finDb(mSqlStmtBaseClass);
 
     // create indices
     sqlite3_exec(mDb, "CREATE INDEX file_list_index0 ON file_list(id);", NULL, NULL, NULL);
@@ -168,81 +208,4 @@ void IndexDb::fin(const std::map<std::string, int >& fileMap, const std::map<std
     }
 }
 
-// DBMgrBase
-void IndexDb::DBMgrBase::InitDb(sqlite3* db)
-{
-    const char* err = NULL;
-    if(SQLITE_OK != sqlite3_prepare_v2(db, mQueryInsertTmpl, -1, &mSqlStmt, &err)) {
-        fprintf(stderr, "ERROR: initDb(): prepare: %s\n", sqlite3_errmsg(db));
-        exit(1);
-    }
-}
-
-void IndexDb::DBMgrBase::FinDb(sqlite3* db)
-{
-    sqlite3_finalize(mSqlStmt);
-}
-
-// DBMgrRef
-void IndexDb::DBMgrRef::InsertValue(int usrId, int nameId, int fileId, int line, int col, int kind, int refFileId, int refLine, int refCol)
-{
-    sqlite3_reset(mSqlStmt);
-    sqlite3_bind_int(mSqlStmt, 1, usrId);
-    sqlite3_bind_int(mSqlStmt, 2, nameId);
-    sqlite3_bind_int(mSqlStmt, 3, fileId);
-    sqlite3_bind_int(mSqlStmt, 4, line);
-    sqlite3_bind_int(mSqlStmt, 5, col);
-    sqlite3_bind_int(mSqlStmt, 6, kind);
-    sqlite3_bind_int(mSqlStmt, 7, refFileId);
-    sqlite3_bind_int(mSqlStmt, 8, refLine);
-    sqlite3_bind_int(mSqlStmt, 9, refCol);
-    tryStep(mSqlStmt);
-}
-
-// DBMgrDecl
-void IndexDb::DBMgrDecl::InsertValue(int usrId, int nameId, int fid, int line, int col, int entityKind, int val, int isVirtual, int isDef, int typeUsrId, int typeKind, int isPointer)
-{
-    sqlite3_reset(mSqlStmt);
-    sqlite3_bind_int(mSqlStmt, 1, usrId);
-    sqlite3_bind_int(mSqlStmt, 2, nameId);
-    sqlite3_bind_int(mSqlStmt, 3, fid);
-    sqlite3_bind_int(mSqlStmt, 4, line);
-    sqlite3_bind_int(mSqlStmt, 5, col);
-    sqlite3_bind_int(mSqlStmt, 6, entityKind);
-    sqlite3_bind_int(mSqlStmt, 7, val);
-    sqlite3_bind_int(mSqlStmt, 8, isVirtual);
-    sqlite3_bind_int(mSqlStmt, 9, isDef);
-    sqlite3_bind_int(mSqlStmt, 10, typeUsrId);
-    sqlite3_bind_int(mSqlStmt, 11, typeKind);
-    sqlite3_bind_int(mSqlStmt, 12, isPointer);
-    sqlite3_bind_int(mSqlStmt, 13, 0); // accessibility
-    tryStep(mSqlStmt);
-}
-
-// DBMgrOverriden
-void IndexDb::DBMgrOverriden::InsertValue(int usrId, int nameId, int fid, int line, int col, int entityKind, int overriderUsrId, int isDef)
-{
-    sqlite3_reset(mSqlStmt);
-    sqlite3_bind_int(mSqlStmt, 1, usrId);
-    sqlite3_bind_int(mSqlStmt, 2, nameId);
-    sqlite3_bind_int(mSqlStmt, 3, fid);
-    sqlite3_bind_int(mSqlStmt, 4, line);
-    sqlite3_bind_int(mSqlStmt, 5, col);
-    sqlite3_bind_int(mSqlStmt, 6, entityKind);
-    sqlite3_bind_int(mSqlStmt, 7, overriderUsrId);
-    sqlite3_bind_int(mSqlStmt, 8, isDef);
-    tryStep(mSqlStmt);
-}
-
-// DBMgrBaseClass
-void IndexDb::DBMgrBaseClass::InsertValue(int classUsrId, int baseClassUsrId, int line, int col, int accessibility)
-{
-    sqlite3_reset(mSqlStmt);
-    sqlite3_bind_int(mSqlStmt, 1, classUsrId);
-    sqlite3_bind_int(mSqlStmt, 2, baseClassUsrId);
-    sqlite3_bind_int(mSqlStmt, 3, line);
-    sqlite3_bind_int(mSqlStmt, 4, col);
-    sqlite3_bind_int(mSqlStmt, 5, accessibility);
-    tryStep(mSqlStmt);
-}
 };

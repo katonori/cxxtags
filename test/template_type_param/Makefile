@@ -13,5 +13,5 @@ $(MERGER_OUT): $(DB_FILES)
 html: $(MERGER_OUT)
 	$(DUMPER) $<
 clean:
-	rm -rf main.cpp.db html $(MERGER_OUT)
+	rm -rf main.db html $(MERGER_OUT)
 include ../util/common_rule.mk

@@ -224,7 +224,7 @@ static inline void procRef(const CXCursor& Cursor, std::string name, std::string
         assert(cUsr);
         //printf("ref: %s: %d, %d\n", cUsr, line, column);
         if(gIsPartial) {
-            unsigned int pos = fileName.rfind('/', fileName.size()-1);
+            std::string::size_type pos = fileName.rfind('/', fileName.size()-1);
             std::string substr;
             if(pos == std::string::npos) {
                 substr = fileName;

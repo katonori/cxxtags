@@ -11,7 +11,7 @@ if LLVM_HOME == None:
     sys.exit(1)
 
 CXXTAGS = "../../src/cxxtags"
-CXXTAGS_INCLUDES = "-I%s/lib/clang/3.2/include"%(LLVM_HOME)
+CXXTAGS_INCLUDES = "-I%s/lib/clang/3.4/include"%(LLVM_HOME)
 USAGE = "usage: cxxtags [-p, --partial] [-e,--exclude exclude_list] [-o out_file] input_file [compiler_arguments]"
 DB_INFO_COLS = 6
 DB_VER = 6

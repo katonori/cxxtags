@@ -1,10 +1,10 @@
 CXX=g++
-LLVM_HOME=/pkg/llvm-3.2
+LLVM_HOME=/vol/0/pkg/llvm-3.4
 INCLUDES=-I${LLVM_HOME}/include/
-CXXTAGS_INCLUDES=-I${LLVM_HOME}/include/ -I${LLVM_HOME}/lib/clang/3.2/include
+CXXTAGS_INCLUDES=-I${LLVM_HOME}/include/ -I${LLVM_HOME}/lib/clang/3.4/include
 LIBS=-L${LLVM_HOME}/lib/ -L/usr/lib/ -lsqlite3 -lclang -lstdc++ 
 CXXFLAGS=-Wall -g -O2
-CXXTAGS = ./cxxtags
+CXXTAGS = env LD_LIBRARY_PATH=${LLVM_HOME}/lib:${LD_LIBRARY_PATH} ./cxxtags
 CXXTAGS_DB_MANAGER = ./cxxtags_db_manager
 
 all: cxxtags_core.cpp db.cpp

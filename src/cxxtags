@@ -122,7 +122,7 @@ class CxxTagsCoreWrapper:
         if self.mGuessOptions == 0:
             cmd = "%s/cxxtags_core %s %s %s %s %s "%(exe_dir, self.mOptPartial, self.mExcludeList, cur_dir, outfile, in_file)+string.join(argv)
         else:
-            cmd = "%s/cxxtags_core %s %s %s %s "%(exe_dir, self.mOptPartial, self.mExcludeList, cur_dir, outfile)+opt
+            cmd = "%s/cxxtags_core %s %s %s %s "%(exe_dir, self.mOptPartial, self.mExcludeList, cur_dir, outfile)+' '+' '.join(argv)+' '+opt
         #print(cmd)
         #self.mTimeList.append(time.time())
         rv = os.system(cmd)

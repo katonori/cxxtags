@@ -148,6 +148,49 @@ static void getCXTypeInfo(CXCursor& typeCur, int& typeUsrId, int& typeKind, int&
     clang_disposeString(cxTypeUSR);
 }
 
+static bool isBuiltinType(int typeKind)
+{
+    switch(typeKind) {
+        case CXType_Bool: 
+        case CXType_Char_U:
+        case CXType_UChar:
+        case CXType_Char16:
+        case CXType_Char32:
+        case CXType_UShort:
+        case CXType_UInt:
+        case CXType_ULong:
+        case CXType_ULongLong:
+        case CXType_UInt128:
+        case CXType_Char_S:
+        case CXType_SChar:
+        case CXType_WChar:
+        case CXType_Short:
+        case CXType_Int:
+        case CXType_Long:
+        case CXType_LongLong:
+        case CXType_Int128:
+        case CXType_Float:
+        case CXType_Double:
+        case CXType_LongDouble:
+            return true;
+        default:
+            return false;
+    }
+    return false;
+}
+
+static bool isLocalDecl(CXCursorKind parentKind)
+{
+    switch(parentKind) {
+        case CXCursor_FunctionDecl: 
+        case CXCursor_ParmDecl:
+            return true;
+        default:
+            return false;
+    }
+    return false;
+}
+
 // process declarations other than function declarations.
 static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column, int kind, int val)
 {
@@ -161,7 +204,26 @@ static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::strin
     int typeUsrId = 0;
     int isPointer = 0;
     int typeKind = 0;
-    getCXTypeInfo(typeCur, typeUsrId, typeKind, isPointer, clang_getCursorType(Cursor));
+    CXType curTypeOrig = clang_getCursorType(Cursor);
+
+    getCXTypeInfo(typeCur, typeUsrId, typeKind, isPointer, curTypeOrig);
+    //
+    // if the option '-p' is specified
+    // 
+    if(gIsPartial) {
+        CXCursor parentCur = clang_getCursorSemanticParent(Cursor);
+        if(curTypeOrig.kind == CXType_LValueReference) {
+            curTypeOrig = clang_getPointeeType(curTypeOrig);
+        }
+        while(curTypeOrig.kind == CXType_Pointer) {
+            curTypeOrig = clang_getPointeeType(curTypeOrig);
+        }
+        //printf("%s, %s, %d, %d, parent=%d, type=%d, cursorKind=%d\n", fileName.c_str(), name.c_str(), line, column, parentCur.kind, curTypeOrig.kind, Cursor.kind);
+        // type is canonical && scope is function internal then skip
+        if(isBuiltinType(curTypeOrig.kind) && isLocalDecl(parentCur.kind)) {
+            return;
+        }
+    }
     // insert to database
     gDb->insert_decl_value(usrId, nameId, fileId, line, column, kind, val, 0, isDef, typeUsrId, typeKind, isPointer);
 }
@@ -223,18 +285,14 @@ static inline void procRef(const CXCursor& Cursor, std::string name, std::string
         cUsr = clang_getCString(cxRefUSR);
         assert(cUsr);
         //printf("ref: %s: %d, %d\n", cUsr, line, column);
+        //
+        // if the option '-p' is specified
+        // 
         if(gIsPartial) {
-            std::string::size_type pos = fileName.rfind('/', fileName.size()-1);
-            std::string substr;
-            if(pos == std::string::npos) {
-                substr = fileName;
-            }
-            else {
-                substr = fileName.substr(pos+1);
-            }
-            std::string cmpStr = "c:" + substr;
-            if(strncmp(cUsr, cmpStr.c_str(), 2+substr.size()) == 0) {
-                return ;
+            // skip if the scope is function internal
+            CXCursor parentCur = clang_getCursorSemanticParent(refCur);
+            if(isLocalDecl(parentCur.kind)) {
+                return;
             }
         }
         // refered location

@@ -10,12 +10,19 @@ import cxxtags_util
 from elftools.elf.elffile import ELFFile
 
 class CxxTagsCoreWrapper:
+    mClangHome = ""
     mExcludeList = ""
     mOptPartial = ""
     mInFileList = []
     mOutFile = ""
     mTimeList = []
     mGuessOptions = 0
+
+    def __init__(self):
+        try:
+            self.mClangHome = os.environ["CLANG_HOME"]
+        except KeyError:
+            None
 
     def printUsage(self):
         print "usage: cxxtags [-p, --partial] [-e,--exclude exclude_list] [-o out_file] input_file [compiler_arguments]"
@@ -65,19 +72,25 @@ class CxxTagsCoreWrapper:
             f = open(filename, 'rb')
             elffile = ELFFile(f)
             cl = elffile.get_section_by_name(".GCC.command.line")
-            lines = cl.data().split('\0')
-            #print lines
+            srcFile = ""
             opts = []
-            for l in lines:
-                if re.match('-[ID]', l):
-                    opts.append(l)
-                elif re.match('[^-]', l):
-                    opts.append(l)
+            if cl:
+                lines = cl.data().split('\0')
+                #print lines
+                for l in lines:
+                    if l.startswith('-I'):
+                        l = l.replace('-I ', '-I')
+                        opts.append(l)
+                    elif l.startswith('-D'):
+                        l = l.replace('-D ', '-D')
+                        opts.append(l)
+                    elif re.match('[^-]', l):
+                        srcFile = l
         except IOError, (errno, strerror):
             raise IOError(errno, strerror + ": " + filename)
         except:
-            return None
-        return ' '.join(opts)
+            return ("", "")
+        return (srcFile, ' '.join(opts))
 
     def run(self):
         in_file = ""
@@ -103,10 +116,8 @@ class CxxTagsCoreWrapper:
             sys.exit(0)
         opt = ""
         if self.mGuessOptions != 0:
-            opt = self.getBuildOptions(in_file)
-            if opt:
-                print "BuildOption: " + opt
-            else:
+            (in_file, opt) = self.getBuildOptions(in_file)
+            if opt == "" or in_file == "":
                 print("ERROR: could not build option from elf information")
                 sys.exit(1)
 
@@ -122,7 +133,13 @@ class CxxTagsCoreWrapper:
         if self.mGuessOptions == 0:
             cmd = "%s/cxxtags_core %s %s %s %s %s "%(exe_dir, self.mOptPartial, self.mExcludeList, cur_dir, outfile, in_file)+string.join(argv)
         else:
-            cmd = "%s/cxxtags_core %s %s %s %s "%(exe_dir, self.mOptPartial, self.mExcludeList, cur_dir, outfile)+' '+' '.join(argv)+' '+opt
+            clangIncludePath = ""
+            if self.mClangHome == "":
+                print "WARNIGN: environment variable CLANG_HOME is not set. This may cause build error."
+            else:
+                clangIncludePath = '-I' + self.mClangHome + '/include/ '
+            cmd = "%s/cxxtags_core %s %s %s %s %s "%(exe_dir, self.mOptPartial, self.mExcludeList, cur_dir, outfile, in_file) + ' '.join(argv) + ' ' + clangIncludePath + opt
+            print(cmd)
         #print(cmd)
         #self.mTimeList.append(time.time())
         rv = os.system(cmd)

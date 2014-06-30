@@ -181,8 +181,9 @@ class rebuildHandler():
         partialOpt = ""
         if self.mIsPartial:
             partialOpt = "-p"
+        buildOptions = buildOptions.replace('-g', '')
         cmd = "cd " + buildDir + " && cxxtags " + partialOpt + " " + excludeList + " " + self.mActualSrcFileName + " -o " + tmpfile + " " + buildOptions
-        #print cmd
+        print "CMD: " + cmd
         rv = -1
         try:
             rv = os.system(cmd)

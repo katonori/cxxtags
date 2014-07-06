@@ -5,6 +5,8 @@ import sqlite3
 import traceback
 import re
 
+FILE_INDEX_FILE_NAME = "file_index.db"
+
 def my_exit(val, msg):
     traceback.print_stack()
     print msg
@@ -29,7 +31,7 @@ def db_connect(fn):
     return db
 
 def get_db_file_list(db_dir):
-    db = db_connect(db_dir + "/" + "file_index.db")
+    db = db_connect(db_dir + "/" + FILE_INDEX_FILE_NAME)
     cur = db.cursor()
     cur.execute("SELECT db_file FROM file_index;")
     db_dict = {}
@@ -41,7 +43,7 @@ def get_db_file_list(db_dir):
 
 def get_db_by_file_name(db_dir, file_name):
     file_name = os.path.abspath(file_name)
-    db = db_connect(db_dir + "/" + "file_index.db")
+    db = db_connect(db_dir + "/" + FILE_INDEX_FILE_NAME)
     cur = db.cursor()
     cur.execute("SELECT db_file FROM file_index WHERE file_name=?;", (file_name,))
     row = cur.fetchone()
@@ -54,7 +56,7 @@ def get_db_files_by_src_file_name(db_dir, file_name):
     db_list = []
     if file_name == "":
         return db_list
-    db = db_connect(db_dir + "/" + "file_index.db")
+    db = db_connect(db_dir + "/" + FILE_INDEX_FILE_NAME)
     cur = db.cursor()
     cur.execute("SELECT file_name, db_file FROM file_index WHERE file_name LIKE ?;", ('%'+file_name,))
     for row in cur.fetchall():
@@ -65,7 +67,7 @@ def get_db_files_by_src_file_name(db_dir, file_name):
 
 def get_db_by_file_name_match(db_dir, file_name):
     db_list = []
-    db = db_connect(db_dir + "/" + "file_index.db")
+    db = db_connect(db_dir + "/" + FILE_INDEX_FILE_NAME)
     cur = db.cursor()
     cur.execute("SELECT file_name, db_file FROM file_index WHERE file_name LIKE ?;", ('%'+file_name+'%',))
     for row in cur.fetchall():

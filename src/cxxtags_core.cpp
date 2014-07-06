@@ -195,7 +195,6 @@ static bool isLocalDecl(CXCursorKind parentKind)
 static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column, int kind, int val)
 {
     int isDef = clang_isCursorDefinition(Cursor);
-    //printf("decl: %s: %s, %s, %d, %d\n", cUsr, name.c_str(), fileName.c_str(), line, column);
     int nameId = nameIdTbl->GetId(name);
     int fileId = fileIdTbl->GetId(fileName);
     int usrId = usrIdTbl->GetId(cUsr);
@@ -207,6 +206,7 @@ static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::strin
     CXType curTypeOrig = clang_getCursorType(Cursor);
 
     getCXTypeInfo(typeCur, typeUsrId, typeKind, isPointer, curTypeOrig);
+    //printf("decl: %s: %s, %s, %d, %d, kind=%d, typeKind=%d, typeKind2=%d\n", cUsr, name.c_str(), fileName.c_str(), line, column, kind, curTypeOrig.kind, typeKind);
     //
     // if the option '-p' is specified
     // 
@@ -382,7 +382,8 @@ static inline void procCursor(const CXCursor& Cursor) {
             break;
         }
         case CXCursor_StructDecl:
-        case CXCursor_ClassDecl: {
+        case CXCursor_ClassDecl:
+        case CXCursor_EnumDecl: {
             gLastClassUsr = cUsr;
             procDecl(Cursor, cUsr, name, fileName, line, column, kind, val);
             break;
@@ -524,6 +525,7 @@ static int perform_test_load_source(int argc, const char **argv,
   setCursorTypeAvailable(CXCursor_EnumConstantDecl);
   setCursorTypeAvailable(CXCursor_TypedefDecl);
   setCursorTypeAvailable(CXCursor_ClassDecl);
+  setCursorTypeAvailable(CXCursor_EnumDecl);
   setCursorTypeAvailable(CXCursor_Namespace);
   setCursorTypeAvailable(CXCursor_StructDecl);
   setCursorTypeAvailable(CXCursor_UnionDecl);

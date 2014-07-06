@@ -114,10 +114,11 @@ err += test(CXXTAGS + " "+buildOptRef+" main.cpp -e "+excludeListRef+" -o a.db",
 buildOpt = "-I ./subdir " + CXXTAGS_INCLUDES
 err += test(CXXTAGS + " "+buildOpt+" main.cpp -e "+excludeListRef+" -o a.db", "a.db", "ref.db", buildOpt, buildOptRef, excludeListRef, excludeListRef)
 
-
 # -g option test
 OPT_REF=" -I/usr/lib/llvm-3.5//include/ -I/ -I../../ -D_GNU_SOURCE -DA -DB"
-res = commands.getoutput(CXXTAGS + " -v -g test.o | grep 'build option'")
+cmd = CXXTAGS + " -v -G test.o | grep 'build option'"
+print cmd
+res = commands.getoutput(cmd)
 m = re.match(r'^build option.+:(.+)$', res)
 if m:
     res = m.group(1)
@@ -126,6 +127,7 @@ if m:
         print "ERROR: opt: " + res
         err += 1
 else:
+    print "ERROR: could not get bild option from elf information"
     err += 1
 
 if err == 0:

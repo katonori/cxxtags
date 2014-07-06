@@ -17,6 +17,7 @@ class CxxTagsCoreWrapper:
     mOutFile = ""
     mTimeList = []
     mGuessOptions = 0
+    mIsVerbose = 0
 
     def __init__(self):
         try:
@@ -43,19 +44,22 @@ class CxxTagsCoreWrapper:
             elif arg == "-p" or arg == "--partial":
                 self.mOptPartial = "-p"
                 del argv[i]
+            elif arg == "-v":
+                self.mIsVerbose = 1
+                del argv[i]
             elif arg == "-o":
                 self.mOutFile = argv[i+1]
                 #print "-o: "+self.mOutFile
                 del argv[i:i+2]
+            elif arg == "-G":
+                # guess compile options from DWARF information.
+                # the input file must be an object file compile with -grecord-gcc-switches option.
+                self.mGuessOptions = 1
+                del argv[i]
             elif arg == "-I":
                 # ignore "-I path" options
                 # "-Ipath" format is treated as another option.
                 i += 2
-            elif arg == "-g":
-                # guess compile options from DWARF information.
-                # the input file must be an object file compile with -grecord-gcc-switches option.
-                self.mGuessOptions = 1
-                i += 1
             elif arg == "-x" or arg == "-MF" or arg == "-MT":
                 # ignore options that take an additional argument.
                 i += 2
@@ -109,6 +113,9 @@ class CxxTagsCoreWrapper:
         outfile = self.mOutFile
         if outfile == "":
             outfile = os.path.basename(in_file) + ".db"
+        tgt_dir =os.path.dirname(outfile)
+        if tgt_dir != "" and not os.path.exists(tgt_dir):
+            os.makedirs(tgt_dir)
         if len(self.mInFileList) > 1:
             print "INFO: multiple input file are specified. empty file \"%s\" is generated."%(outfile)
             fo = open(outfile, 'a+') # touch file
@@ -118,8 +125,10 @@ class CxxTagsCoreWrapper:
         if self.mGuessOptions != 0:
             (in_file, opt) = self.getBuildOptions(in_file)
             if opt == "" or in_file == "":
-                print("ERROR: could not build option from elf information")
+                print("ERROR: could not get build options from elf information")
                 sys.exit(1)
+            if self.mIsVerbose != 0:
+                print "build option retrieved from elf information: " + opt
 
         if not os.path.exists(in_file):
             print "ERROR: file not found: %s\n"%(in_file)
@@ -144,6 +153,8 @@ class CxxTagsCoreWrapper:
         #self.mTimeList.append(time.time())
         rv = os.system(cmd)
         if rv != 0:
+            if os.path.exists(outfile):
+                os.remove(outfile)
             sys.exit(1)
         #self.mTimeList.append(time.time())
 

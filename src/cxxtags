@@ -56,6 +56,10 @@ class CxxTagsCoreWrapper:
                 # the input file must be an object file compile with -grecord-gcc-switches option.
                 self.mGuessOptions = 1
                 del argv[i]
+            elif arg == "-D":
+                # ignore "-D xxx" options
+                # "-Dxxx" format is treated as another option.
+                i += 2
             elif arg == "-I":
                 # ignore "-I path" options
                 # "-Ipath" format is treated as another option.

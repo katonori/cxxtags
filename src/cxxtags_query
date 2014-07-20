@@ -121,7 +121,7 @@ class QueryHandlerDecl(HandlerBase):
     mColNo = 0
 
     def __init__(self, dbDir):
-        self.mDbDir = dbDir
+        self.mDbDir = dbDir + "/"
 
     def DoQuery(self):
         usr = self.GetUsr(self.mFileName, self.mLineNo, self.mColNo)
@@ -137,7 +137,17 @@ class QueryHandlerDecl(HandlerBase):
         cur.execute('SELECT name_list.name, file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name=? ORDER BY decl.is_def LIMIT 1', (usr,))
         result = cur.fetchone()
         db.close()
-        return result
+        if result:
+            return result
+        common_db = self.mDbDir + "common_headers.db"
+        if os.path.exists(common_db):
+            db = cxxtags_util.db_connect(common_db)
+            cur = db.cursor()
+            cur.execute('SELECT name_list.name, file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name=? ORDER BY decl.is_def LIMIT 1', (usr,))
+            result = cur.fetchone()
+            db.close()
+            return result
+        return None
 
     def parseArg(self):
         if len(sys.argv) != 6:

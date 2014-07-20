@@ -14,6 +14,7 @@
 
 namespace cxxtagsIndexer {
 static int gIsPartial = 0;
+static int gIsEmpty = 0;
 static std::string gLastClassUsr = "";
 cxxtags::IndexDb* gDb;
 /******************************************************************************/
@@ -510,7 +511,7 @@ static int perform_test_load(CXIndex Idx, CXTranslationUnit TU,
 static int perform_test_load_source(int argc, const char **argv,
                              CXCursorVisitor Visitor,
                              PostVisitTU PV) {
-  CXIndex Idx;
+  CXIndex Idx = 0;
   CXTranslationUnit TU;
   const char *CommentSchemaFile = NULL;
   int result;
@@ -556,6 +557,13 @@ static int perform_test_load_source(int argc, const char **argv,
 
   gDb = new cxxtags::IndexDb();
   gDb->init(out_file_name, in_file_name, gExcludeListStr, gIsPartial, cur_dir, argc-1, argv+1);
+
+  if(gIsEmpty) {
+      result = 0;
+      // add the source file to the file list
+      fileIdTbl->GetId(in_file_name);
+      goto FUNC_END;
+  }
   
   Idx = clang_createIndex(/* excludeDeclsFromPCH */0,
                           /* displayDiagnosics=*/0);
@@ -574,7 +582,9 @@ static int perform_test_load_source(int argc, const char **argv,
   result = perform_test_load(Idx, TU, NULL, Visitor, PV,
                              CommentSchemaFile);
 FUNC_END:
-  clang_disposeIndex(Idx);
+  if(Idx) {
+    clang_disposeIndex(Idx);
+  }
   gDb->fin(fileIdTbl->GetTbl(), usrIdTbl->GetTbl(), nameIdTbl->GetTbl());
   delete fileIdTbl;
   delete usrIdTbl;
@@ -586,7 +596,7 @@ FUNC_END:
 /* Command line processing.                                                   */
 /******************************************************************************/
 static void print_usage(void) {
-    fprintf(stderr, "usage: cxxtags_core [-p] [-e excludeList] cur_dir out_file in_file -- {<clang_args>}*\n");
+    fprintf(stderr, "usage: cxxtags_core [-pE] [-e excludeList] cur_dir out_file in_file -- {<clang_args>}*\n");
 }
 
 static std::vector<std::string > splitString(std::string str)
@@ -622,6 +632,11 @@ static int indexSource(int argc, const char **argv) {
             }
             else if(strncmp(*argv, "-p", 2) == 0) {
                 gIsPartial = 1;
+                argv++;
+                argc--;
+            }
+            else if(strncmp(*argv, "-E", 2) == 0) {
+                gIsEmpty = 1;
                 argv++;
                 argc--;
             }

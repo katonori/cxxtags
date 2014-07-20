@@ -8,10 +8,12 @@ import sqlite3
 import cxxtags_util
 import getopt
 import traceback
+import tempfile
 
 DB_VER = 6
 CONTAINED_PART_FULL = 0
 CONTAINED_PART_PARTIAL = 1
+COMMON_HEADER_DB_NAME = "common_headers.db"
 
 def print_usage():
     #print "usage: cxxtags_db_manager add     [-l, --lazy] database_dir input_files [...]"
@@ -42,15 +44,31 @@ class AddHandler():
         try:
             cur = db.cursor()
             cur.execute("CREATE TABLE IF NOT EXISTS db_info(db_format INTEGER, src_file_name TEXT, exclude_list TEXT, contained_part INTEGER, build_dir TEXT, build_options);")
-            cur.execute("INSERT INTO db_info VALUES(?, ?, ?, ?, ?, ?);", row)
+            cur.execute("CREATE TABLE IF NOT EXISTS file_list(id INTEGER, name TEXT);")
+            cur.execute("CREATE TABLE IF NOT EXISTS usr_list(id INTEGER, name TEXT);")
+            cur.execute("CREATE TABLE IF NOT EXISTS name_list(id INTEGER, name TEXT);")
+            cur.execute("CREATE TABLE IF NOT EXISTS ref(usr_id INTEGER, name_id INTEGER, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, ref_file_id INTEGER, ref_line INTEGER, ref_col INTEGER);")
+            cur.execute("CREATE TABLE IF NOT EXISTS decl(usr_id INTEGER, name_id INTEGER, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, val INTEGER, is_virtual INTEGER, is_def INTEGER, type_usr_id INTEGER, type_kind INTEGER, is_pointer, accessibility INTEGER);")
+            cur.execute("CREATE TABLE IF NOT EXISTS overriden(usr_id INTEGER, name_id INTEGER, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, overrider_usr_id INTEGER, is_def INTEGER);")
+            cur.execute("CREATE TABLE IF NOT EXISTS base_class(class_usr_id INTEGER, base_class_usr_id INTEGER, line INTEGER, col INTEGER, accessibility INTEGER);");
 
-            cur.execute("CREATE TABLE file_list(id INTEGER, name TEXT);")
-            cur.execute("CREATE TABLE usr_list(id INTEGER, name TEXT);")
-            cur.execute("CREATE TABLE name_list(id INTEGER, name TEXT);")
-            cur.execute("CREATE TABLE ref(usr_id INTEGER, name_id INTEGER, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, ref_file_id INTEGER, ref_line INTEGER, ref_col INTEGER);")
-            cur.execute("CREATE TABLE decl(usr_id INTEGER, name_id INTEGER, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, val INTEGER, is_virtual INTEGER, is_def INTEGER, type_usr_id INTEGER, type_kind INTEGER, is_pointer, accessibility INTEGER);")
-            cur.execute("CREATE TABLE overriden(usr_id INTEGER, name_id INTEGER, file_id INTEGER, line INTEGER, col INTEGER, kind INTEGER, overrider_usr_id INTEGER, is_def INTEGER);")
-            cur.execute("CREATE TABLE base_class(class_usr_id INTEGER, base_class_usr_id INTEGER, line INTEGER, col INTEGER, accessibility INTEGER);");
+            cur.execute("SELECT * FROM db_info;")
+            if not cur.fetchone():
+                cur.execute("INSERT INTO db_info VALUES(?, ?, ?, ?, ?, ?);", row)
+                cur.execute("CREATE INDEX file_list_index0 ON file_list(id);")
+                cur.execute("CREATE INDEX file_list_index1 ON file_list(name);")
+                cur.execute("CREATE INDEX usr_list_index0 ON usr_list(id);")
+                cur.execute("CREATE INDEX usr_list_index1 ON usr_list(name);")
+                cur.execute("CREATE INDEX name_list_index0 ON name_list(id);")
+                cur.execute("CREATE INDEX name_list_index1 ON name_list(name);")
+                cur.execute("CREATE INDEX ref_index0 ON ref(file_id, name_id, line, col);")
+                cur.execute("CREATE INDEX ref_index1 ON ref(file_id);")
+                cur.execute("CREATE INDEX ref_index2 ON ref(usr_id);")
+                cur.execute("CREATE INDEX decl_index0 ON decl(file_id, name_id, line, col);")
+                cur.execute("CREATE INDEX decl_index1 ON decl(file_id)")
+                cur.execute("CREATE INDEX decl_index2 ON decl(usr_id)")
+                cur.execute("CREATE INDEX decl_index3 ON decl(usr_id, is_def)")
+
         except sqlite3.Error, e:
             print "ERROR: sqlite3: ", e.args[0]
             db.close()
@@ -119,6 +137,7 @@ class AddHandler():
             file_list_cur.execute("SELECT * FROM file_index WHERE file_name=?;", (src_file_name,))
             tgt_fn = ""
             row = file_list_cur.fetchone()
+            """
             if row and row[2] != self.mMainDbFileName:
                 # already done
                 return
@@ -128,12 +147,23 @@ class AddHandler():
             else:
                 # new file
                 output_dir = self.mOutputDir
-                tgt_fn = output_dir + "/" + os.path.basename(src_file_name) + ".db"
-                tgt_fn = self.AddSuffix(tgt_fn)
+                #tgt_fn = output_dir + "/" + os.path.basename(src_file_name) + ".db"
+                tgt_fn = output_dir + "/" + COMMON_HEADER_DB_NAME
+                #tgt_fn = self.AddSuffix(tgt_fn)
                 # register to database
                 file_list_cur.execute("DELETE FROM file_index WHERE file_name=?;", (src_file_name,))
                 basename = os.path.basename(tgt_fn)
                 file_list_cur.execute("INSERT INTO file_index VALUES(?,?,?);", (src_file_name,0,basename))
+            """
+            # new file
+            output_dir = self.mOutputDir
+            #tgt_fn = output_dir + "/" + os.path.basename(src_file_name) + ".db"
+            tgt_fn = output_dir + "/" + COMMON_HEADER_DB_NAME
+            # register to database
+            file_list_cur.execute("DELETE FROM file_index WHERE file_name=?;", (src_file_name,))
+            basename = os.path.basename(tgt_fn)
+            file_list_cur.execute("INSERT INTO file_index VALUES(?,?,?);", (src_file_name,0,basename))
+
             #print "divide: " + db_file_name + ", " + src_file_name + ", " + tgt_fn
             outDb = sqlite3.connect(tgt_fn, isolation_level='EXCLUSIVE')
             inDb = self.mMainDb
@@ -227,7 +257,7 @@ class AddHandler():
                 AddIdInfoName(name_id)
                 outCur.execute("INSERT INTO overriden VALUES(?" + ",?"*7 + ");", (r))
 
-            # remove unreferenced information
+            # remove unreferenced information from input database
             for usr_id in copied_usr_list:
                 inCur.execute("SELECT * FROM ref WHERE usr_id=?;", (usr_id,))
                 if not inCur.fetchone():
@@ -237,24 +267,10 @@ class AddHandler():
                         if not inCur.fetchone():
                             inCur.execute("SELECT * FROM base_class WHERE class_usr_id=? OR base_class_usr_id=?;", (usr_id, usr_id))
                             if not inCur.fetchone():
-                                inCur.execute("SELECT * FROM usr_list WHERE id=?;", (usr_id,))
+                                #inCur.execute("SELECT * FROM usr_list WHERE id=?;", (usr_id,))
+                                #print "del: usr: ",
+                                #print inCur.fetchone()
                                 inCur.execute("DELETE FROM usr_list WHERE id=?;", (usr_id,))
-
-            """
-            outCur.execute("CREATE INDEX file_list_index0 ON file_list(id);")
-            outCur.execute("CREATE INDEX file_list_index1 ON file_list(name);")
-            outCur.execute("CREATE INDEX usr_list_index0 ON usr_list(id);")
-            outCur.execute("CREATE INDEX usr_list_index1 ON usr_list(name);")
-            outCur.execute("CREATE INDEX name_list_index0 ON name_list(id);")
-            outCur.execute("CREATE INDEX name_list_index1 ON name_list(name);")
-            outCur.execute("CREATE INDEX ref_index0 ON ref(file_id, name_id, line, col);")
-            outCur.execute("CREATE INDEX ref_index1 ON ref(file_id);")
-            outCur.execute("CREATE INDEX ref_index2 ON ref(usr_id);")
-            outCur.execute("CREATE INDEX decl_index0 ON decl(file_id, name_id, line, col);")
-            outCur.execute("CREATE INDEX decl_index1 ON decl(file_id)")
-            outCur.execute("CREATE INDEX decl_index2 ON decl(usr_id)")
-            outCur.execute("CREATE INDEX decl_index3 ON decl(usr_id, is_def)")
-            """
 
             outDb.commit()
             inDb.commit()
@@ -348,12 +364,13 @@ class AddHandler():
 ########## rebuild ###########
 class RebuildHandler():
     mDatabaseDir = ""
-    mInSrcFileName = ""
+    mInSrcFileNameList = []
     mActualSrcFileName = ""
     mFileIndex = ""
     mDbFile = ""
     mIsForce = 0
     mIsPartial = 0
+    mInDb = None
 
     def ParseArg(self, args):
         optlist, args = getopt.getopt(args, 'fp', ['force','partial'])
@@ -371,20 +388,24 @@ class RebuildHandler():
         if not os.path.exists(self.mDatabaseDir):
             print "ERROR: database dir \"%s\" does not exists."%(self.mDatabaseDir)
             sys.exit(1)
-        self.mInSrcFileName = args[1]
+        if len(args) == 2:
+            self.mInSrcFileNameList.append(args[1])
+        else: # rebuild the all files
+            self.mInSrcFileNameList = cxxtags_util.get_src_file_list(self.mDatabaseDir)
+
         self.mFileIndex = self.mDatabaseDir + "/file_index.db"
         #print "ParseArg: %s, %s"%(self.mInSrcFileName, self.mFileIndex)
 
-    def GetDbFileFromSrcName(self):
+    def GetDbFileFromSrcName(self, src_file):
         try:
             db_idx = sqlite3.connect(self.mFileIndex, isolation_level='EXCLUSIVE')
             cur_idx = db_idx.cursor()
-            cur_idx.execute("SELECT file_name, db_file FROM file_index WHERE file_name LIKE ?", ('%'+self.mInSrcFileName,))
+            cur_idx.execute("SELECT file_name, db_file FROM file_index WHERE file_name LIKE ?", ('%'+src_file,))
             dbFileName = ""
             lastSrcFileName = ""
             for i in cur_idx.fetchall():
                 resFileName, resDbFile = i
-                if cxxtags_util.pathCmp(resFileName, self.mInSrcFileName):
+                if cxxtags_util.pathCmp(resFileName, src_file):
                     if lastSrcFileName != "" and lastSrcFileName != resFileName:
                         print "ERROR: file name is ambiguous. specify as absolute path."
                         sys.exit(1)
@@ -406,28 +427,27 @@ class RebuildHandler():
     def GetBuildOption(self):
         try:
             db = sqlite3.connect(self.mDbFile, isolation_level='EXCLUSIVE')
+            self.mInDb = db
             cur = db.cursor()
             cur.execute("SELECT exclude_list, contained_part, build_dir, build_options FROM db_info")
             row = cur.fetchone()
             if row:
-                db.close()
                 return row
-            db.close()
             return None
         except sqlite3.Error, e:
             print "ERROR: get build option: " + self.mDbFile + ": " + e.args[0]
             db.close()
             sys.exit(1)
 
-    def DoRebuild(self, excludeList, buildDir, buildOptions):
-        tmpfile = "/tmp/cxxtags.tmp.o." + str(os.getpid())
+    def DoRebuild(self, excludeList, buildDir, buildOptions, src_file):
+        tmpfile = tempfile.NamedTemporaryFile(delete=False)
         if excludeList != "":
             excludeList = "-e " + excludeList
         partialOpt = ""
         if self.mIsPartial:
             partialOpt = "-p"
         buildOptions = buildOptions.replace('-g', '')
-        cmd = "cd " + buildDir + " && cxxtags " + partialOpt + " " + excludeList + " " + self.mActualSrcFileName + " -o " + tmpfile + " " + buildOptions
+        cmd = "cd " + buildDir + " && cxxtags " + partialOpt + " " + excludeList + " " + self.mActualSrcFileName + " -o " + tmpfile.name + " " + buildOptions
         print "CMD: " + cmd
         rv = -1
         try:
@@ -435,30 +455,47 @@ class RebuildHandler():
         finally:
             if rv != 0:
                 print "ERROR: build failed: " + cmd
-                shutil.remove(tmpfile)
+                shutil.remove(tmpfile.name)
                 sys.exit(1)
-        #shutil.copy(tmpfile, self.mDbFile)
-        shutil.move(tmpfile, self.mDbFile)
+        dbIn = sqlite3.connect(tmpfile.name, isolation_level='EXCLUSIVE')
+        self.UpdateFilelist(self.mDbFile, src_file, dbIn.cursor())
+        dbIn.close()
+        #shutil.copy(tmpfile.name, self.mDbFile)
+        shutil.move(tmpfile.name, self.mDbFile)
         return 0
+
+    def UpdateFilelist(self, tgt_fn, src_file, db_cursor):
+        all_files = {}
+        value_list = []
+        tgt_base_fn = os.path.basename(tgt_fn)
+        db_cursor.execute("SELECT name FROM file_list;")
+        for f in db_cursor.fetchall():
+            fn = f[0]
+            print "FN: " + fn
+            if fn != "" and not all_files.has_key(fn):
+                is_src = 0
+                if fn == src_file:
+                    is_src = 1
+                all_files[fn] = is_src
+                value_list.append((fn, is_src, tgt_base_fn))
+
+        file_index = self.mDatabaseDir + "/" + cxxtags_util.FILE_INDEX_FILE_NAME
+        db_idx = sqlite3.connect(file_index, isolation_level='EXCLUSIVE')
+        db_idx.executemany("INSERT INTO file_index VALUES(?, ?, ?);", value_list)
+        db_idx.commit()
+        db_idx.close()
 
     def Run(self, args):
         self.ParseArg(args)
-
-        if "" == self.GetDbFileFromSrcName():
-            print "ERROR: counld not find database file."
-            sys.exit(1)
-        res = self.GetBuildOption()
-        if res:
-            excludeList, containedPart, buildDir, buildOptions = res
-            after = 0
-            if self.mIsPartial:
-                after = CONTAINED_PART_PARTIAL
-            else:
-                after = CONTAINED_PART_FULL
-            if self.mIsForce == 0 and (containedPart == after):
-                print "INFO: database was not updated."
-                return
-            self.DoRebuild(excludeList, buildDir, buildOptions)
+        for f in self.mInSrcFileNameList:
+            if "" == self.GetDbFileFromSrcName(f):
+                print "ERROR: counld not find database file.: " + f
+                sys.exit(1)
+            res = self.GetBuildOption()
+            if res:
+                excludeList, containedPart, buildDir, buildOptions = res
+                self.DoRebuild(excludeList, buildDir, buildOptions, f)
+                self.mInDb.close()
 
 ########## main ###########
 def main():

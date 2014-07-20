@@ -55,4 +55,5 @@ if not "-MM" in argv:
     os.system(cmd)
 
 # run compilation
-exit(os.system(compiler + " " + " ".join(argv[1:])))
+cmd = compiler + " " + " ".join(argv)
+exit(os.system(cmd))

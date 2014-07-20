@@ -27,6 +27,7 @@ if exclude != "":
 # get output filename
 output = None
 i = 0
+argv_orig = sys.argv[1:]
 argv = sys.argv[1:]
 while 1:
     if i >= len(argv):
@@ -39,12 +40,12 @@ while 1:
     else:
         i += 1
 if output == None:
-    print "could not determine output file: " + " ".join(argv)
+    #print "could not determine output file: " + " ".join(argv)
     # generate output filename
     dt = str(datetime.datetime.now())
     dt = dt.replace(" ", "_")
     output = dt.replace(":", "_") + "." + str(os.getpid()) + ".db"
-    print "use random name: "  + output
+    #print "use random name: "  + output
 if not "-MM" in argv:
     args_tmp = [CXXTAGS, CXXTAGS_OPT, exclude, " ".join(argv), " -o " + output]
     # run cxxtags
@@ -55,5 +56,5 @@ if not "-MM" in argv:
     os.system(cmd)
 
 # run compilation
-cmd = compiler + " " + " ".join(argv)
+cmd = compiler + " " + " ".join(argv_orig)
 exit(os.system(cmd))

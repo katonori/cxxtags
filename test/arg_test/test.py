@@ -15,7 +15,7 @@ if CLANG_HOME == None:
     print "ERROR: set CLANG_HOME"
     sys.exit(1)
 
-CXXTAGS = "../../src/cxxtags"
+CXXTAGS = "../../bin/cxxtags"
 CXXTAGS_INCLUDES = "-I%s/include"%(CLANG_HOME)
 USAGE = "usage: cxxtags [-E, --empty] [-p, --partial] [-e,--exclude exclude_list] [-o out_file] input_file [compiler_arguments]"
 DB_INFO_COLS = 6

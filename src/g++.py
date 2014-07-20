@@ -33,7 +33,7 @@ while 1:
         break
     arg = argv[i]
     if arg == "-o":
-        output = argv[i+1]
+        output = argv[i+1] + ".db"
         del argv[i:i+2]
         i += 2
     else:
@@ -49,13 +49,10 @@ if not "-MM" in argv:
     args_tmp = [CXXTAGS, CXXTAGS_OPT, exclude, " ".join(argv), " -o " + output]
     # run cxxtags
     cmd = " ".join(args_tmp)
-    print "CXXTAGS: " + cmd
     os.system(cmd)
     args_tmp = [CXXTAGS_DB_MANAGER, "add", db_dst, output]
     cmd = " ".join(args_tmp)
-    print "CXXTAGS: " + cmd
     os.system(cmd)
-print argv
 
 # run compilation
 exit(os.system(compiler + " " + " ".join(argv[1:])))

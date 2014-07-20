@@ -448,7 +448,7 @@ class RebuildHandler():
             partialOpt = "-p"
         buildOptions = buildOptions.replace('-g', '')
         cmd = "cd " + buildDir + " && cxxtags " + partialOpt + " " + excludeList + " " + self.mActualSrcFileName + " -o " + tmpfile.name + " " + buildOptions
-        print "CMD: " + cmd
+        #print "CMD: " + cmd
         rv = -1
         try:
             rv = os.system(cmd)
@@ -471,7 +471,6 @@ class RebuildHandler():
         db_cursor.execute("SELECT name FROM file_list;")
         for f in db_cursor.fetchall():
             fn = f[0]
-            print "FN: " + fn
             if fn != "" and not all_files.has_key(fn):
                 is_src = 0
                 if fn == src_file:

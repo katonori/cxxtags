@@ -1,4 +1,4 @@
-TESTS = enum ns inheritance arg_test template_type_param db_update enum_query inheritance_query type_info
+TESTS = enum ns inheritance arg_test template_type_param db_update enum_query inheritance_query type_info rebuild
 
 test: $(TESTS)
 	rm -f log

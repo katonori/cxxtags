@@ -17,7 +17,7 @@ if CLANG_HOME == None:
 
 CXXTAGS = "../../src/cxxtags"
 CXXTAGS_INCLUDES = "-I%s/include"%(CLANG_HOME)
-USAGE = "usage: cxxtags [-p, --partial] [-e,--exclude exclude_list] [-o out_file] input_file [compiler_arguments]"
+USAGE = "usage: cxxtags [-E, --empty] [-p, --partial] [-e,--exclude exclude_list] [-o out_file] input_file [compiler_arguments]"
 DB_INFO_COLS = 6
 DB_VER = 6
 err = 0
@@ -115,6 +115,7 @@ buildOpt = "-I ./subdir " + CXXTAGS_INCLUDES
 err += test(CXXTAGS + " "+buildOpt+" main.cpp -e "+excludeListRef+" -o a.db", "a.db", "ref.db", buildOpt, buildOptRef, excludeListRef, excludeListRef)
 
 # -g option test
+"""
 OPT_REF=" -I/usr/lib/llvm-3.5//include/ -I/ -I../../ -D_GNU_SOURCE -DA -DB"
 cmd = CXXTAGS + " -v -G test.o | grep 'build option'"
 print cmd
@@ -129,6 +130,7 @@ if m:
 else:
     print "ERROR: could not get bild option from elf information"
     err += 1
+"""
 
 if err == 0:
     print "OK"

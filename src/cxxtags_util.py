@@ -41,6 +41,17 @@ def get_db_file_list(db_dir):
             db_dict[fn] = 1
     return db_dict.keys()
 
+def get_src_file_list(db_dir):
+    db = db_connect(db_dir + "/" + FILE_INDEX_FILE_NAME)
+    cur = db.cursor()
+    cur.execute("SELECT * FROM file_index;")
+    src_files = []
+    for i in cur.fetchall():
+        (srcFile, isSrc, dbFile) = i
+        if isSrc != 0:
+            src_files.append(srcFile)
+    return src_files
+
 def get_db_by_file_name(db_dir, file_name):
     file_name = os.path.abspath(file_name)
     db = db_connect(db_dir + "/" + FILE_INDEX_FILE_NAME)

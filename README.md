@@ -54,7 +54,7 @@ How to use
 ------------------------
 **cxxtags** needs compile options such as "-I" "-D" to get correct information.
 This is difficult in some cases. An easy way to recorde such information is to use wrapper scripts of compilers.
-g++.py and gcc.py included in this package are wrapper script of cxxtags and compilers. This generate tag database
+g++.py and gcc.py included in this package are wrapper script of **cxxtags** and compilers. This generate tag database
 and run compilers. You can use this script like below
 
 

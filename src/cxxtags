@@ -7,7 +7,6 @@ import string
 import time
 import sqlite3
 import cxxtags_util
-from elftools.elf.elffile import ELFFile
 
 class CxxTagsCoreWrapper:
     mClangHome = ""
@@ -17,7 +16,6 @@ class CxxTagsCoreWrapper:
     mInFileList = []
     mOutFile = ""
     mTimeList = []
-    mGuessOptions = 0
     mIsVerbose = 0
 
     def __init__(self):
@@ -56,11 +54,6 @@ class CxxTagsCoreWrapper:
                 self.mOutFile = argv[i+1]
                 #print "-o: "+self.mOutFile
                 del argv[i:i+2]
-            elif arg == "-G":
-                # guess compile options from DWARF information.
-                # the input file must be an object file compile with -grecord-gcc-switches option.
-                self.mGuessOptions = 1
-                del argv[i]
             elif arg == "-D":
                 # ignore "-D xxx" options
                 # "-Dxxx" format is treated as another option.
@@ -79,31 +72,6 @@ class CxxTagsCoreWrapper:
             else:
                 i+=1
         return argv
-
-    def getBuildOptions(self, filename):
-        try:
-            f = open(filename, 'rb')
-            elffile = ELFFile(f)
-            cl = elffile.get_section_by_name(".GCC.command.line")
-            srcFile = ""
-            opts = []
-            if cl:
-                lines = cl.data().split('\0')
-                #print lines
-                for l in lines:
-                    if l.startswith('-I'):
-                        l = l.replace('-I ', '-I')
-                        opts.append(l)
-                    elif l.startswith('-D'):
-                        l = l.replace('-D ', '-D')
-                        opts.append(l)
-                    elif re.match('[^-]', l):
-                        srcFile = l
-        except IOError, (errno, strerror):
-            raise IOError(errno, strerror + ": " + filename)
-        except:
-            return ("", "")
-        return (srcFile, ' '.join(opts))
 
     def run(self):
         in_file = ""
@@ -131,13 +99,6 @@ class CxxTagsCoreWrapper:
             fo.close()
             sys.exit(0)
         opt = ""
-        if self.mGuessOptions != 0:
-            (in_file, opt) = self.getBuildOptions(in_file)
-            if opt == "" or in_file == "":
-                print("ERROR: could not get build options from elf information")
-                sys.exit(1)
-            if self.mIsVerbose != 0:
-                print "build option retrieved from elf information: " + opt
 
         if not os.path.exists(in_file):
             print "ERROR: file not found: %s\n"%(in_file)
@@ -148,16 +109,7 @@ class CxxTagsCoreWrapper:
             self.mExcludeList = "-e " + self.mExcludeList
         if os.path.exists(outfile):
             os.remove(outfile)
-        if self.mGuessOptions == 0:
-            cmd = "%s/cxxtags_core %s %s %s %s %s "%(exe_dir, self.mOptCore, self.mExcludeList, cur_dir, outfile, in_file)+string.join(argv)
-        else:
-            clangIncludePath = ""
-            if self.mClangHome == "":
-                print "WARNIGN: environment variable CLANG_HOME is not set. This may cause build error."
-            else:
-                clangIncludePath = '-I' + self.mClangHome + '/include/ '
-            cmd = "%s/cxxtags_core %s %s %s %s %s "%(exe_dir, self.mOptCore, self.mExcludeList, cur_dir, outfile, in_file) + ' '.join(argv) + ' ' + clangIncludePath + opt
-            print(cmd)
+        cmd = "%s/cxxtags_core %s %s %s %s %s "%(exe_dir, self.mOptCore, self.mExcludeList, cur_dir, outfile, in_file)+string.join(argv)
         #print(cmd)
         #self.mTimeList.append(time.time())
         rv = os.system(cmd)

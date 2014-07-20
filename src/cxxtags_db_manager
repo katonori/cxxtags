@@ -167,8 +167,11 @@ class RebuildHandler():
             sys.exit(1)
         if len(args) == 2:
             self.mInSrcFileNameList.append(args[1])
-        else: # rebuild the all files
+        elif len(args) == 1: # rebuild the all files
             self.mInSrcFileNameList = cxxtags_util.get_src_file_list(self.mDatabaseDir)
+        else:
+            print "ERROR: invalid arguments: " + " ".join(args)
+            sys.exit(1)
 
         self.mFileIndex = self.mDatabaseDir + "/file_index.db"
         #print "ParseArg: %s, %s"%(self.mInSrcFileName, self.mFileIndex)
@@ -257,13 +260,19 @@ class RebuildHandler():
 
         file_index = self.mDatabaseDir + "/" + cxxtags_util.FILE_INDEX_FILE_NAME
         db_idx = sqlite3.connect(file_index, isolation_level='EXCLUSIVE')
-        db_idx.executemany("INSERT INTO file_index VALUES(?, ?, ?);", value_list)
+        cur_idx = db_idx.cursor()
+        for val in value_list:
+            cur_idx.execute("SELECT * FROM file_index WHERE file_name=? AND is_src=? AND db_file=?;", val);
+            row = cur_idx.fetchone()
+            if not row:
+                cur_idx.execute("INSERT INTO file_index VALUES(?, ?, ?);", val)
         db_idx.commit()
         db_idx.close()
 
     def Run(self, args):
         self.ParseArg(args)
         for f in self.mInSrcFileNameList:
+            print "Processing: " + f
             if "" == self.GetDbFileFromSrcName(f):
                 print "ERROR: counld not find database file.: " + f
                 sys.exit(1)

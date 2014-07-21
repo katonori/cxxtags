@@ -14,6 +14,8 @@ DB_VER = 6
 CONTAINED_PART_FULL = 0
 CONTAINED_PART_PARTIAL = 1
 
+gErr = 0;
+
 def print_usage():
     print "usage: cxxtags_db_manager add     database_dir input_files [...]"
     print "     :                    rebuild [-f,--force] [-p,--partial] database_dir src_file_name"
@@ -205,6 +207,7 @@ class RebuildHandler():
     # get build options from database.
     #
     def GetBuildOption(self):
+        global gErr
         try:
             db = sqlite3.connect(self.mDbFile, isolation_level='EXCLUSIVE')
             self.mInDb = db
@@ -217,9 +220,11 @@ class RebuildHandler():
         except sqlite3.Error, e:
             print "ERROR: get build option: " + self.mDbFile + ": " + e.args[0]
             db.close()
-            sys.exit(1)
+            gErr += 1
+            return None
 
     def DoRebuild(self, excludeList, buildDir, buildOptions, src_file):
+        global gErr
         tmpfile = tempfile.NamedTemporaryFile(delete=False)
         if excludeList != "":
             excludeList = "-e " + excludeList
@@ -235,8 +240,8 @@ class RebuildHandler():
         finally:
             if rv != 0:
                 print "ERROR: build failed: " + cmd
-                shutil.remove(tmpfile.name)
-                sys.exit(1)
+                #os.remove(tmpfile.name)
+                gErr += 1
         dbIn = sqlite3.connect(tmpfile.name, isolation_level='EXCLUSIVE')
         self.UpdateFilelist(self.mDbFile, src_file, dbIn.cursor())
         dbIn.close()
@@ -245,29 +250,37 @@ class RebuildHandler():
         return 0
 
     def UpdateFilelist(self, tgt_fn, src_file, db_cursor):
+        global gErr
         all_files = {}
         value_list = []
         tgt_base_fn = os.path.basename(tgt_fn)
-        db_cursor.execute("SELECT name FROM file_list;")
-        for f in db_cursor.fetchall():
-            fn = f[0]
-            if fn != "" and not all_files.has_key(fn):
-                is_src = 0
-                if fn == src_file:
-                    is_src = 1
-                all_files[fn] = is_src
-                value_list.append((fn, is_src, tgt_base_fn))
+        db_idx = None
+        try:
+            db_cursor.execute("SELECT name FROM file_list;")
+            for f in db_cursor.fetchall():
+                fn = f[0]
+                if fn != "" and not all_files.has_key(fn):
+                    is_src = 0
+                    if fn == src_file:
+                        is_src = 1
+                    all_files[fn] = is_src
+                    value_list.append((fn, is_src, tgt_base_fn))
 
-        file_index = self.mDatabaseDir + "/" + cxxtags_util.FILE_INDEX_FILE_NAME
-        db_idx = sqlite3.connect(file_index, isolation_level='EXCLUSIVE')
-        cur_idx = db_idx.cursor()
-        for val in value_list:
-            cur_idx.execute("SELECT * FROM file_index WHERE file_name=? AND is_src=? AND db_file=?;", val);
-            row = cur_idx.fetchone()
-            if not row:
-                cur_idx.execute("INSERT INTO file_index VALUES(?, ?, ?);", val)
-        db_idx.commit()
-        db_idx.close()
+            file_index = self.mDatabaseDir + "/" + cxxtags_util.FILE_INDEX_FILE_NAME
+            db_idx = sqlite3.connect(file_index, isolation_level='EXCLUSIVE')
+            cur_idx = db_idx.cursor()
+            for val in value_list:
+                cur_idx.execute("SELECT * FROM file_index WHERE file_name=? AND is_src=? AND db_file=?;", val);
+                row = cur_idx.fetchone()
+                if not row:
+                    cur_idx.execute("INSERT INTO file_index VALUES(?, ?, ?);", val)
+            db_idx.commit()
+            db_idx.close()
+        except sqlite3.Error, e:
+            print "ERROR: %s, %s: "%(tgt_fn, src_file) + e.args[0]
+            if db_idx:
+                db_idx.close()
+            gErr += 1
 
     def Run(self, args):
         self.ParseArg(args)
@@ -297,5 +310,6 @@ def main():
     else:
         print_usage()
         sys.exit(1)
+    return gErr
 ######
-main()
+sys.exit(main())

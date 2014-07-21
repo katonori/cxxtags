@@ -14,7 +14,13 @@ import os
 OUTPUT_DELIMITER = '|'
 
 gDebugMode = 0
+gVerboseMode = 0
 gPartialCompare = 0
+
+def DEBUG_PRINT(str):
+    global gVerboseMode
+    if gVerboseMode != 0:
+        print str
 
 class HandlerBase:
     #
@@ -149,11 +155,11 @@ class QueryHandlerDecl(HandlerBase):
             return result
         return None
 
-    def parseArg(self):
-        if len(sys.argv) != 6:
+    def parseArg(self, argv):
+        if len(argv) != 3:
             usage()
             sys.exit(1)
-        self.mFileName, self.mLineNo, self.mColNo = sys.argv[3:]
+        self.mFileName, self.mLineNo, self.mColNo = argv
 
 class QueryHandlerDef(HandlerBase):
     #
@@ -186,11 +192,11 @@ class QueryHandlerDef(HandlerBase):
                 return result
         return None
 
-    def parseArg(self):
-        if len(sys.argv) != 6:
+    def parseArg(self, argv):
+        if len(argv) != 3:
             usage()
             sys.exit(1)
-        self.mFileName, self.mLineNo, self.mColNo = sys.argv[3:]
+        self.mFileName, self.mLineNo, self.mColNo = argv
 
 class QueryHandlerRef(HandlerBase):
     #
@@ -206,6 +212,7 @@ class QueryHandlerRef(HandlerBase):
 
     def DoQuery(self):
         usr = self.GetUsr(self.mFileName, self.mLineNo, self.mColNo)
+        DEBUG_PRINT("usr: " + str(usr))
         if usr:
             self.GetAllRefs(usr)
 
@@ -213,31 +220,37 @@ class QueryHandlerRef(HandlerBase):
         resultList = []
         db_list = []
         mainSrcFile = self.GetMainSrcName()
+        DEBUG_PRINT("src: " + mainSrcFile)
         bn = os.path.basename(mainSrcFile)
         if re.match("c:"+bn, usr): # local scope
             db_list = [self.mUsrDbName,]
         else:
             db_list = self.GetAllDbFiles()
+        DEBUG_PRINT("db_list: " + str(db_list))
         for fn in db_list:
-            db = cxxtags_util.db_connect(fn)
-            cur = db.cursor()
-            cur.execute('SELECT usr_list.id FROM usr_list WHERE name=?;', (usr,))
-            row = cur.fetchone()
-            if row:
-                usrId = row[0]
-                cur.execute('SELECT name_list.name, file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE ref.usr_id=?;', (usrId,))
-                resultList += cur.fetchall()
+            try:
+                db = cxxtags_util.db_connect(fn)
+                cur = db.cursor()
+                cur.execute('SELECT usr_list.id FROM usr_list WHERE name=?;', (usr,))
+                row = cur.fetchone()
+                if row:
+                    usrId = row[0]
+                    cur.execute('SELECT name_list.name, file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE ref.usr_id=?;', (usrId,))
+                    resultList += cur.fetchall()
+            except sqlite3.Error, e:
+                db.close()
+                print "ERROR: GerAllRefs(): %s: "%(fn), e.args[0]
             db.close()
         resultList = set(resultList)
         for i in resultList:
             resultName, resultFileName, resultLine, resultCol = i
             self.PrintResult(resultName, resultFileName, resultLine, resultCol)
 
-    def parseArg(self):
-        if len(sys.argv) != 6:
+    def parseArg(self, argv):
+        if len(argv) != 3:
             usage()
             sys.exit(1)
-        self.mFileName, self.mLineNo, self.mColNo = sys.argv[3:]
+        self.mFileName, self.mLineNo, self.mColNo = argv
 
 class QueryHandlerOverride(HandlerBase):
     #
@@ -278,11 +291,11 @@ class QueryHandlerOverride(HandlerBase):
             resultName, resultFileName, resultLine, resultCol = i
             self.PrintResult(resultName, resultFileName, resultLine, resultCol)
 
-    def parseArg(self):
-        if len(sys.argv) != 6:
+    def parseArg(self, argv):
+        if len(argv) != 3:
             usage()
             sys.exit(1)
-        self.mFileName, self.mLineNo, self.mColNo = sys.argv[3:]
+        self.mFileName, self.mLineNo, self.mColNo = argv
 
 class QueryHandlerOverrideN(HandlerBase):
     #
@@ -318,11 +331,11 @@ class QueryHandlerOverrideN(HandlerBase):
             resultName, resultFileName, resultLine, resultCol = i
             self.PrintResult(resultName, resultFileName, resultLine, resultCol)
 
-    def parseArg(self):
-        if len(sys.argv) != 6:
+    def parseArg(self, argv):
+        if len(argv) != 3:
             usage()
             sys.exit(1)
-        self.mFileName, self.mLineNo, self.mColNo = sys.argv[3:]
+        self.mFileName, self.mLineNo, self.mColNo = argv
 
 class QueryHandlerName(HandlerBase):
     #
@@ -367,11 +380,11 @@ class QueryHandlerName(HandlerBase):
                     resultList += rows
             db.close()
 
-    def parseArg(self):
+    def parseArg(self, argv):
         global gDebugMode
         global gPartialCompare
         try:
-            optlist, args = getopt.gnu_getopt(sys.argv[2:], 'f:dp', ['debug', 'partial'])
+            optlist, args = getopt.gnu_getopt(argv, 'f:dp', ['debug', 'partial'])
         except getopt.GetoptError, e:
             print "ERROR: getopt: ", e.args[0]
             sys.exit(1)
@@ -429,11 +442,11 @@ class QueryHandlerTable(HandlerBase):
                 print i
             db.close()
 
-    def parseArg(self):
-        if len(sys.argv) != 4:
+    def parseArg(self, argv):
+        if len(argv) != 1:
             usage()
             sys.exit(1)
-        self.mTableName = sys.argv[3]
+        self.mTableName = argv[0]
 
 class QueryHandlerType(HandlerBase):
     #
@@ -449,6 +462,7 @@ class QueryHandlerType(HandlerBase):
 
     def DoQuery(self):
         usr = self.GetUsr(self.mFileName, self.mLineNo, self.mColNo)
+        DEBUG_PRINT("usr: " + str(usr))
         if usr:
             typeUsr = self.GetTypeUsr(usr, self.mFileName, self.mLineNo, self.mColNo)
             usrList = self.GetBaseClassInfo(typeUsr)
@@ -526,53 +540,66 @@ class QueryHandlerType(HandlerBase):
             db.close()
         return result
 
-    def parseArg(self):
-        if len(sys.argv) != 6:
+    def parseArg(self, argv):
+        if len(argv) != 3:
             usage()
             sys.exit(1)
-        self.mFileName, self.mLineNo, self.mColNo = sys.argv[3:]
+        self.mFileName, self.mLineNo, self.mColNo = argv
 
     def PrintResult(self, name, typeName, fileName, line, col, kind):
         print typeName + OUTPUT_DELIMITER + name + OUTPUT_DELIMITER + fileName + OUTPUT_DELIMITER + str(line) + OUTPUT_DELIMITER + str(col) + OUTPUT_DELIMITER + kind + OUTPUT_DELIMITER + cxxtags_util.get_line_from_file(fileName, line)
 
 def main():
+    global gVerboseMode
     result = []
     if len(sys.argv) <= 2:
         usage()
         sys.exit(1)
-    queryType = sys.argv[1]
-    dbDir = sys.argv[2]
+
+    # get global options
+    gVerboseMode = 0
+    try:
+        optlist, argv = getopt.getopt(sys.argv[1:], 'v', [])
+        for opt, val in optlist:
+            if opt == "-v":
+                gVerboseMode = 1
+    except getopt.GetoptError, e:
+        print "ERROR: getopt: ", e.args[0]
+        sys.exit(1)
+
+    queryType = argv[0]
+    dbDir = argv[1]
     if queryType == 'ref': # get all references
         handler = QueryHandlerRef(dbDir)
-        handler.parseArg()
+        handler.parseArg(argv[2:])
         handler.DoQuery()
     elif queryType == 'decl': # get a declaration or definition
         handler = QueryHandlerDecl(dbDir)
-        handler.parseArg()
+        handler.parseArg(argv[2:])
         handler.DoQuery()
     elif queryType == 'def': # get a definition
         handler = QueryHandlerDef(dbDir)
-        handler.parseArg()
+        handler.parseArg(argv[2:])
         handler.DoQuery()
     elif queryType == 'override': # get override information
         handler = QueryHandlerOverride(dbDir)
-        handler.parseArg()
+        handler.parseArg(argv[2:])
         handler.DoQuery()
     elif queryType == 'overriden': # get overriden items
         handler = QueryHandlerOverrideN(dbDir)
-        handler.parseArg()
+        handler.parseArg(argv[2:])
         handler.DoQuery()
     elif queryType == 'name': # search a name
         handler = QueryHandlerName(dbDir)
-        handler.parseArg()
+        handler.parseArg(argv[2:])
         handler.DoQuery()
     elif queryType == 'dump': # dump the contents of a table
         handler = QueryHandlerTable(dbDir)
-        handler.parseArg()
+        handler.parseArg(argv[2:])
         handler.DoQuery()
     elif queryType == 'type': # get type info
         handler = QueryHandlerType(dbDir)
-        handler.parseArg()
+        handler.parseArg(argv[2:])
         handler.DoQuery()
     else:
         print "ERROR: query type must be ref, decl, def, override, overriden, name, dump or type"

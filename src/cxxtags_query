@@ -239,7 +239,7 @@ class QueryHandlerRef(HandlerBase):
                     resultList += cur.fetchall()
             except sqlite3.Error, e:
                 db.close()
-                print "ERROR: GerAllRefs(): %s: "%(fn), e.args[0]
+                DEBUG_PRINT("WARN: GetAllRefs(): %s: "%(fn) + str(e.args[0]))
             db.close()
         resultList = set(resultList)
         for i in resultList:

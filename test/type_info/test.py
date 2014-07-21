@@ -139,7 +139,7 @@ def main():
         if res[len(res)-1] == "":
             del res[len(res)-1]
         if len(res) != len(resultList[i]):
-            print "ERROR: result num"
+            print "ERROR: result num: %d, %d"%(len(res), len(resultList[i]))
             gErr += 1
         else:
             r = 0

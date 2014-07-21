@@ -62,7 +62,7 @@ and run compilers. You can use this script like below
                 
 or
 
-                $ env CXXTAGS_DB_DST=`pwd`/db CXX=g++.py make
+                $ env CXXTAGS_DB_DST=`pwd`/db make CXX=g++.py
 
 These commands generate database to the directory \`pwd\`/db. But generated database is generated with "-E" option
 so you need to rebuild the database.

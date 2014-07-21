@@ -175,6 +175,7 @@ class QueryHandlerDef(HandlerBase):
 
     def DoQuery(self):
         usr = self.GetUsr(self.mFileName, self.mLineNo, self.mColNo)
+        DEBUG_PRINT("usr: " + str(usr))
         if usr:
             result = self.GetDef(usr)
             if result:
@@ -182,12 +183,17 @@ class QueryHandlerDef(HandlerBase):
                 self.PrintResult(resultName, resultFileName, resultLine, resultCol)
 
     def GetDef(self, usr):
+        DEBUG_PRINT("db_list: " + str(self.GetAllDbFiles()))
         for fn in self.GetAllDbFiles():
-            db = cxxtags_util.db_connect(fn)
-            cur = db.cursor()
-            cur.execute('SELECT name_list.name, file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name=? AND is_def=1 LIMIT 1;', (usr,))
-            result = cur.fetchone()
-            db.close()
+            try:
+                db = cxxtags_util.db_connect(fn)
+                cur = db.cursor()
+                cur.execute('SELECT name_list.name, file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name=? AND is_def=1 LIMIT 1;', (usr,))
+                result = cur.fetchone()
+                db.close()
+            except sqlite3.Error, e:
+                db.close()
+                DEBUG_PRINT("WARN: GetDef(): %s: "%(fn) + str(e.args[0]))
             if result:
                 return result
         return None

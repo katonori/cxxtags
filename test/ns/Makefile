@@ -11,6 +11,8 @@ $(MERGER_OUT): $(DB_FILES)
 	$(CXXTAGS_DB_MANAGER) add $@ $^
 test: check $(MERGER_OUT)
 	./test.py $(MERGER_OUT)
+	$(CXXTAGS_DB_MANAGER) rebuild $(MERGER_OUT) ns0.h
+	./test.py $(MERGER_OUT)
 ns1.db:
 	$(CXXTAGS) $(CXXTAGS_INCLUDES) ./subdir/ns1.cpp -I. -o ns1.db
 html: $(MERGER_OUT)

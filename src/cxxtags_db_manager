@@ -15,6 +15,12 @@ CONTAINED_PART_FULL = 0
 CONTAINED_PART_PARTIAL = 1
 
 gErr = 0;
+gVerboseMode = 0
+
+def DEBUG_PRINT(str):
+    global gVerboseMode
+    if gVerboseMode != 0:
+        print str
 
 def print_usage():
     print "usage: cxxtags_db_manager add     database_dir input_files [...]"
@@ -144,7 +150,6 @@ class AddHandler():
 class RebuildHandler():
     mDatabaseDir = ""
     mInSrcFileNameList = []
-    mActualSrcFileName = ""
     mFileIndex = ""
     mDbFile = ""
     mIsForce = 0
@@ -187,15 +192,15 @@ class RebuildHandler():
             lastSrcFileName = ""
             for i in cur_idx.fetchall():
                 resFileName, resDbFile = i
+                DEBUG_PRINT("src: " + resFileName + "," + src_file)
                 if cxxtags_util.pathCmp(resFileName, src_file):
                     if lastSrcFileName != "" and lastSrcFileName != resFileName:
                         print "ERROR: file name is ambiguous. specify as absolute path."
                         sys.exit(1)
                     lastSrcFileName = resFileName
                     dbFileName = self.mDatabaseDir + "/" + resDbFile
-            self.mActualSrcFileName = lastSrcFileName
             db_idx.close()
-            #print "dbFileName: %s"%(dbFileName)
+            DEBUG_PRINT("dbFileName: %s"%(dbFileName))
             self.mDbFile = dbFileName
             return self.mDbFile
         except sqlite3.Error, e:
@@ -212,9 +217,10 @@ class RebuildHandler():
             db = sqlite3.connect(self.mDbFile, isolation_level='EXCLUSIVE')
             self.mInDb = db
             cur = db.cursor()
-            cur.execute("SELECT exclude_list, contained_part, build_dir, build_options FROM db_info")
+            cur.execute("SELECT src_file_name, exclude_list, contained_part, build_dir, build_options FROM db_info")
             row = cur.fetchone()
             if row:
+                DEBUG_PRINT("opt: " + str(row))
                 return row
             return None
         except sqlite3.Error, e:
@@ -223,7 +229,7 @@ class RebuildHandler():
             gErr += 1
             return None
 
-    def DoRebuild(self, excludeList, buildDir, buildOptions, src_file):
+    def DoRebuild(self, mainSrcFile, excludeList, buildDir, buildOptions, src_file):
         global gErr
         tmpfile = tempfile.NamedTemporaryFile(delete=False)
         if excludeList != "":
@@ -232,8 +238,8 @@ class RebuildHandler():
         if self.mIsPartial:
             partialOpt = "-p"
         buildOptions = buildOptions.replace('-g', '')
-        cmd = "cd " + buildDir + " && cxxtags " + partialOpt + " " + excludeList + " " + self.mActualSrcFileName + " -o " + tmpfile.name + " " + buildOptions
-        #print "CMD: " + cmd
+        cmd = "cd " + buildDir + " && cxxtags " + partialOpt + " " + excludeList + " " + mainSrcFile + " -o " + tmpfile.name + " " + buildOptions
+        DEBUG_PRINT("CMD: " + cmd)
         rv = -1
         try:
             rv = os.system(cmd)
@@ -269,11 +275,8 @@ class RebuildHandler():
             file_index = self.mDatabaseDir + "/" + cxxtags_util.FILE_INDEX_FILE_NAME
             db_idx = sqlite3.connect(file_index, isolation_level='EXCLUSIVE')
             cur_idx = db_idx.cursor()
-            for val in value_list:
-                cur_idx.execute("SELECT * FROM file_index WHERE file_name=? AND is_src=? AND db_file=?;", val);
-                row = cur_idx.fetchone()
-                if not row:
-                    cur_idx.execute("INSERT INTO file_index VALUES(?, ?, ?);", val)
+            cur_idx.executemany("DELETE FROM file_index WHERE file_name=? AND is_src=? AND db_file=?;", value_list);
+            cur_idx.executemany("INSERT INTO file_index VALUES(?, ?, ?);", value_list)
             db_idx.commit()
             db_idx.close()
         except sqlite3.Error, e:
@@ -291,22 +294,36 @@ class RebuildHandler():
                 sys.exit(1)
             res = self.GetBuildOption()
             if res:
-                excludeList, containedPart, buildDir, buildOptions = res
-                self.DoRebuild(excludeList, buildDir, buildOptions, f)
+                mainSrcFile, excludeList, containedPart, buildDir, buildOptions = res
+                self.DoRebuild(mainSrcFile, excludeList, buildDir, buildOptions, f)
                 self.mInDb.close()
 
 ########## main ###########
 def main():
+    global gVerboseMode
+
     if len(sys.argv) <= 2:
         print_usage()
         sys.exit(1)
-    mode = sys.argv[1]
+
+    # get global options
+    gVerboseMode = 0
+    try:
+        optlist, argv = getopt.getopt(sys.argv[1:], 'v', [])
+        for opt, val in optlist:
+            if opt == "-v":
+                gVerboseMode = 1
+    except getopt.GetoptError, e:
+        print "ERROR: getopt: ", e.args[0]
+        sys.exit(1)
+
+    mode = argv[0]
     if mode == "add":
         handler = AddHandler()
-        handler.Run(sys.argv[2:])
+        handler.Run(argv[1:])
     elif mode == "rebuild":
         handler = RebuildHandler()
-        handler.Run(sys.argv[2:])
+        handler.Run(argv[1:])
     else:
         print_usage()
         sys.exit(1)

@@ -6,6 +6,7 @@ import traceback
 import re
 
 FILE_INDEX_FILE_NAME = "file_index.db"
+SCRIPT_DIR = os.path.dirname(__file__)
 
 def my_exit(val, msg):
     traceback.print_stack()
@@ -24,11 +25,50 @@ def get_line_from_file(fn, line_no):
     fi.close()
     return str_line
 
+def get_usr_id(fn, usr):
+    db = db_connect(fn)
+    cur = db.cursor()
+    cur.execute('SELECT usr_list.id FROM usr_list WHERE name=?;', (usr,))
+    row = cur.fetchone()
+    db.close()
+    if row:
+        return row[0]
+    return -1
+
+def rebuild_and_connect_if_is_skel(db_dir, fn):
+    db = db_connect(fn)
+    cur = db.cursor()
+    cur.execute("SELECT src_file_name, is_skel FROM db_info;")
+    #isSkel = is_db_skel(db)
+    row = cur.fetchone()
+    if row:
+        srcFilename, isSkel = row
+    else:
+        return None
+    if isSkel == 1:
+        db.close()
+        # rebuild database
+        cmd = SCRIPT_DIR + "/cxxtags_db_manager rebuild %s %s"%(db_dir, os.path.abspath(srcFilename))
+        rv = os.system(cmd)
+        if rv == 0:
+            db = db_connect(fn)
+        else:
+            print "ERROR: rebuild of the database file faild: rv=%d: "%(rv) + cmd
+    return db
+
 def db_connect(fn):
     if not os.path.exists(fn):
         my_exit(1, "ERROR: DB connect: "+fn)
     db = sqlite3.connect(fn, isolation_level='EXCLUSIVE')
     return db
+
+def is_db_skel(db):
+    cur = db.cursor()
+    cur.execute("SELECT is_skel FROM db_info;")
+    row = cur.fetchone()
+    if row:
+        return row[0]
+    return None
 
 def get_db_file_list(db_dir):
     db = db_connect(db_dir + "/" + FILE_INDEX_FILE_NAME)

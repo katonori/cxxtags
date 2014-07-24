@@ -15,6 +15,7 @@
 namespace cxxtagsIndexer {
 static int gIsPartial = 0;
 static int gIsEmpty = 0;
+static int gIsSkelton = 0; // only USRs and file names are recorded.
 static std::string gLastClassUsr = "";
 cxxtags::IndexDb* gDb;
 /******************************************************************************/
@@ -195,18 +196,20 @@ static bool isLocalDecl(CXCursorKind parentKind)
 // process declarations other than function declarations.
 static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column, int kind, int val)
 {
-    int isDef = clang_isCursorDefinition(Cursor);
-    int nameId = nameIdTbl->GetId(name);
-    int fileId = fileIdTbl->GetId(fileName);
-    int usrId = usrIdTbl->GetId(cUsr);
     // get type information
     CXCursor typeCur;
     int typeUsrId = 0;
     int isPointer = 0;
     int typeKind = 0;
     CXType curTypeOrig = clang_getCursorType(Cursor);
-
     getCXTypeInfo(typeCur, typeUsrId, typeKind, isPointer, curTypeOrig);
+    int usrId = usrIdTbl->GetId(cUsr);
+    int fileId = fileIdTbl->GetId(fileName);
+    if(gIsSkelton) {
+        return;
+    }
+    int isDef = clang_isCursorDefinition(Cursor);
+    int nameId = nameIdTbl->GetId(name);
     //printf("decl: %s: %s, %s, %d, %d, kind=%d, typeKind=%d, typeKind2=%d\n", cUsr, name.c_str(), fileName.c_str(), line, column, kind, curTypeOrig.kind, typeKind);
     //
     // if the option '-p' is specified
@@ -232,16 +235,19 @@ static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::strin
 // process declarations
 static inline void procFuncDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column, int kind, int isVirt)
 {
-    int isDef = clang_isCursorDefinition(Cursor);
-    int nameId = nameIdTbl->GetId(name);
-    int fileId = fileIdTbl->GetId(fileName);
-    int usrId = usrIdTbl->GetId(cUsr);
     // get result type information
     CXCursor typeCur;
     int typeUsrId = 0;
     int isPointer = 0;
     int typeKind = 0;
     getCXTypeInfo(typeCur, typeUsrId, typeKind, isPointer, clang_getCursorResultType(Cursor));
+    int usrId = usrIdTbl->GetId(cUsr);
+    int fileId = fileIdTbl->GetId(fileName);
+    if(gIsSkelton) {
+        return;
+    }
+    int isDef = clang_isCursorDefinition(Cursor);
+    int nameId = nameIdTbl->GetId(name);
     // insert to database
     gDb->insert_decl_value(usrId, nameId, fileId, line, column, kind, 0, isVirt, isDef, typeUsrId, typeKind, isPointer);
 }
@@ -249,24 +255,27 @@ static inline void procFuncDecl(const CXCursor& Cursor, const char* cUsr, std::s
 // process c++ method declarations
 static inline void procCXXMethodDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column, int kind)
 {
-    int isDef = clang_isCursorDefinition(Cursor);
-    int fileId = fileIdTbl->GetId(fileName);
-    int usrId = usrIdTbl->GetId(cUsr);
-    int isVirt = clang_CXXMethod_isVirtual(Cursor);
     unsigned int numOverridden = 0;
     CXCursor *cursorOverridden;
     clang_getOverriddenCursors(Cursor, 
             &cursorOverridden,
             &numOverridden);
-    int nameId = nameIdTbl->GetId(name);
     for(unsigned int i = 0; i < numOverridden; i++) {
         CXString cxRefUSR = clang_getCursorUSR(cursorOverridden[i]);
         const char *cRefUsr = clang_getCString(cxRefUSR);
         assert(cRefUsr);
+        int usrId = usrIdTbl->GetId(cUsr);
+        int fileId = fileIdTbl->GetId(fileName);
+        if(gIsSkelton) {
+            return;
+        }
         int refUsrId = usrIdTbl->GetId(cRefUsr);
+        int isDef = clang_isCursorDefinition(Cursor);
+        int nameId = nameIdTbl->GetId(name);
         // insert information about overrides to database
         gDb->insert_overriden_value(refUsrId, nameId, fileId, line, column, kind, usrId, isDef);
     }
+    int isVirt = clang_CXXMethod_isVirtual(Cursor);
     clang_disposeOverriddenCursors(cursorOverridden);
     // process as a function declaration is also done. 
     procFuncDecl(Cursor, cUsr, name, fileName, line, column, kind, isVirt);
@@ -278,13 +287,17 @@ static inline void procRef(const CXCursor& Cursor, std::string name, std::string
     const char* cUsr = "";
     unsigned int ref_line = 0;
     unsigned int ref_column = 0;
-    int fileId = fileIdTbl->GetId(fileName);
     CXCursor refCur = clang_getCursorReferenced(Cursor);
     if (!clang_equalCursors(refCur, clang_getNullCursor())) {
         // ref_usr
         CXString cxRefUSR = clang_getCursorUSR(refCur);
         cUsr = clang_getCString(cxRefUSR);
         assert(cUsr);
+        int refUsrId = usrIdTbl->GetId(cUsr);
+        int fileId = fileIdTbl->GetId(fileName);
+        if(gIsSkelton) {
+            return;
+        }
         //printf("ref: %s: %d, %d\n", cUsr, line, column);
         //
         // if the option '-p' is specified
@@ -310,7 +323,6 @@ static inline void procRef(const CXCursor& Cursor, std::string name, std::string
             }
             refFid = fileIdTbl->GetId(cRefFileName);
         }
-        int refUsrId = usrIdTbl->GetId(cUsr);
         int nameId = nameIdTbl->GetId(name);
         // insert to database.
         gDb->insert_ref_value(refUsrId, nameId, fileId, line, column, kind, refFid, ref_line, ref_column);
@@ -330,8 +342,11 @@ static inline void procCXXBaseClassInfo(const CXCursor& Cursor, std::string name
     cBaseUsr = clang_getCString(cxBaseUsr);
     int accessibility = clang_getCXXAccessSpecifier(Cursor);
     // convert to ID
-    int classUsrId = usrIdTbl->GetId(gLastClassUsr);
     int baseClassUsrId = usrIdTbl->GetId(cBaseUsr);
+    if(gIsSkelton) {
+        return;
+    }
+    int classUsrId = usrIdTbl->GetId(gLastClassUsr);
     // insert to database
     gDb->insert_base_class_value(classUsrId, baseClassUsrId, line, column, accessibility);
     clang_disposeString(cxBaseUsr);
@@ -556,7 +571,7 @@ static int perform_test_load_source(int argc, const char **argv,
   nameIdTbl = new IdTbl();
 
   gDb = new cxxtags::IndexDb();
-  gDb->init(out_file_name, in_file_name, gExcludeListStr, gIsPartial, cur_dir, argc-1, argv+1);
+  gDb->init(out_file_name, in_file_name, gExcludeListStr, gIsPartial, gIsSkelton, cur_dir, argc-1, argv+1);
 
   if(gIsEmpty) {
       result = 0;
@@ -596,7 +611,7 @@ FUNC_END:
 /* Command line processing.                                                   */
 /******************************************************************************/
 static void print_usage(void) {
-    fprintf(stderr, "usage: cxxtags_core [-pE] [-e excludeList] cur_dir out_file in_file -- {<clang_args>}*\n");
+    fprintf(stderr, "usage: cxxtags_core [-psE] [-e excludeList] cur_dir out_file in_file -- {<clang_args>}*\n");
 }
 
 static std::vector<std::string > splitString(std::string str)
@@ -632,6 +647,11 @@ static int indexSource(int argc, const char **argv) {
             }
             else if(strncmp(*argv, "-p", 2) == 0) {
                 gIsPartial = 1;
+                argv++;
+                argc--;
+            }
+            else if(strncmp(*argv, "-s", 2) == 0) {
+                gIsSkelton = 1;
                 argv++;
                 argc--;
             }

@@ -25,7 +25,7 @@ class CxxTagsCoreWrapper:
             None
 
     def printUsage(self):
-        print "usage: cxxtags [-E, --empty] [-p, --partial] [-e,--exclude exclude_list] [-o out_file] input_file [compiler_arguments]"
+        print "usage: cxxtags [-E, --empty] [-p, --partial] [-s, --skel] [-e,--exclude exclude_list] [-o out_file] input_file [compiler_arguments]"
 
     # parse arguments.
     def parseArgs(self, argv):
@@ -46,6 +46,9 @@ class CxxTagsCoreWrapper:
             elif arg == "-E" or arg == "--empty":
                 self.mOptCore += " -E"
                 self.mIsEmptyMode = True
+                del argv[i]
+            elif arg == "-s" or arg == "--skel":
+                self.mOptCore += " -s"
                 del argv[i]
             elif arg == "-v":
                 self.mIsVerbose = 1

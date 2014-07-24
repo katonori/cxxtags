@@ -10,9 +10,11 @@ import getopt
 import traceback
 import tempfile
 
-DB_VER = 6
+DB_VER = 7
 CONTAINED_PART_FULL = 0
 CONTAINED_PART_PARTIAL = 1
+
+SCRIPT_DIR = os.path.dirname(__file__)
 
 gErr = 0;
 gVerboseMode = 0
@@ -154,16 +156,19 @@ class RebuildHandler():
     mDbFile = ""
     mIsForce = 0
     mIsPartial = 0
+    mCxxtagsOpt = ""
     mInDb = None
 
     def ParseArg(self, args):
-        optlist, args = getopt.getopt(args, 'fp', ['force','partial'])
+        optlist, args = getopt.getopt(args, 'fps', ['force','partial','skel'])
         for i in optlist:
             opt, val = i
             if opt == "--force" or opt == "-f":
                 self.mIsForce = 1
+            elif opt == "--skel" or opt == "-s":
+                self.mCxxtagsOpt += " -s "
             elif opt == "--partial" or opt == "-p":
-                self.mIsPartial = 1
+                self.mCxxtagsOpt += " -p "
             else:
                 print "ERROR: no such option: " + opt
                 print_usage()
@@ -235,10 +240,8 @@ class RebuildHandler():
         if excludeList != "":
             excludeList = "-e " + excludeList
         partialOpt = ""
-        if self.mIsPartial:
-            partialOpt = "-p"
         buildOptions = buildOptions.replace('-g', '')
-        cmd = "cd " + buildDir + " && cxxtags " + partialOpt + " " + excludeList + " " + mainSrcFile + " -o " + tmpfile.name + " " + buildOptions
+        cmd = "cd " + buildDir + " && " + SCRIPT_DIR + "/cxxtags " + self.mCxxtagsOpt + " " + excludeList + " " + mainSrcFile + " -o " + tmpfile.name + " " + buildOptions
         DEBUG_PRINT("CMD: " + cmd)
         rv = -1
         try:
@@ -288,7 +291,7 @@ class RebuildHandler():
     def Run(self, args):
         self.ParseArg(args)
         for f in self.mInSrcFileNameList:
-            print "Processing: " + f
+            DEBUG_PRINT("Processing: " + f)
             if "" == self.GetDbFileFromSrcName(f):
                 print "ERROR: counld not find database file.: " + f
                 sys.exit(1)

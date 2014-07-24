@@ -18,8 +18,8 @@ if CLANG_HOME == None:
 CXXTAGS = "../../bin/cxxtags"
 CXXTAGS_INCLUDES = "-I%s/include"%(CLANG_HOME)
 USAGE = "usage: cxxtags [-E, --empty] [-p, --partial] [-e,--exclude exclude_list] [-o out_file] input_file [compiler_arguments]"
-DB_INFO_COLS = 6
-DB_VER = 6
+DB_INFO_COLS = 7
+DB_VER = 7
 err = 0
 
 def msgTest(cmd, refMsg, refRv):

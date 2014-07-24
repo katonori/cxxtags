@@ -31,7 +31,7 @@ void IndexDb::finDb(sqlite3_stmt *sqlStmt)
     sqlite3_finalize(sqlStmt);
 }
 
-void IndexDb::init(std::string db_file_name, std::string src_file_name, std::string excludeList, int isPartial, const char* curDir, int argc, const char** argv)
+void IndexDb::init(std::string db_file_name, std::string src_file_name, std::string excludeList, int isPartial, int isSkel, const char* curDir, int argc, const char** argv)
 {
     char *err=NULL;
     if(sqlite3_open(db_file_name.c_str(), &mDb ) != SQLITE_OK) {
@@ -56,7 +56,7 @@ void IndexDb::init(std::string db_file_name, std::string src_file_name, std::str
     //
     // contained_part| 0:full, 1:partial
     //
-    sqlite3_exec(mDb, "CREATE TABLE db_info(db_format INTEGER, src_file_name TEXT, exclude_list TEXT, contained_part INTEGER, build_dir TEXT, build_options);", NULL, NULL, &err);
+    sqlite3_exec(mDb, "CREATE TABLE db_info(db_format INTEGER, src_file_name TEXT, exclude_list TEXT, contained_part INTEGER, is_skel INTEGER, build_dir TEXT, build_options);", NULL, NULL, &err);
     // file_list
     sqlite3_exec(mDb, "CREATE TABLE file_list(id INTEGER, name TEXT);", NULL, NULL, &err);
     // usr_list
@@ -81,7 +81,7 @@ void IndexDb::init(std::string db_file_name, std::string src_file_name, std::str
     // register databasee information
     std::ostringstream os;
     int contained_part = isPartial ? CONTAINED_PART_PARTIAL : CONTAINED_PART_FULL;
-    os << "INSERT INTO db_info VALUES(" << DB_VER << ", '" << src_file_name << "','" << excludeList << "'," << contained_part << ", '" << curDir << "','" << build_opt << "');";
+    os << "INSERT INTO db_info VALUES(" << DB_VER << ", '" << src_file_name << "','" << excludeList << "'," << contained_part << "," << isSkel << ",'" << curDir << "','" << build_opt << "');";
     sqlite3_exec(mDb, os.str().c_str(), NULL, NULL, &err);
 
     // prepare queries

@@ -12,6 +12,7 @@ import re
 import os
 
 OUTPUT_DELIMITER = '|'
+SCRIPT_DIR = os.path.dirname(__file__)
 
 gDebugMode = 0
 gVerboseMode = 0
@@ -44,6 +45,7 @@ class HandlerBase:
         result = cur.fetchall()
         usr = ""
         for row in result:
+            DEBUG_PRINT("row: " + str(row))
             resUsr, resFileName, resLine, resCol = row
             if re.search(fileName + '$', resFileName):
                 if usr == "":
@@ -64,6 +66,7 @@ class HandlerBase:
         result = cur.fetchall()
         usr = ""
         for row in result:
+            DEBUG_PRINT("a: " + str(row))
             resUsr, resFileName, resLine, resCol = row
             if re.search(fileName + '$', resFileName):
                 if usr == "":
@@ -84,6 +87,7 @@ class HandlerBase:
             print "ERROR: specify file name"
             sys.exit(1)
         db_list = cxxtags_util.get_db_files_by_src_file_name(self.mDbDir, fileName)
+        DEBUG_PRINT("db_list: " + str(db_list))
         if db_list == []:
             print "ERROR: database file of \'%s\' not found:"%(fileName)
             sys.exit(1)
@@ -96,8 +100,13 @@ class HandlerBase:
                 print "ERROR: file name \"%s\" is ambiguous. spcecify an absolute path."%(fileName)
                 sys.exit(1)
         fn = db_list[0]
-        db = cxxtags_util.db_connect(fn)
+        DEBUG_PRINT("REBUILDING: " + fn)
+        db = cxxtags_util.rebuild_and_connect_if_is_skel(self.mDbDir, fn)
+        if db == None:
+            print "ERROR: invalid db format"
+            sys.exit(1)
         usr = self.GetUsrFromDeclTable(db, fileName, lineNo, colNo)
+        DEBUG_PRINT("USR: " + str(usr))
         if usr == "":
             usr = self.GetUsrFromRefTable(db, fileName, lineNo, colNo)
         db.close()
@@ -235,12 +244,10 @@ class QueryHandlerRef(HandlerBase):
         DEBUG_PRINT("db_list: " + str(db_list))
         for fn in db_list:
             try:
-                db = cxxtags_util.db_connect(fn)
-                cur = db.cursor()
-                cur.execute('SELECT usr_list.id FROM usr_list WHERE name=?;', (usr,))
-                row = cur.fetchone()
-                if row:
-                    usrId = row[0]
+                usrId = cxxtags_util.get_usr_id(fn, usr)
+                if usrId >= 0:
+                    db = cxxtags_util.rebuild_and_connect_if_is_skel(self.mDbDir, fn)
+                    cur = db.cursor()
                     cur.execute('SELECT name_list.name, file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE ref.usr_id=?;', (usrId,))
                     resultList += cur.fetchall()
             except sqlite3.Error, e:

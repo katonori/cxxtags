@@ -245,15 +245,17 @@ class QueryHandlerRef(HandlerBase):
         for fn in db_list:
             try:
                 usrId = cxxtags_util.get_usr_id(fn, usr)
+                db = None
                 if usrId >= 0:
                     db = cxxtags_util.rebuild_and_connect_if_is_skel(self.mDbDir, fn)
                     cur = db.cursor()
                     cur.execute('SELECT name_list.name, file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE ref.usr_id=?;', (usrId,))
                     resultList += cur.fetchall()
+                    db.close()
             except sqlite3.Error, e:
-                db.close()
+                if db:
+                    db.close()
                 DEBUG_PRINT("WARN: GetAllRefs(): %s: "%(fn) + str(e.args[0]))
-            db.close()
         resultList = set(resultList)
         for i in resultList:
             resultName, resultFileName, resultLine, resultCol = i

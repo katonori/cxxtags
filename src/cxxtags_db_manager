@@ -9,6 +9,7 @@ import cxxtags_util
 import getopt
 import traceback
 import tempfile
+import time
 
 DB_VER = 7
 CONTAINED_PART_FULL = 0
@@ -236,6 +237,7 @@ class RebuildHandler():
 
     def DoRebuild(self, mainSrcFile, excludeList, buildDir, buildOptions, src_file):
         global gErr
+        #startRebuild = time.time() 
         tmpfile = tempfile.NamedTemporaryFile(delete=False)
         if excludeList != "":
             excludeList = "-e " + excludeList
@@ -251,11 +253,13 @@ class RebuildHandler():
                 print "ERROR: build failed: " + cmd
                 #os.remove(tmpfile.name)
                 gErr += 1
+        #endRebuild = time.time() 
         dbIn = sqlite3.connect(tmpfile.name, isolation_level='EXCLUSIVE')
         self.UpdateFilelist(self.mDbFile, src_file, dbIn.cursor())
         dbIn.close()
         #shutil.copy(tmpfile.name, self.mDbFile)
         shutil.move(tmpfile.name, self.mDbFile)
+        #endAll = time.time() 
         return 0
 
     def UpdateFilelist(self, tgt_fn, src_file, db_cursor):
@@ -278,7 +282,8 @@ class RebuildHandler():
             file_index = self.mDatabaseDir + "/" + cxxtags_util.FILE_INDEX_FILE_NAME
             db_idx = sqlite3.connect(file_index, isolation_level='EXCLUSIVE')
             cur_idx = db_idx.cursor()
-            cur_idx.executemany("DELETE FROM file_index WHERE file_name=? AND is_src=? AND db_file=?;", value_list);
+            DEBUG_PRINT("tgt_fn: " + str(tgt_fn))
+            cur_idx.execute("DELETE FROM file_index WHERE db_file=?;", (tgt_fn,));
             cur_idx.executemany("INSERT INTO file_index VALUES(?, ?, ?);", value_list)
             db_idx.commit()
             db_idx.close()

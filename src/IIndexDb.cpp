@@ -209,3 +209,4 @@ void IndexDb::fin(const std::map<std::string, int >& fileMap, const std::map<std
 }
 
 };
+

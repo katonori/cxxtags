@@ -6,7 +6,7 @@ set(CMAKE_CXX_FLAGS "-g -O2")
 include_directories(${LLVM_HOME}/include)
 link_directories(${LLVM_HOME}/lib)
 
-add_executable(cxxtags_core cxxtags_core.cpp db.cpp)
+add_executable(cxxtags_core cxxtags_core.cpp DbImplLevelDb.cpp)
 target_link_libraries(cxxtags_core sqlite3 clang stdc++)
 
 install(FILES

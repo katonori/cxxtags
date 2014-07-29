@@ -10,14 +10,16 @@
 #include <time.h>
 #include <unistd.h>
 #include <getopt.h>
-#include "db.h"
+#include "IIndexDb.h"
+//#include "DbImplSqlite3.h"
+#include "DbImplLevelDb.h"
 
 namespace cxxtagsIndexer {
 static int gIsPartial = 0;
 static int gIsEmpty = 0;
 static int gIsSkelton = 0; // only USRs and file names are recorded.
 static std::string gLastClassUsr = "";
-cxxtags::IndexDb* gDb;
+cxxtags::IIndexDb* gDb;
 /******************************************************************************/
 /* Utility functions.                                                         */
 /******************************************************************************/
@@ -570,7 +572,8 @@ static int perform_test_load_source(int argc, const char **argv,
   usrIdTbl = new IdTbl();
   nameIdTbl = new IdTbl();
 
-  gDb = new cxxtags::IndexDb();
+  //gDb = reinterpret_cast<cxxtags::DbImplSqlite3*>(new cxxtags::DbImplSqlite3());
+  gDb = reinterpret_cast<cxxtags::DbImplLevelDb*>(new cxxtags::DbImplLevelDb());
   gDb->init(out_file_name, in_file_name, gExcludeListStr, gIsPartial, gIsSkelton, cur_dir, argc-1, argv+1);
 
   if(gIsEmpty) {

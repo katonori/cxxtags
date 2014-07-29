@@ -161,13 +161,14 @@ class RebuildHandler():
     mInDb = None
 
     def ParseArg(self, args):
-        optlist, args = getopt.getopt(args, 'fps', ['force','partial','skel'])
+        #optlist, args = getopt.getopt(args, 'fps', ['force','partial','skel'])
+        optlist, args = getopt.getopt(args, 'fp', ['force','partial','skel'])
         for i in optlist:
             opt, val = i
             if opt == "--force" or opt == "-f":
                 self.mIsForce = 1
-            elif opt == "--skel" or opt == "-s":
-                self.mCxxtagsOpt += " -s "
+            #elif opt == "--skel" or opt == "-s":
+            #    self.mCxxtagsOpt += " -s "
             elif opt == "--partial" or opt == "-p":
                 self.mCxxtagsOpt += " -p "
             else:

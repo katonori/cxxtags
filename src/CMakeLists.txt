@@ -1,13 +1,14 @@
 project(cxxtags)
 
 set(LLVM_HOME "" CACHE PATH "")
+set(LEVELDB_HOME "" CACHE PATH "")
 set(CMAKE_CXX_FLAGS "-g -O2")
 
-include_directories(${LLVM_HOME}/include)
-link_directories(${LLVM_HOME}/lib)
+include_directories(${LLVM_HOME}/include ${LEVELDB_HOME}/include)
+link_directories(${LLVM_HOME}/lib ${LEVELDB_HOME}/lib)
 
 add_executable(cxxtags_core cxxtags_core.cpp DbImplLevelDb.cpp)
-target_link_libraries(cxxtags_core sqlite3 clang stdc++)
+target_link_libraries(cxxtags_core sqlite3 clang stdc++ leveldb)
 
 install(FILES
     ${PROJECT_BINARY_DIR}/cxxtags_core

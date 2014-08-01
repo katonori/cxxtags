@@ -21,6 +21,7 @@ public:
     virtual void insert_decl_value(int usrId, int nameId, int fileId, int line, int col, int entityKind, int val, int isVirtual, int isDef, int typeUsrId, int typeKind, int isPointer);
     virtual void insert_overriden_value(int usrId, int nameId, int fileId, int line, int col, int entityKind, int overriderUsrId, int isDef);
     virtual void insert_base_class_value(int classUsrId, int baseClassUsrId, int line, int col, int accessibility);
+    void addIdList(const std::map<std::string, int >& inMap, std::string tableName);
 private:
 private:
 };

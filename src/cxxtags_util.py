@@ -14,11 +14,12 @@ def my_exit(val, msg):
     sys.exit(val)
 
 def get_line_from_file(fn, line_no):
+    line_no = int(line_no)
     fi = open(fn, 'r')
     all_lines = fi.readlines()
     str_line = ""
     if len(all_lines) < line_no:
-        my_exit(1, "ERROR: get_line_from_file: %s, %s, %d, %d\n"%(name, fn, line_no, col))
+        my_exit(1, "ERROR: get_line_from_file: %s, %s, %d\n"%(name, fn, line_no))
     else:
         str_line = all_lines[line_no-1]
     str_line = str_line.rstrip('\r\n')

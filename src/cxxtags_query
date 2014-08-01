@@ -5,7 +5,7 @@ def usage():
     print '     : cxxtags_query              dump database_dir table_name'
 
 import sys
-import sqlite3
+import plyvel
 import cxxtags_util
 import getopt
 import re
@@ -30,54 +30,15 @@ class HandlerBase:
 
     mAllDbFileList = None
     mDbDir = ""
+    mDb = None
     mUsrDbName = None
+    m_srcFileName = ""
+    m_colNo = 0
 
     def GetAllDbFiles(self):
         if self.mAllDbFileList == None:
             self.mAllDbFileList = cxxtags_util.get_db_file_list(self.mDbDir)
         return self.mAllDbFileList
-
-    def GetUsrFromRefTable(self, db, fileName, lineNo, colNo):
-        cur = db.cursor()
-        q = 'SELECT usr_list.name, file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE file_list.name LIKE ? AND ref.line=? AND ref.col=?'
-        argList = ('%'+fileName, lineNo, colNo)
-        cur.execute(q, argList)
-        result = cur.fetchall()
-        usr = ""
-        for row in result:
-            DEBUG_PRINT("row: " + str(row))
-            resUsr, resFileName, resLine, resCol = row
-            if re.search(fileName + '$', resFileName):
-                if usr == "":
-                    usr = resUsr
-                elif usr != resUsr:
-                    print usr + ", " + resUsr
-                    print "ERROR: Ambiguous query."
-                    for row in result:
-                        print row
-                    return ""
-        return usr
-
-    def GetUsrFromDeclTable(self, db, fileName, lineNo, colNo):
-        cur = db.cursor()
-        q = 'SELECT usr_list.name, file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE file_list.name LIKE ? AND decl.line=? AND decl.col=?'
-        argList = ('%'+fileName, lineNo, colNo)
-        cur.execute(q, argList)
-        result = cur.fetchall()
-        usr = ""
-        for row in result:
-            DEBUG_PRINT("a: " + str(row))
-            resUsr, resFileName, resLine, resCol = row
-            if re.search(fileName + '$', resFileName):
-                if usr == "":
-                    usr = resUsr
-                elif usr != resUsr:
-                    print usr + ", " + resUsr
-                    print "ERROR: Ambiguous query."
-                    for row in result:
-                        print row
-                    return ""
-        return usr
 
     #
     # get USR from location information.
@@ -86,34 +47,18 @@ class HandlerBase:
         if fileName == "":
             print "ERROR: specify file name"
             sys.exit(1)
-        db_list = cxxtags_util.get_db_files_by_src_file_name(self.mDbDir, fileName)
-        DEBUG_PRINT("db_list: " + str(db_list))
-        if db_list == []:
-            print "ERROR: database file of \'%s\' not found:"%(fileName)
-            sys.exit(1)
-        # If multiple hit occur when absolute path is specified,
-        # choose the file found the first.
-        if fileName[0] != '/':
-            # If file is a relative path and found multiple database files, treated as the file name is
-            # ambiguous.
-            if len(db_list) != 1 and fileName.find('/') != 0:
-                print "ERROR: file name \"%s\" is ambiguous. spcecify an absolute path."%(fileName)
-                sys.exit(1)
-        fn = db_list[0]
-        DEBUG_PRINT("REBUILDING: " + fn)
-        db = cxxtags_util.rebuild_and_connect_if_is_skel(self.mDbDir, fn)
-        if db == None:
-            print "ERROR: invalid db format"
-            sys.exit(1)
-        usr = self.GetUsrFromDeclTable(db, fileName, lineNo, colNo)
-        DEBUG_PRINT("USR: " + str(usr))
-        if usr == "":
-            usr = self.GetUsrFromRefTable(db, fileName, lineNo, colNo)
-        db.close()
-        if usr != "":
-            self.mUsrDbName = fn
-            return usr
-        return None
+        q = "pos2usr|%s|%s|%s"%(fileName, lineNo, colNo)
+        usrId = self.mDb.get(q)
+        DEBUG_PRINT("usrId: " + str(usrId))
+        if usrId == None:
+            DEBUG_PRINT("pos2usr failed: " + q)
+            return (None, None)
+        q = "id2usr|" + usrId
+        usr = self.mDb.get(q)
+        if usr == None:
+            DEBUG_PRINT("id2usr failed: " + q)
+            return (None, None)
+        return (usrId, usr)
 
     def GetMainSrcName(self):
         db = cxxtags_util.db_connect(self.mUsrDbName)
@@ -126,107 +71,99 @@ class HandlerBase:
     def PrintResult(self, name, fileName, line, col):
         print name + OUTPUT_DELIMITER + fileName + OUTPUT_DELIMITER + str(line) + OUTPUT_DELIMITER + str(col) + OUTPUT_DELIMITER + cxxtags_util.get_line_from_file(fileName, line)
 
+
+def id2name(db, src, id):
+    result = db.get("id2name|%s|%s"%(src, str(id)))
+    return result
+
+def id2file(db, src, id):
+    result = db.get("id2file|%s|%s"%(src, str(id)))
+    return result
+
 class QueryHandlerDecl(HandlerBase):
     #
     # Handle Rquest for infomation about declarations
     #
-
-    mFileName = ""
-    mLineNo = 0
-    mColNo = 0
-
     def __init__(self, dbDir):
         self.mDbDir = dbDir + "/"
+        self.mDb = plyvel.DB(dbDir)
 
     def DoQuery(self):
-        usr = self.GetUsr(self.mFileName, self.mLineNo, self.mColNo)
+        (usrId, usr) = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
+        DEBUG_PRINT("usr: " + usrId + "," + usr)
         if usr:
-            result = self.QueryDeclInfo(usr)
+            result = self.QueryDeclInfo(usrId)
             if result:
-                resultName, resultFileName, resultLine, resultCol = result
-                self.PrintResult(resultName, resultFileName, resultLine, resultCol)
+                name, fileName, line, col = result
+                self.PrintResult(name, fileName, line, col)
 
-    def QueryDeclInfo(self, usr):
-        db = cxxtags_util.db_connect(self.mUsrDbName)
-        cur = db.cursor()
-        cur.execute('SELECT name_list.name, file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name=? ORDER BY decl.is_def LIMIT 1', (usr,))
-        result = cur.fetchone()
-        db.close()
-        if result:
-            return result
-        common_db = self.mDbDir + "common_headers.db"
-        if os.path.exists(common_db):
-            db = cxxtags_util.db_connect(common_db)
-            cur = db.cursor()
-            cur.execute('SELECT name_list.name, file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name=? ORDER BY decl.is_def LIMIT 1', (usr,))
-            result = cur.fetchone()
-            db.close()
-            return result
+    def QueryDeclInfo(self, usrId):
+
+        decl = self.mDb.get("usr2decl|%s"%(usrId))
+        DEBUG_PRINT("decl: " + str(decl))
+        if decl:
+            declList = decl.split("|")
+            nameId, fileId, line, col, entityKind, val, isVirtual, isDef, typeUsrId, typeKind, isPointer = tuple(declList)
+            name = id2name(self.mDb, self.m_srcFileName, nameId)
+            fileName = id2file(self.mDb, self.m_srcFileName, fileId)
+            return name, fileName, line, col
         return None
 
     def parseArg(self, argv):
         if len(argv) != 3:
             usage()
             sys.exit(1)
-        self.mFileName, self.mLineNo, self.mColNo = argv
+        self.m_srcFileName, self.m_lineNo, self.m_colNo = argv
+        self.m_srcFileName = os.path.abspath(self.m_srcFileName)
+        DEBUG_PRINT("src: " + self.m_srcFileName)
 
 class QueryHandlerDef(HandlerBase):
     #
     # Handle Rquest for infomation about definition
     #
-
-    mFileName = ""
-    mLineNo = 0
-    mColNo = 0
-
     def __init__(self, dbDir):
         self.mDbDir = dbDir
+        self.mDb = plyvel.DB(dbDir)
 
     def DoQuery(self):
-        usr = self.GetUsr(self.mFileName, self.mLineNo, self.mColNo)
+        (usrId, usr) = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         DEBUG_PRINT("usr: " + str(usr))
         if usr:
-            result = self.GetDef(usr)
+            result = self.GetDef(usrId)
             if result:
-                resultName, resultFileName, resultLine, resultCol = result
-                self.PrintResult(resultName, resultFileName, resultLine, resultCol)
+                name, fileName, line, col = result
+                self.PrintResult(name, fileName, line, col)
 
-    def GetDef(self, usr):
-        DEBUG_PRINT("db_list: " + str(self.GetAllDbFiles()))
-        for fn in self.GetAllDbFiles():
-            try:
-                db = cxxtags_util.db_connect(fn)
-                cur = db.cursor()
-                cur.execute('SELECT name_list.name, file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name=? AND is_def=1 LIMIT 1;', (usr,))
-                result = cur.fetchone()
-                db.close()
-            except sqlite3.Error, e:
-                db.close()
-                DEBUG_PRINT("WARN: GetDef(): %s: "%(fn) + str(e.args[0]))
-            if result:
-                return result
+    def GetDef(self, usrId):
+        q = "usr2decl|%s"%(usrId)
+        DEBUG_PRINT("q: " + q)
+        resDef = self.mDb.get(q)
+        DEBUG_PRINT("def: " + str(resDef))
+        if resDef:
+            defList = resDef.split("|")
+            nameId, fileId, line, col, entityKind, val, isVirtual, isDef, typeUsrId, typeKind, isPointer = tuple(defList)
+            if isDef != 0:
+                name = id2name(self.mDb, self.m_srcFileName, nameId)
+                fileName = id2file(self.mDb, self.m_srcFileName, fileId)
+                return name, fileName, line, col
         return None
 
     def parseArg(self, argv):
         if len(argv) != 3:
             usage()
             sys.exit(1)
-        self.mFileName, self.mLineNo, self.mColNo = argv
+        self.m_srcFileName, self.m_lineNo, self.m_colNo = argv
+        self.m_srcFileName = os.path.abspath(self.m_srcFileName)
 
 class QueryHandlerRef(HandlerBase):
     #
     # Handle Rquest for infomation about reference
     #
-
-    mFileName = ""
-    mLineNo = 0
-    mColNo = 0
-
     def __init__(self, dbDir):
         self.mDbDir = dbDir
 
     def DoQuery(self):
-        usr = self.GetUsr(self.mFileName, self.mLineNo, self.mColNo)
+        usr = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         DEBUG_PRINT("usr: " + str(usr))
         if usr:
             self.GetAllRefs(usr)
@@ -265,22 +202,17 @@ class QueryHandlerRef(HandlerBase):
         if len(argv) != 3:
             usage()
             sys.exit(1)
-        self.mFileName, self.mLineNo, self.mColNo = argv
+        self.m_srcFileName, self.m_lineNo, self.m_colNo = argv
 
 class QueryHandlerOverride(HandlerBase):
     #
     # Handle Rquest for infomation about reference
     #
-
-    mFileName = ""
-    mLineNo = 0
-    mColNo = 0
-
     def __init__(self, dbDir):
         self.mDbDir = dbDir
 
     def DoQuery(self):
-        usr = self.GetUsr(self.mFileName, self.mLineNo, self.mColNo)
+        usr = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         if usr:
             self.GetAllOverrides(usr)
 
@@ -310,22 +242,17 @@ class QueryHandlerOverride(HandlerBase):
         if len(argv) != 3:
             usage()
             sys.exit(1)
-        self.mFileName, self.mLineNo, self.mColNo = argv
+        self.m_srcFileName, self.m_lineNo, self.m_colNo = argv
 
 class QueryHandlerOverrideN(HandlerBase):
     #
     # Handle Rquest for infomation about reference
     #
-
-    mFileName = ""
-    mLineNo = 0
-    mColNo = 0
-
     def __init__(self, dbDir):
         self.mDbDir = dbDir
 
     def DoQuery(self):
-        usr = self.GetUsr(self.mFileName, self.mLineNo, self.mColNo)
+        usr = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         if usr:
             self.GetAllOverriders(usr)
 
@@ -350,16 +277,12 @@ class QueryHandlerOverrideN(HandlerBase):
         if len(argv) != 3:
             usage()
             sys.exit(1)
-        self.mFileName, self.mLineNo, self.mColNo = argv
+        self.m_srcFileName, self.m_lineNo, self.m_colNo = argv
 
 class QueryHandlerName(HandlerBase):
     #
     # Handle Rquest for infomation about name
     #
-
-    mFileName = ""
-    mLineNo = 0
-    mColNo = 0
     mName = 0
 
     def __init__(self, dbDir):
@@ -368,7 +291,7 @@ class QueryHandlerName(HandlerBase):
     def DoQuery(self):
         global gDebugMode
         resultList = []
-        dbList = cxxtags_util.get_db_files_by_src_file_name(self.mDbDir, self.mFileName)
+        dbList = cxxtags_util.get_db_files_by_src_file_name(self.mDbDir, self.m_srcFileName)
         if dbList == []:
             dbList = self.GetAllDbFiles()
         for fn in dbList:
@@ -418,9 +341,9 @@ class QueryHandlerName(HandlerBase):
             elif opt in ("-p", "--partial"):
                 gPartialCompare = 1
         self.mName = name
-        self.mFileName = fileName
-        self.mLineNo = lineNo
-        self.mColNo = colNo
+        self.m_srcFileName = fileName
+        self.m_lineNo = lineNo
+        self.m_colNo = colNo
 
 class QueryHandlerTable(HandlerBase):
     #
@@ -467,25 +390,20 @@ class QueryHandlerType(HandlerBase):
     #
     # Handle Rquest for infomation about type
     #
-
-    mFileName = ""
-    mLineNo = 0
-    mColNo = 0
-
     def __init__(self, dbDir):
         self.mDbDir = dbDir
 
     def DoQuery(self):
-        usr = self.GetUsr(self.mFileName, self.mLineNo, self.mColNo)
+        usr = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         DEBUG_PRINT("usr: " + str(usr))
         if usr:
-            typeUsr = self.GetTypeUsr(usr, self.mFileName, self.mLineNo, self.mColNo)
+            typeUsr = self.GetTypeUsr(usr, self.m_srcFileName, self.m_lineNo, self.m_colNo)
             usrList = self.GetBaseClassInfo(typeUsr)
             if usrList:
                 for i in usrList:
                     baseUsr, accessibility = i
-                    self.GetTypeInfo(baseUsr, self.mFileName, self.mLineNo, self.mColNo)
-            self.GetTypeInfo(typeUsr, self.mFileName, self.mLineNo, self.mColNo)
+                    self.GetTypeInfo(baseUsr, self.m_srcFileName, self.m_lineNo, self.m_colNo)
+            self.GetTypeInfo(typeUsr, self.m_srcFileName, self.m_lineNo, self.m_colNo)
 
     def GetTypeInfo(self, typeUsr, fileName, lineNo, colNo):
         done_dict = {}
@@ -559,7 +477,8 @@ class QueryHandlerType(HandlerBase):
         if len(argv) != 3:
             usage()
             sys.exit(1)
-        self.mFileName, self.mLineNo, self.mColNo = argv
+        self.m_srcFileName, self.m_lineNo, self.m_colNo = argv
+        self.m_srcFileName = os.path.abspath(self.m_srcFileName)
 
     def PrintResult(self, name, typeName, fileName, line, col, kind):
         print typeName + OUTPUT_DELIMITER + name + OUTPUT_DELIMITER + fileName + OUTPUT_DELIMITER + str(line) + OUTPUT_DELIMITER + str(col) + OUTPUT_DELIMITER + kind + OUTPUT_DELIMITER + cxxtags_util.get_line_from_file(fileName, line)

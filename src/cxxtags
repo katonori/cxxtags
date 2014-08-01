@@ -122,20 +122,5 @@ class CxxTagsCoreWrapper:
             sys.exit(1)
         #self.mTimeList.append(time.time())
 
-        # normalize paths
-        db = cxxtags_util.db_connect(outfile)
-        cur = db.cursor()
-        cur.execute("SELECT * FROM file_list;")
-        new_file_list = []
-        for row in cur.fetchall():
-            num, fn = row
-            if fn != '':
-                new_file_list.append((os.path.abspath(fn), num))
-        cur.executemany(u"UPDATE file_list SET name=? WHERE id=?;", new_file_list)
-        db.commit()
-        db.close()
-        #print "time:"
-        #print "    proc0: ", self.mTimeList[1]-self.mTimeList[0]
-
 cxxtags = CxxTagsCoreWrapper()
 cxxtags.run()

@@ -25,7 +25,7 @@ class CxxTagsCoreWrapper:
             None
 
     def printUsage(self):
-        print "usage: cxxtags [-E, --empty] [-p, --partial] [-e,--exclude exclude_list] [-o out_file] input_file [compiler_arguments]"
+        print "usage: cxxtags [-E, --empty] [-p, --partial] [-e,--exclude exclude_list] input_file out_dir [compiler_arguments]"
 
     # parse arguments.
     def parseArgs(self, argv):
@@ -54,7 +54,7 @@ class CxxTagsCoreWrapper:
                 self.mIsVerbose = 1
                 del argv[i]
             elif arg == "-o":
-                self.mOutFile = argv[i+1]
+                #self.mOutFile = argv[i+1]
                 #print "-o: "+self.mOutFile
                 del argv[i:i+2]
             elif arg == "-D":
@@ -90,17 +90,16 @@ class CxxTagsCoreWrapper:
             self.printUsage()
             sys.exit(1)
         in_file = self.mInFileList[0]
-        outfile = self.mOutFile
-        if outfile == "":
-            outfile = os.path.basename(in_file) + ".db"
-        tgt_dir =os.path.dirname(outfile)
-        if tgt_dir != "" and not os.path.exists(tgt_dir):
-            os.makedirs(tgt_dir)
-        if len(self.mInFileList) > 1:
-            print "INFO: multiple input file are specified. empty file \"%s\" is generated."%(outfile)
-            fo = open(outfile, 'a+') # touch file
-            fo.close()
-            sys.exit(0)
+        out_dir = self.mInFileList[1]
+        out_dir = os.path.abspath(out_dir)
+        if out_dir != "" and not os.path.exists(out_dir):
+            os.makedirs(out_dir)
+        if len(self.mInFileList) > 2:
+            #print "INFO: multiple input file are specified. empty file \"%s\" is generated."%(outfile)
+            #fo = open(outfile, 'a+') # touch file
+            #fo.close()
+            print "ERROR: multiple file are specified"
+            sys.exit(1)
         opt = ""
 
         if not os.path.exists(in_file):
@@ -110,16 +109,10 @@ class CxxTagsCoreWrapper:
 
         if self.mExcludeList != "":
             self.mExcludeList = "-e " + self.mExcludeList
-        if os.path.exists(outfile):
-            os.remove(outfile)
-        cmd = "%s/cxxtags_core %s %s %s %s %s "%(exe_dir, self.mOptCore, self.mExcludeList, cur_dir, outfile, in_file)+string.join(argv)
+        cmd = "%s/cxxtags_core %s %s %s %s %s "%(exe_dir, self.mOptCore, self.mExcludeList, cur_dir, out_dir, in_file)+string.join(argv)
         #print(cmd)
         #self.mTimeList.append(time.time())
         rv = os.system(cmd)
-        if rv != 0:
-            if os.path.exists(outfile):
-                os.remove(outfile)
-            sys.exit(1)
         #self.mTimeList.append(time.time())
 
 cxxtags = CxxTagsCoreWrapper()

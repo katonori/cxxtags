@@ -2,11 +2,11 @@ LLVM_HOME=/pkg/llvm-3.2/
 
 CXX=g++
 LD=g++
-INCLUDES=-I${LLVM_HOME}/include/
+INCLUDES=-I${LLVM_HOME}/include/ -I/pkg/leveldb-1.15.0/include/
 LIBS=-L${LLVM_HOME}/lib/ -L/usr/lib/ -lsqlite3 -lclang -lstdc++ 
 CXXFLAGS=-Wall -O2 -g
-CXXTAGS = ../bin/cxxtags -e /usr/include/c++:/usr/include/sys/
-#CXXTAGS = ../bin/cxxtags
+#CXXTAGS = ../bin/cxxtags -e /usr/include/c++:/usr/include/sys/
+CXXTAGS = ../bin/cxxtags
 CXXTAGS_DB_MANAGER = ../bin/cxxtags_db_manager
 LDFLAGS = 
 BINS = cxxtags_core cxxtags cxxtags_db_manager cxxtags_html_dumper cxxtags_util.py cxxtags_query g++.py gcc.py
@@ -20,8 +20,9 @@ all: cxxtags_core.cpp DbImplSqlite3.cpp
 	cp $(BINS) ../bin
 	strip ../bin/cxxtags_core
 index: 
-	$(CXXTAGS) $(INCLUDES) cxxtags_core.cpp -o cxxtags_core.cpp.db
-	$(CXXTAGS) $(INCLUDES) DbImplSqlite3.cpp -o DbImplSqlite3.cpp.db
-	$(CXXTAGS_DB_MANAGER) add db cxxtags_core.cpp.db DbImplSqlite3.cpp.db
+	$(CXXTAGS) $(INCLUDES) db cxxtags_core.cpp
+	$(CXXTAGS) $(INCLUDES) db DbImplSqlite3.cpp
+	#g++.py $(INCLUDES) cxxtags_core.cpp -o cxxtags_core.o -c
+	#g++.py $(INCLUDES) DbImplLevelDb.cpp -o DbImplLevelDb.o -c
 clean:
 	rm -rf db cxxtags_core.o db.o cxxtags_core

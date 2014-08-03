@@ -5,6 +5,7 @@
 #include <map>
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include <time.h>
@@ -231,7 +232,7 @@ static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::strin
         }
     }
     // insert to database
-    gDb->insert_decl_value(usrId, nameId, fileId, line, column, kind, val, 0, isDef, typeUsrId, typeKind, isPointer);
+    gDb->insert_decl_value(cUsr, fileName, name, line, column, kind, val, 0, isDef, typeUsrId, typeKind, isPointer);
 }
 
 // process declarations
@@ -251,7 +252,7 @@ static inline void procFuncDecl(const CXCursor& Cursor, const char* cUsr, std::s
     int isDef = clang_isCursorDefinition(Cursor);
     int nameId = nameIdTbl->GetId(name);
     // insert to database
-    gDb->insert_decl_value(usrId, nameId, fileId, line, column, kind, 0, isVirt, isDef, typeUsrId, typeKind, isPointer);
+    gDb->insert_decl_value(cUsr, fileName, name, line, column, kind, 0, isVirt, isDef, typeUsrId, typeKind, isPointer);
 }
 
 // process c++ method declarations
@@ -327,7 +328,7 @@ static inline void procRef(const CXCursor& Cursor, std::string name, std::string
         }
         int nameId = nameIdTbl->GetId(name);
         // insert to database.
-        gDb->insert_ref_value(refUsrId, nameId, fileId, line, column, kind, refFid, ref_line, ref_column);
+        gDb->insert_ref_value(cUsr, fileName, name, line, column, kind, refFid, ref_line, ref_column);
         clang_disposeString(cxRefUSR);
     }
 }
@@ -365,6 +366,9 @@ static inline void procCursor(const CXCursor& Cursor) {
 
     // file_name
     std::string fileName = getCursorSourceLocation(line, column, Cursor);
+    char filenameBuff[PATH_MAX];
+    realpath(fileName.c_str(), filenameBuff);
+    fileName = filenameBuff;
     // decide if this Cursor info is to be registered to db.
     if(isInExcludeList(fileName)) {
         return;
@@ -533,7 +537,7 @@ static int perform_test_load_source(int argc, const char **argv,
   const char *CommentSchemaFile = NULL;
   int result;
   const char *cur_dir = argv[0];
-  const char *out_file_name = argv[1];
+  const char *out_dir = argv[1];
   const char *in_file_name = argv[2];
   // increment argv to pass clang
   argv+=2;
@@ -574,7 +578,7 @@ static int perform_test_load_source(int argc, const char **argv,
 
   //gDb = reinterpret_cast<cxxtags::DbImplSqlite3*>(new cxxtags::DbImplSqlite3());
   gDb = reinterpret_cast<cxxtags::DbImplLevelDb*>(new cxxtags::DbImplLevelDb());
-  gDb->init(out_file_name, in_file_name, gExcludeListStr, gIsPartial, gIsSkelton, cur_dir, argc-1, argv+1);
+  gDb->init(out_dir, in_file_name, gExcludeListStr, gIsPartial, gIsSkelton, cur_dir, argc-1, argv+1);
 
   if(gIsEmpty) {
       result = 0;
@@ -614,7 +618,7 @@ FUNC_END:
 /* Command line processing.                                                   */
 /******************************************************************************/
 static void print_usage(void) {
-    fprintf(stderr, "usage: cxxtags_core [-psE] [-e excludeList] cur_dir out_file in_file -- {<clang_args>}*\n");
+    fprintf(stderr, "usage: cxxtags_core [-psE] [-e excludeList] cur_dir out_dir in_file -- {<clang_args>}*\n");
 }
 
 static std::vector<std::string > splitString(std::string str)

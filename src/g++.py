@@ -6,7 +6,8 @@ import datetime
 
 CXXTAGS = "cxxtags"
 CXXTAGS_DB_MANAGER = "cxxtags_db_manager"
-CXXTAGS_OPT = "-E -p"
+#CXXTAGS_OPT = "-E -p"
+CXXTAGS_OPT = ""
 
 db_dst = ""
 if "CXXTAGS_DB_DST" in os.environ:
@@ -47,11 +48,8 @@ if output == None:
     output = dt.replace(":", "_") + "." + str(os.getpid()) + ".db"
     #print "use random name: "  + output
 if not "-MM" in argv:
-    args_tmp = [CXXTAGS, CXXTAGS_OPT, exclude, " ".join(argv), " -o " + output]
+    args_tmp = [CXXTAGS, CXXTAGS_OPT, exclude, db_dst, " ".join(argv)]
     # run cxxtags
-    cmd = " ".join(args_tmp)
-    os.system(cmd)
-    args_tmp = [CXXTAGS_DB_MANAGER, "add", db_dst, output]
     cmd = " ".join(args_tmp)
     os.system(cmd)
 

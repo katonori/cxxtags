@@ -31,6 +31,7 @@ class HandlerBase:
     mAllDbFileList = None
     mDbDir = ""
     mDb = None
+    mFileListDb = None
     mUsrDbName = None
     m_srcFileName = ""
     m_colNo = 0
@@ -48,37 +49,25 @@ class HandlerBase:
             print "ERROR: specify file name"
             sys.exit(1)
         q = "pos2usr|%s|%s|%s"%(fileName, lineNo, colNo)
-        usrId = self.mDb.get(q)
-        DEBUG_PRINT("usrId: " + str(usrId))
-        if usrId == None:
-            DEBUG_PRINT("pos2usr failed: " + q)
-            return (None, None)
-        q = "id2usr|" + usrId
+        DEBUG_PRINT("q: " + q)
         usr = self.mDb.get(q)
+        DEBUG_PRINT("usr: " + str(usr))
         if usr == None:
-            DEBUG_PRINT("id2usr failed: " + q)
-            return (None, None)
-        return (usrId, usr)
+            DEBUG_PRINT("pos2usr failed: " + q)
+            return None
+        return usr
 
     def GetMainSrcName(self):
-        db = cxxtags_util.db_connect(self.mUsrDbName)
-        cur = db.cursor()
-        cur.execute("SELECT src_file_name FROM db_info;")
+        #db = cxxtags_util.db_connect(self.mUsrDbName)
+        #cur = db.cursor()
+        #cur.execute("SELECT src_file_name FROM db_info;")
         result = cur.fetchone()
         db.close()
         return result[0]
 
     def PrintResult(self, name, fileName, line, col):
-        print name + OUTPUT_DELIMITER + fileName + OUTPUT_DELIMITER + str(line) + OUTPUT_DELIMITER + str(col) + OUTPUT_DELIMITER + cxxtags_util.get_line_from_file(fileName, line)
-
-
-def id2name(db, src, id):
-    result = db.get("id2name|%s|%s"%(src, str(id)))
-    return result
-
-def id2file(db, src, id):
-    result = db.get("id2file|%s|%s"%(src, str(id)))
-    return result
+        DEBUG_PRINT("res: " + str(name) + OUTPUT_DELIMITER + str(fileName) + OUTPUT_DELIMITER + str(line) + OUTPUT_DELIMITER + str(col))
+        print str(name) + OUTPUT_DELIMITER + str(fileName) + OUTPUT_DELIMITER + str(line) + OUTPUT_DELIMITER + str(col) + OUTPUT_DELIMITER + str(cxxtags_util.get_line_from_file(fileName, line))
 
 class QueryHandlerDecl(HandlerBase):
     #
@@ -87,26 +76,28 @@ class QueryHandlerDecl(HandlerBase):
     def __init__(self, dbDir):
         self.mDbDir = dbDir + "/"
         self.mDb = plyvel.DB(dbDir)
+        self.mFileListDb = plyvel.DB(dbDir + "/file_list")
 
     def DoQuery(self):
-        (usrId, usr) = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
-        DEBUG_PRINT("usr: " + usrId + "," + usr)
+        usr = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
+        DEBUG_PRINT("usr: " + str(usr))
         if usr:
-            result = self.QueryDeclInfo(usrId)
+            result = self.QueryDeclInfo(usr)
             if result:
                 name, fileName, line, col = result
                 self.PrintResult(name, fileName, line, col)
 
-    def QueryDeclInfo(self, usrId):
-
-        decl = self.mDb.get("usr2decl|%s"%(usrId))
+    def QueryDeclInfo(self, usr):
+        decl = self.mDb.get("usr2decl|%s"%(usr))
         DEBUG_PRINT("decl: " + str(decl))
         if decl:
             declList = decl.split("|")
-            nameId, fileId, line, col, entityKind, val, isVirtual, isDef, typeUsrId, typeKind, isPointer = tuple(declList)
-            name = id2name(self.mDb, self.m_srcFileName, nameId)
-            fileName = id2file(self.mDb, self.m_srcFileName, fileId)
-            return name, fileName, line, col
+            name, fileName, line, col, entityKind, val, isVirtual, isDef, typeUsrId, typeKind, isPointer = tuple(declList)
+            # get compileunit
+            cuName = self.mFileListDb.get(self.m_srcFileName)
+            DEBUG_PRINT("CU: " + cuName)
+            if cuName:
+                return name, fileName, line, col
         return None
 
     def parseArg(self, argv):
@@ -141,10 +132,8 @@ class QueryHandlerDef(HandlerBase):
         DEBUG_PRINT("def: " + str(resDef))
         if resDef:
             defList = resDef.split("|")
-            nameId, fileId, line, col, entityKind, val, isVirtual, isDef, typeUsrId, typeKind, isPointer = tuple(defList)
+            name, fileName, line, col, entityKind, val, isVirtual, isDef, typeUsrId, typeKind, isPointer = tuple(defList)
             if isDef != 0:
-                name = id2name(self.mDb, self.m_srcFileName, nameId)
-                fileName = id2file(self.mDb, self.m_srcFileName, fileId)
                 return name, fileName, line, col
         return None
 
@@ -161,6 +150,8 @@ class QueryHandlerRef(HandlerBase):
     #
     def __init__(self, dbDir):
         self.mDbDir = dbDir
+        self.mDb = plyvel.DB(dbDir)
+        self.mFileListDb = plyvel.DB(dbDir + "/file_list")
 
     def DoQuery(self):
         usr = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
@@ -170,30 +161,19 @@ class QueryHandlerRef(HandlerBase):
 
     def GetAllRefs(self, usr):
         resultList = []
-        db_list = []
-        mainSrcFile = self.GetMainSrcName()
-        DEBUG_PRINT("src: " + mainSrcFile)
-        bn = os.path.basename(mainSrcFile)
-        if re.match("c:"+bn, usr): # local scope
-            db_list = [self.mUsrDbName,]
-        else:
-            db_list = self.GetAllDbFiles()
-        DEBUG_PRINT("db_list: " + str(db_list))
-        for fn in db_list:
-            try:
-                usrId = cxxtags_util.get_usr_id(fn, usr)
-                db = None
-                if usrId >= 0:
-                    db = cxxtags_util.rebuild_and_connect_if_is_skel(self.mDbDir, fn)
-                    cur = db.cursor()
-                    cur.execute('SELECT name_list.name, file_list.name, ref.line, ref.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_REF + ' WHERE ref.usr_id=?;', (usrId,))
-                    resultList += cur.fetchall()
-                    db.close()
-            except sqlite3.Error, e:
-                if db:
-                    db.close()
-                DEBUG_PRINT("WARN: GetAllRefs(): %s: "%(fn) + str(e.args[0]))
-        resultList = set(resultList)
+        # check all files
+        for fileName, v in self.mFileListDb:
+            count = 0
+            while True:
+                q = "usr2ref|" + usr + "|" + fileName + "|" + str(count)
+                rv = self.mDb.get(q)
+                if rv:
+                    name, fn, line, col, kind, refFileId, refLine, refCol = \
+                            rv.split("|")
+                    resultList.append((name, fn, line, col))
+                else:
+                    break;
+                count += 1
         for i in resultList:
             resultName, resultFileName, resultLine, resultCol = i
             self.PrintResult(resultName, resultFileName, resultLine, resultCol)

@@ -5,4 +5,4 @@ ifeq (${LLVM_HOME},)
 endif
 
 .cpp.db:
-	$(CXXTAGS) $(CXXTAGS_INCLUDES) $< -o $*.db
+	$(CXXTAGS) $(CXXTAGS_INCLUDES) db $< 

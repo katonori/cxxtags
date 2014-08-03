@@ -36,6 +36,11 @@ class HandlerBase:
     m_srcFileName = ""
     m_colNo = 0
 
+    def __init__(self, dbDir):
+        self.mDbDir = dbDir + "/"
+        self.mDb = plyvel.DB(dbDir)
+        self.mFileListDb = plyvel.DB(dbDir + "/file_list")
+
     def GetAllDbFiles(self):
         if self.mAllDbFileList == None:
             self.mAllDbFileList = cxxtags_util.get_db_file_list(self.mDbDir)
@@ -65,6 +70,10 @@ class HandlerBase:
         db.close()
         return result[0]
 
+    def closeDb(self):
+        self.mDb.close()
+        self.mFileListDb.close()
+
     def PrintResult(self, name, fileName, line, col):
         DEBUG_PRINT("res: " + str(name) + OUTPUT_DELIMITER + str(fileName) + OUTPUT_DELIMITER + str(line) + OUTPUT_DELIMITER + str(col))
         print str(name) + OUTPUT_DELIMITER + str(fileName) + OUTPUT_DELIMITER + str(line) + OUTPUT_DELIMITER + str(col) + OUTPUT_DELIMITER + str(cxxtags_util.get_line_from_file(fileName, line))
@@ -73,26 +82,25 @@ class QueryHandlerDecl(HandlerBase):
     #
     # Handle Rquest for infomation about declarations
     #
-    def __init__(self, dbDir):
-        self.mDbDir = dbDir + "/"
-        self.mDb = plyvel.DB(dbDir)
-        self.mFileListDb = plyvel.DB(dbDir + "/file_list")
-
     def DoQuery(self):
         usr = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         DEBUG_PRINT("usr: " + str(usr))
         if usr:
             result = self.QueryDeclInfo(usr)
             if result:
+                self.closeDb()
                 name, fileName, line, col = result
                 self.PrintResult(name, fileName, line, col)
+                return True
+        self.closeDb()
+        return False
 
     def QueryDeclInfo(self, usr):
         decl = self.mDb.get("usr2decl|%s"%(usr))
         DEBUG_PRINT("decl: " + str(decl))
         if decl:
             declList = decl.split("|")
-            name, fileName, line, col, entityKind, val, isVirtual, isDef, typeUsrId, typeKind, isPointer = tuple(declList)
+            name, fileName, line, col, entityKind, val, isVirtual, typeUsrId, typeKind, isPointer = tuple(declList)
             # get compileunit
             cuName = self.mFileListDb.get(self.m_srcFileName)
             DEBUG_PRINT("CU: " + cuName)
@@ -112,29 +120,25 @@ class QueryHandlerDef(HandlerBase):
     #
     # Handle Rquest for infomation about definition
     #
-    def __init__(self, dbDir):
-        self.mDbDir = dbDir
-        self.mDb = plyvel.DB(dbDir)
-
     def DoQuery(self):
-        (usrId, usr) = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
+        usr = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         DEBUG_PRINT("usr: " + str(usr))
         if usr:
-            result = self.GetDef(usrId)
+            result = self.GetDef(usr)
             if result:
                 name, fileName, line, col = result
                 self.PrintResult(name, fileName, line, col)
+        self.closeDb()
 
-    def GetDef(self, usrId):
-        q = "usr2decl|%s"%(usrId)
+    def GetDef(self, usr):
+        q = "usr2def|%s"%(usr)
         DEBUG_PRINT("q: " + q)
         resDef = self.mDb.get(q)
         DEBUG_PRINT("def: " + str(resDef))
         if resDef:
             defList = resDef.split("|")
-            name, fileName, line, col, entityKind, val, isVirtual, isDef, typeUsrId, typeKind, isPointer = tuple(defList)
-            if isDef != 0:
-                return name, fileName, line, col
+            name, fileName, line, col, entityKind, val, isVirtual, typeUsrId, typeKind, isPointer = tuple(defList)
+            return name, fileName, line, col
         return None
 
     def parseArg(self, argv):
@@ -148,11 +152,6 @@ class QueryHandlerRef(HandlerBase):
     #
     # Handle Rquest for infomation about reference
     #
-    def __init__(self, dbDir):
-        self.mDbDir = dbDir
-        self.mDb = plyvel.DB(dbDir)
-        self.mFileListDb = plyvel.DB(dbDir + "/file_list")
-
     def DoQuery(self):
         usr = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         DEBUG_PRINT("usr: " + str(usr))
@@ -188,9 +187,6 @@ class QueryHandlerOverride(HandlerBase):
     #
     # Handle Rquest for infomation about reference
     #
-    def __init__(self, dbDir):
-        self.mDbDir = dbDir
-
     def DoQuery(self):
         usr = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         if usr:
@@ -228,9 +224,6 @@ class QueryHandlerOverrideN(HandlerBase):
     #
     # Handle Rquest for infomation about reference
     #
-    def __init__(self, dbDir):
-        self.mDbDir = dbDir
-
     def DoQuery(self):
         usr = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         if usr:
@@ -264,10 +257,6 @@ class QueryHandlerName(HandlerBase):
     # Handle Rquest for infomation about name
     #
     mName = 0
-
-    def __init__(self, dbDir):
-        self.mDbDir = dbDir
-
     def DoQuery(self):
         global gDebugMode
         resultList = []
@@ -331,10 +320,6 @@ class QueryHandlerTable(HandlerBase):
     #
 
     mTableName = ""
-
-    def __init__(self, dbDir):
-        self.mDbDir = dbDir
-
     def DoQuery(self):
         dbList = self.GetAllDbFiles()
         tableQueryStr = ""
@@ -370,9 +355,6 @@ class QueryHandlerType(HandlerBase):
     #
     # Handle Rquest for infomation about type
     #
-    def __init__(self, dbDir):
-        self.mDbDir = dbDir
-
     def DoQuery(self):
         usr = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         DEBUG_PRINT("usr: " + str(usr))
@@ -490,7 +472,10 @@ def main():
     elif queryType == 'decl': # get a declaration or definition
         handler = QueryHandlerDecl(dbDir)
         handler.parseArg(argv[2:])
-        handler.DoQuery()
+        if False == handler.DoQuery():
+            handler = QueryHandlerDef(dbDir)
+            handler.parseArg(argv[2:])
+            handler.DoQuery()
     elif queryType == 'def': # get a definition
         handler = QueryHandlerDef(dbDir)
         handler.parseArg(argv[2:])

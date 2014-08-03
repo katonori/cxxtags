@@ -105,10 +105,14 @@ void DbImplLevelDb::insert_ref_value(std::string usr, std::string filename, std:
 
 void DbImplLevelDb::insert_decl_value(std::string usr, std::string filename, std::string name, int line, int col, int entityKind, int val, int isVirtual, int isDef, int typeUsrId, int typeKind, int isPointer)
 {
+    const char* keyPrefix = "usr2decl";
+    if(isDef) {
+        keyPrefix = "usr2def";
+    }
     // usrId -> decl info
-    int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "usr2decl|%s", usr.c_str()); 
-    int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%s|%s|%d|%d|%d|%d|%d|%d|%d|%d|%d",
-            name.c_str(), filename.c_str(), line, col, entityKind, val, isVirtual, isDef, typeUsrId, typeKind, isPointer);
+    int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s", keyPrefix, usr.c_str()); 
+    int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%s|%s|%d|%d|%d|%d|%d|%d|%d|%d",
+            name.c_str(), filename.c_str(), line, col, entityKind, val, isVirtual, typeUsrId, typeKind, isPointer);
     leveldb_writebatch_put(s_wb, gCharBuff0, len0, gCharBuff1, len1);
 
     // pos -> usr

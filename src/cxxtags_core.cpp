@@ -232,7 +232,7 @@ static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::strin
         }
     }
     // insert to database
-    gDb->insert_decl_value(cUsr, fileName, name, line, column, kind, val, 0, isDef, typeUsrId, typeKind, isPointer);
+    gDb->insert_decl_value(cUsr, fileName, fileId, name, line, column, kind, val, 0, isDef, typeUsrId, typeKind, isPointer);
 }
 
 // process declarations
@@ -252,7 +252,7 @@ static inline void procFuncDecl(const CXCursor& Cursor, const char* cUsr, std::s
     int isDef = clang_isCursorDefinition(Cursor);
     int nameId = nameIdTbl->GetId(name);
     // insert to database
-    gDb->insert_decl_value(cUsr, fileName, name, line, column, kind, 0, isVirt, isDef, typeUsrId, typeKind, isPointer);
+    gDb->insert_decl_value(cUsr, fileName, fileId, name, line, column, kind, 0, isVirt, isDef, typeUsrId, typeKind, isPointer);
 }
 
 // process c++ method declarations
@@ -321,6 +321,13 @@ static inline void procRef(const CXCursor& Cursor, std::string name, std::string
             CXString cxRefFileName = clang_getFileName(ref_file);
             std::string cRefFileName = clang_getCString(cxRefFileName);
             clang_disposeString(cxRefFileName);
+            char filenameBuff[PATH_MAX];
+            char* p = realpath(cRefFileName.c_str(), filenameBuff);
+            if(p != filenameBuff) {
+                printf("ERROR:9: %s, %p\n", cRefFileName.c_str(), p);
+            }
+            //printf("realpath: %s\n", filenameBuff);
+            cRefFileName = std::string(filenameBuff);
             if(isInExcludeList(cRefFileName)) {
                 return;
             }
@@ -328,7 +335,7 @@ static inline void procRef(const CXCursor& Cursor, std::string name, std::string
         }
         int nameId = nameIdTbl->GetId(name);
         // insert to database.
-        gDb->insert_ref_value(cUsr, fileName, name, line, column, kind, refFid, ref_line, ref_column);
+        gDb->insert_ref_value(cUsr, fileName, fileId, name, line, column, kind, refFid, ref_line, ref_column);
         clang_disposeString(cxRefUSR);
     }
 }
@@ -366,9 +373,14 @@ static inline void procCursor(const CXCursor& Cursor) {
 
     // file_name
     std::string fileName = getCursorSourceLocation(line, column, Cursor);
-    char filenameBuff[PATH_MAX];
-    realpath(fileName.c_str(), filenameBuff);
-    fileName = filenameBuff;
+    if(fileName != "") {
+        char filenameBuff[PATH_MAX];
+        char* p = realpath(fileName.c_str(), filenameBuff);
+        if(p != filenameBuff) {
+            printf("ERROR: realpath: %s, %p\n", fileName.c_str(), p);
+        }
+        fileName = std::string(filenameBuff);
+    }
     // decide if this Cursor info is to be registered to db.
     if(isInExcludeList(fileName)) {
         return;

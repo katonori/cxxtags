@@ -31,15 +31,60 @@ class HandlerBase:
     mAllDbFileList = None
     mDbDir = ""
     mDb = None
+    mRefDb = None
     mFileListDb = None
     mUsrDbName = None
     m_srcFileName = ""
+    m_cuName = ""
     m_colNo = 0
 
     def __init__(self, dbDir):
         self.mDbDir = dbDir + "/"
-        self.mDb = plyvel.DB(dbDir)
         self.mFileListDb = plyvel.DB(dbDir + "/file_list")
+
+    def InitDb(self, srcFileName):
+        self.m_cuName = self.mFileListDb.get("file_list|" + srcFileName)
+        if self.m_cuName == None:
+            print("ERROR: could not determin compile unit name: " + srcFileName)
+            return None
+        DEBUG_PRINT("CU: " + self.m_cuName)
+        db = self.OpenDb(self.m_cuName)
+        return db
+
+    def InitRefDb(self, srcFileName):
+        self.m_cuName = self.mFileListDb.get("file_list|" + srcFileName)
+        if self.m_cuName == None:
+            print("ERROR: could not determin compile unit name: " + srcFileName)
+            return None
+        DEBUG_PRINT("CU: " + self.m_cuName)
+        self.mRefDb = self.OpenRefDb(self.m_cuName)
+        return self.mRefDb
+
+    def OpenDb(self, cuName):
+        dirNo = self.mFileListDb.get("db_dir|" + cuName)
+        if dirNo == None:
+            print("ERROR:0: db_dir: "  + cuName)
+            return None
+        DEBUG_PRINT("OpenDb: " + self.mDbDir + dirNo + ", " + cuName)
+        db = plyvel.DB(self.mDbDir + dirNo)
+        if db == None:
+            print("ERROR:1: db_dir: "  + cuName)
+            return None
+        return db
+
+    def OpenRefDb(self, cuName):
+        db = plyvel.DB(self.mDbDir + "common")
+        if db == None:
+            print("ERROR:1: db_dir: "  + cuName)
+            return None
+        return db
+
+    def GetCompileUnitList(self):
+        cuList = []
+        for fileName, v in self.mFileListDb:
+            if fileName.startswith("file_list|"):
+                cuList.append(v)
+        return list(set(cuList))
 
     def GetAllDbFiles(self):
         if self.mAllDbFileList == None:
@@ -78,11 +123,30 @@ class HandlerBase:
         DEBUG_PRINT("res: " + str(name) + OUTPUT_DELIMITER + str(fileName) + OUTPUT_DELIMITER + str(line) + OUTPUT_DELIMITER + str(col))
         print str(name) + OUTPUT_DELIMITER + str(fileName) + OUTPUT_DELIMITER + str(line) + OUTPUT_DELIMITER + str(col) + OUTPUT_DELIMITER + str(cxxtags_util.get_line_from_file(fileName, line))
 
+def id2name(db, src, id):
+    result = db.get("id2name|%s|%s"%(src, str(id)))
+    return result
+def id2file(db, src, id):
+    result = db.get("id2file|%s|%s"%(src, str(id)))
+    return result
+
 class QueryHandlerDecl(HandlerBase):
     #
     # Handle Rquest for infomation about declarations
     #
     def DoQuery(self):
+        # get compileunit
+        q = "file_list|" + self.m_srcFileName
+        self.m_cuName = self.mFileListDb.get(q)
+        if self.m_cuName == None:
+            for k, v in self.mFileListDb:
+                print k + ", " + v
+            print("ERROR: could not determin compile unit name: " + self.m_srcFileName)
+            print("ERROR: q: " + q)
+            return None
+        DEBUG_PRINT("CU: " + self.m_cuName)
+        self.mDb = self.OpenDb(self.m_cuName)
+
         usr = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         DEBUG_PRINT("usr: " + str(usr))
         if usr:
@@ -100,12 +164,12 @@ class QueryHandlerDecl(HandlerBase):
         DEBUG_PRINT("decl: " + str(decl))
         if decl:
             declList = decl.split("|")
-            name, fileName, line, col, entityKind, val, isVirtual, typeUsrId, typeKind, isPointer = tuple(declList)
-            # get compileunit
-            cuName = self.mFileListDb.get(self.m_srcFileName)
-            DEBUG_PRINT("CU: " + cuName)
-            if cuName:
-                return name, fileName, line, col
+            name, fileId, line, col, entityKind, val, isVirtual, typeUsrId, typeKind, isPointer = tuple(declList)
+            fileName = id2file(self.mDb, self.m_cuName, fileId)
+            if fileName == None:
+                print "ERROR: id2file: " + str(fileId) + "," + self.m_cuName
+                return None
+            return name, fileName, line, col
         return None
 
     def parseArg(self, argv):
@@ -121,25 +185,47 @@ class QueryHandlerDef(HandlerBase):
     # Handle Rquest for infomation about definition
     #
     def DoQuery(self):
+        self.mRefDb = self.InitRefDb(self.m_srcFileName)
+        if self.mRefDb == None:
+            print "ERROR: RefDB oopen"
+            return None
+        # get compileunit
+        m_cuName = self.mFileListDb.get("file_list|" + self.m_srcFileName)
+        if m_cuName == None:
+            print("ERROR: could not determin compile unit name")
+            return None
+        DEBUG_PRINT("CU: " + m_cuName)
+        self.mDb = self.OpenDb(m_cuName) # open db
         usr = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         DEBUG_PRINT("usr: " + str(usr))
         if usr:
             result = self.GetDef(usr)
-            if result:
-                name, fileName, line, col = result
+            for r in result:
+                name, fileName, line, col = r
                 self.PrintResult(name, fileName, line, col)
         self.closeDb()
 
     def GetDef(self, usr):
-        q = "usr2def|%s"%(usr)
-        DEBUG_PRINT("q: " + q)
-        resDef = self.mDb.get(q)
-        DEBUG_PRINT("def: " + str(resDef))
-        if resDef:
-            defList = resDef.split("|")
-            name, fileName, line, col, entityKind, val, isVirtual, typeUsrId, typeKind, isPointer = tuple(defList)
-            return name, fileName, line, col
-        return None
+        cuList = self.GetCompileUnitList()
+        result = []
+        for cu in cuList:
+            if cu == self.m_cuName:
+                db = self.mDb
+            else:
+                db = self.OpenDb(cu)
+            q = "usr2def|%s|%s"%(cu, usr)
+            DEBUG_PRINT("q: " + q)
+            resDef = self.mRefDb.get(q)
+            DEBUG_PRINT("def: " + str(resDef))
+            if resDef:
+                defList = resDef.split("|")
+                name, fileId, line, col, entityKind, val, isVirtual, typeUsrId, typeKind, isPointer = tuple(defList)
+                fileName = id2file(db, cu, fileId)
+                if fileName == None:
+                    print("ERRRO: file name lookup failed: " + str(fileId))
+                    return None
+                result.append((name, fileName, line, col))
+        return result
 
     def parseArg(self, argv):
         if len(argv) != 3:
@@ -153,6 +239,15 @@ class QueryHandlerRef(HandlerBase):
     # Handle Rquest for infomation about reference
     #
     def DoQuery(self):
+        # get compileunit
+        self.mRefDb = self.InitRefDb(self.m_srcFileName)
+        if self.mRefDb == None:
+            print "ERROR: RefDB oopen"
+            return None
+        self.mDb = self.InitDb(self.m_srcFileName)
+        if self.mDb == None:
+            print "ERROR: DB oopen"
+            return None
         usr = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         DEBUG_PRINT("usr: " + str(usr))
         if usr:
@@ -160,15 +255,28 @@ class QueryHandlerRef(HandlerBase):
 
     def GetAllRefs(self, usr):
         resultList = []
-        # check all files
+        cuList = []
+        # check all files and make list of compile unit
         for fileName, v in self.mFileListDb:
+            if fileName.startswith("file_list|"):
+                cuList.append(v)
+        cuList = list(set(cuList))
+        for cu in cuList:
+            if cu == self.m_cuName:
+                db = self.mDb
+            else:
+                db = self.OpenDb(cu)
             count = 0
             while True:
-                q = "usr2ref|" + usr + "|" + fileName + "|" + str(count)
-                rv = self.mDb.get(q)
+                q = "usr2ref|" + usr + "|" + cu + "|" + str(count)
+                rv = self.mRefDb.get(q)
                 if rv:
-                    name, fn, line, col, kind, refFileId, refLine, refCol = \
+                    name, fileId, line, col, kind, refFileId, refLine, refCol = \
                             rv.split("|")
+                    fn = id2file(db, cu, fileId)
+                    if fn == None:
+                        print("ERRRO: file name lookup failed: " + str(fileId) + ": " + cu)
+                        return None
                     resultList.append((name, fn, line, col))
                 else:
                     break;

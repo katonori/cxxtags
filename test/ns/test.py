@@ -422,8 +422,14 @@ a_list = [
 "vec|"+cur_dir+"/main.cpp|23|10|    i != vec.end();",
 ],
 # 13 5
-["NS0|"+cur_dir+"/subdir/ns0.h|2|11|namespace NS0 {"],
-["NS0|"+cur_dir+"/subdir/ns0.h|2|11|namespace NS0 {"],
+[
+"NS0|"+cur_dir+"/subdir/ns0.h|2|11|namespace NS0 {",
+"NS0|"+cur_dir+"/ns0.cpp|2|11|namespace NS0 {"
+],
+[
+"NS0|"+cur_dir+"/subdir/ns0.h|2|11|namespace NS0 {",
+"NS0|"+cur_dir+"/ns0.cpp|2|11|namespace NS0 {",
+],
 [
 "NS0|"+cur_dir+"/main.cpp|13|5|    NS0::C0 c00(0);",
 "NS0|"+cur_dir+"/main.cpp|15|5|    NS0::C1 c01(2);",
@@ -442,8 +448,14 @@ a_list = [
 "c00|"+cur_dir+"/main.cpp|17|5|    c00.check();",
 ],
 # 14 5
-["NS1|"+cur_dir+"/ns1.h|2|11|namespace NS1 {"],
-["NS1|"+cur_dir+"/ns1.h|2|11|namespace NS1 {"],
+[
+"NS1|"+cur_dir+"/ns1.h|2|11|namespace NS1 {",
+"NS1|"+cur_dir+"/subdir/ns1.cpp|2|11|namespace NS1 {",
+],
+[
+"NS1|"+cur_dir+"/ns1.h|2|11|namespace NS1 {",
+"NS1|"+cur_dir+"/subdir/ns1.cpp|2|11|namespace NS1 {",
+],
 [
 "NS1|"+cur_dir+"/main.cpp|14|5|    NS1::C0 c10(1);",
 "NS1|"+cur_dir+"/main.cpp|16|5|    NS1::C1 c11(3);",
@@ -460,8 +472,14 @@ a_list = [
 ["c10|"+cur_dir+"/main.cpp|14|13|    NS1::C0 c10(1);"],
 ["c10|"+cur_dir+"/main.cpp|18|5|    c10.check();"],
 # 15 5
-["NS0|"+cur_dir+"/subdir/ns0.h|2|11|namespace NS0 {"],
-["NS0|"+cur_dir+"/subdir/ns0.h|2|11|namespace NS0 {"],
+[
+"NS0|"+cur_dir+"/subdir/ns0.h|2|11|namespace NS0 {",
+"NS0|"+cur_dir+"/ns0.cpp|2|11|namespace NS0 {",
+],
+[
+"NS0|"+cur_dir+"/subdir/ns0.h|2|11|namespace NS0 {",
+"NS0|"+cur_dir+"/ns0.cpp|2|11|namespace NS0 {",
+],
 [
 "NS0|"+cur_dir+"/main.cpp|13|5|    NS0::C0 c00(0);",
 "NS0|"+cur_dir+"/main.cpp|15|5|    NS0::C1 c01(2);",
@@ -481,8 +499,14 @@ a_list = [
 ["c01|"+cur_dir+"/main.cpp|15|13|    NS0::C1 c01(2);"],
 ["c01|"+cur_dir+"/main.cpp|19|5|    c01.check();"],
 # 16 5
-["NS1|"+cur_dir+"/ns1.h|2|11|namespace NS1 {"],
-["NS1|"+cur_dir+"/ns1.h|2|11|namespace NS1 {"],
+[
+"NS1|"+cur_dir+"/ns1.h|2|11|namespace NS1 {",
+"NS1|"+cur_dir+"/subdir/ns1.cpp|2|11|namespace NS1 {",
+],
+[
+"NS1|"+cur_dir+"/ns1.h|2|11|namespace NS1 {",
+"NS1|"+cur_dir+"/subdir/ns1.cpp|2|11|namespace NS1 {",
+],
 [
 "NS1|"+cur_dir+"/main.cpp|14|5|    NS1::C0 c10(1);",
 "NS1|"+cur_dir+"/main.cpp|16|5|    NS1::C1 c11(3);",
@@ -553,8 +577,14 @@ a_list = [
 
 # ns0.h
 # 2 11
-["NS0|"+cur_dir+"/subdir/ns0.h|2|11|namespace NS0 {"],
-["NS0|"+cur_dir+"/subdir/ns0.h|2|11|namespace NS0 {"],
+[
+"NS0|"+cur_dir+"/subdir/ns0.h|2|11|namespace NS0 {",
+"NS0|"+cur_dir+"/ns0.cpp|2|11|namespace NS0 {",
+],
+[
+"NS0|"+cur_dir+"/subdir/ns0.h|2|11|namespace NS0 {",
+"NS0|"+cur_dir+"/ns0.cpp|2|11|namespace NS0 {",
+],
 [
 "NS0|"+cur_dir+"/main.cpp|13|5|    NS0::C0 c00(0);",
 "NS0|"+cur_dir+"/main.cpp|15|5|    NS0::C1 c01(2);",
@@ -647,8 +677,14 @@ a_list = [
 
 # ns1.h
 # 2 11
-["NS1|"+cur_dir+"/ns1.h|2|11|namespace NS1 {"],
-["NS1|"+cur_dir+"/ns1.h|2|11|namespace NS1 {"],
+[
+"NS1|"+cur_dir+"/ns1.h|2|11|namespace NS1 {",
+"NS1|"+cur_dir+"/subdir/ns1.cpp|2|11|namespace NS1 {",
+],
+[
+"NS1|"+cur_dir+"/ns1.h|2|11|namespace NS1 {",
+"NS1|"+cur_dir+"/subdir/ns1.cpp|2|11|namespace NS1 {",
+],
 [
 "NS1|"+cur_dir+"/main.cpp|14|5|    NS1::C0 c10(1);",
 "NS1|"+cur_dir+"/main.cpp|16|5|    NS1::C1 c11(3);",
@@ -711,8 +747,14 @@ a_list = [
 
 # ns1.cpp
 # 2 11
-["NS1|"+cur_dir+"/ns1.h|2|11|namespace NS1 {"],
-["NS1|"+cur_dir+"/ns1.h|2|11|namespace NS1 {"],
+[
+"NS1|"+cur_dir+"/ns1.h|2|11|namespace NS1 {",
+"NS1|"+cur_dir+"/subdir/ns1.cpp|2|11|namespace NS1 {",
+],
+[
+"NS1|"+cur_dir+"/ns1.h|2|11|namespace NS1 {",
+"NS1|"+cur_dir+"/subdir/ns1.cpp|2|11|namespace NS1 {",
+],
 [
 "NS1|"+cur_dir+"/main.cpp|14|5|    NS1::C0 c10(1);",
 "NS1|"+cur_dir+"/main.cpp|16|5|    NS1::C1 c11(3);",
@@ -755,10 +797,16 @@ a_list = [
 "m_val|"+cur_dir+"/ns1.h|12|21|        C1(int a) : m_val(a) {}",
 "m_val|"+cur_dir+"/subdir/ns1.cpp|9|35|        printf(\"C1: val is %d\\n\", m_val);",
 ],
-# ns1.cpp
+# ns0.cpp
 # 2 11
-["NS0|"+cur_dir+"/subdir/ns0.h|2|11|namespace NS0 {"],
-["NS0|"+cur_dir+"/subdir/ns0.h|2|11|namespace NS0 {"],
+[
+"NS0|"+cur_dir+"/subdir/ns0.h|2|11|namespace NS0 {",
+"NS0|"+cur_dir+"/ns0.cpp|2|11|namespace NS0 {",
+],
+[
+"NS0|"+cur_dir+"/subdir/ns0.h|2|11|namespace NS0 {",
+"NS0|"+cur_dir+"/ns0.cpp|2|11|namespace NS0 {",
+],
 [
 "NS0|"+cur_dir+"/main.cpp|13|5|    NS0::C0 c00(0);",
 "NS0|"+cur_dir+"/main.cpp|15|5|    NS0::C1 c01(2);",

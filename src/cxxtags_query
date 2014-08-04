@@ -48,8 +48,11 @@ class HandlerBase:
             print("ERROR: could not determin compile unit name: " + srcFileName)
             return None
         DEBUG_PRINT("CU: " + self.m_cuName)
-        db = self.OpenDb(self.m_cuName)
-        return db
+        self.mDb = self.OpenDb(self.m_cuName)
+        if self.mDb == None:
+            print("ERROR: db open")
+            return None
+        return self.mDb
 
     def InitRefDb(self, srcFileName):
         self.m_cuName = self.mFileListDb.get("file_list|" + srcFileName)
@@ -116,8 +119,12 @@ class HandlerBase:
         return result[0]
 
     def closeDb(self):
-        self.mDb.close()
-        self.mFileListDb.close()
+        if self.mDb:
+            self.mDb.close()
+        if self.mRefDb:
+            self.mRefDb.close()
+        if self.mFileListDb:
+            self.mFileListDb.close()
 
     def PrintResult(self, name, fileName, line, col):
         DEBUG_PRINT("res: " + str(name) + OUTPUT_DELIMITER + str(fileName) + OUTPUT_DELIMITER + str(line) + OUTPUT_DELIMITER + str(col))
@@ -135,28 +142,17 @@ class QueryHandlerDecl(HandlerBase):
     # Handle Rquest for infomation about declarations
     #
     def DoQuery(self):
-        # get compileunit
-        q = "file_list|" + self.m_srcFileName
-        self.m_cuName = self.mFileListDb.get(q)
-        if self.m_cuName == None:
-            for k, v in self.mFileListDb:
-                print k + ", " + v
-            print("ERROR: could not determin compile unit name: " + self.m_srcFileName)
-            print("ERROR: q: " + q)
+        if None == self.InitDb(self.m_srcFileName):
+            print("ERROR: InitDb() failed")
             return None
-        DEBUG_PRINT("CU: " + self.m_cuName)
-        self.mDb = self.OpenDb(self.m_cuName)
-
         usr = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         DEBUG_PRINT("usr: " + str(usr))
         if usr:
             result = self.QueryDeclInfo(usr)
             if result:
-                self.closeDb()
                 name, fileName, line, col = result
                 self.PrintResult(name, fileName, line, col)
                 return True
-        self.closeDb()
         return False
 
     def QueryDeclInfo(self, usr):
@@ -185,17 +181,12 @@ class QueryHandlerDef(HandlerBase):
     # Handle Rquest for infomation about definition
     #
     def DoQuery(self):
-        self.mRefDb = self.InitRefDb(self.m_srcFileName)
-        if self.mRefDb == None:
-            print "ERROR: RefDB oopen"
+        if None == self.InitRefDb(self.m_srcFileName):
+            print "ERROR: RefDB open"
             return None
-        # get compileunit
-        m_cuName = self.mFileListDb.get("file_list|" + self.m_srcFileName)
-        if m_cuName == None:
-            print("ERROR: could not determin compile unit name")
+        if None == self.InitDb(self.m_srcFileName):
+            print "ERROR: Db open"
             return None
-        DEBUG_PRINT("CU: " + m_cuName)
-        self.mDb = self.OpenDb(m_cuName) # open db
         usr = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         DEBUG_PRINT("usr: " + str(usr))
         if usr:
@@ -203,7 +194,6 @@ class QueryHandlerDef(HandlerBase):
             for r in result:
                 name, fileName, line, col = r
                 self.PrintResult(name, fileName, line, col)
-        self.closeDb()
 
     def GetDef(self, usr):
         cuList = self.GetCompileUnitList()
@@ -240,11 +230,11 @@ class QueryHandlerRef(HandlerBase):
     #
     def DoQuery(self):
         # get compileunit
-        self.mRefDb = self.InitRefDb(self.m_srcFileName)
+        self.InitRefDb(self.m_srcFileName)
         if self.mRefDb == None:
             print "ERROR: RefDB oopen"
             return None
-        self.mDb = self.InitDb(self.m_srcFileName)
+        self.InitDb(self.m_srcFileName)
         if self.mDb == None:
             print "ERROR: DB oopen"
             return None
@@ -255,12 +245,7 @@ class QueryHandlerRef(HandlerBase):
 
     def GetAllRefs(self, usr):
         resultList = []
-        cuList = []
-        # check all files and make list of compile unit
-        for fileName, v in self.mFileListDb:
-            if fileName.startswith("file_list|"):
-                cuList.append(v)
-        cuList = list(set(cuList))
+        cuList = self.GetCompileUnitList()
         for cu in cuList:
             if cu == self.m_cuName:
                 db = self.mDb
@@ -281,6 +266,8 @@ class QueryHandlerRef(HandlerBase):
                 else:
                     break;
                 count += 1
+            if db != self.mDb:
+                db.close()
         for i in resultList:
             resultName, resultFileName, resultLine, resultCol = i
             self.PrintResult(resultName, resultFileName, resultLine, resultCol)
@@ -577,37 +564,46 @@ def main():
         handler = QueryHandlerRef(dbDir)
         handler.parseArg(argv[2:])
         handler.DoQuery()
+        handler.closeDb()
     elif queryType == 'decl': # get a declaration or definition
         handler = QueryHandlerDecl(dbDir)
         handler.parseArg(argv[2:])
         if False == handler.DoQuery():
+            handler.closeDb()
             handler = QueryHandlerDef(dbDir)
             handler.parseArg(argv[2:])
             handler.DoQuery()
+            handler.closeDb()
     elif queryType == 'def': # get a definition
         handler = QueryHandlerDef(dbDir)
         handler.parseArg(argv[2:])
         handler.DoQuery()
+        handler.closeDb()
     elif queryType == 'override': # get override information
         handler = QueryHandlerOverride(dbDir)
         handler.parseArg(argv[2:])
         handler.DoQuery()
+        handler.closeDb()
     elif queryType == 'overriden': # get overriden items
         handler = QueryHandlerOverrideN(dbDir)
         handler.parseArg(argv[2:])
         handler.DoQuery()
+        handler.closeDb()
     elif queryType == 'name': # search a name
         handler = QueryHandlerName(dbDir)
         handler.parseArg(argv[2:])
         handler.DoQuery()
+        handler.closeDb()
     elif queryType == 'dump': # dump the contents of a table
         handler = QueryHandlerTable(dbDir)
         handler.parseArg(argv[2:])
         handler.DoQuery()
+        handler.closeDb()
     elif queryType == 'type': # get type info
         handler = QueryHandlerType(dbDir)
         handler.parseArg(argv[2:])
         handler.DoQuery()
+        handler.closeDb()
     else:
         print "ERROR: query type must be ref, decl, def, override, overriden, name, dump or type"
         sys.exit(1)

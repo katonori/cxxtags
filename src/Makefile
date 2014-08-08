@@ -21,7 +21,7 @@ all: cxxtags_core.cpp DbImplSqlite3.cpp
 	strip ../bin/cxxtags_core
 index: 
 	$(CXXTAGS) $(INCLUDES) db cxxtags_core.cpp
-	$(CXXTAGS) $(INCLUDES) db DbImplSqlite3.cpp
+	$(CXXTAGS) $(INCLUDES) db DbImplLevelDb.cpp
 	#g++.py $(INCLUDES) cxxtags_core.cpp -o cxxtags_core.o -c
 	#g++.py $(INCLUDES) DbImplLevelDb.cpp -o DbImplLevelDb.o -c
 clean:

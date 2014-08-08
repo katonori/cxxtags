@@ -44,7 +44,7 @@ void DbImplLevelDb::init(std::string out_dir, std::string src_file_name, std::st
     std::string keyFile = s_compileUnit;
     int rv = 0;
     // check if already registered
-    rv = dbRead(value, s_dbFileList, "db_dir|" + s_compileUnit);
+    rv = dbRead(value, s_dbFileList, "cu2id|" + s_compileUnit);
     if(rv == 1) {
         // not found
         // add file
@@ -66,7 +66,8 @@ void DbImplLevelDb::init(std::string out_dir, std::string src_file_name, std::st
         else {
             printf("ERROR: db info\n");
         }
-        dbWrite(s_dbFileList, "db_dir|" + s_compileUnit, s_compileUnitId);
+        dbWrite(s_dbFileList, "cu2id|" + s_compileUnit, s_compileUnitId);
+        dbWrite(s_dbFileList, "id2cu|" + s_compileUnitId, s_compileUnit);
     }
     else if(rv == 0) {
         // alread exists
@@ -159,40 +160,53 @@ public:
     }
 };
 
+std::map<std::string, std::string> s_refMap;
 RefCount s_refCount;
-void DbImplLevelDb::insert_ref_value(std::string usr, std::string filename, int fileId, std::string name, int line, int col, int kind, int refFileId, int refLine, int refCol)
+void DbImplLevelDb::insert_ref_value(std::string usr, std::string filename, int fileId, int nameId, int line, int col, int kind, int refFileId, int refLine, int refCol)
 {
+    int len = snprintf(gCharBuff0, sizeof(gCharBuff0), "%d|%d|%d|%d|%d|%d|%d|%d",
+            nameId, fileId, line, col, kind, refFileId, refLine, refCol);
+    std::map<std::string, std::string>::iterator itr = s_refMap.find(usr);
+    if(itr == s_refMap.end()){ 
+        s_refMap[usr] = std::string(gCharBuff0);
+    }
+    else {
+        s_refMap[usr] = itr->second + "," + gCharBuff0;
+    }
+
+#if 0
     // ref usrId -> decl info
-    int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "usr2ref|%s|%s|%d", usr.c_str(), s_compileUnit.c_str(), s_refCount.GetCount(usr)); 
-    int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%s|%d|%d|%d|%d|%d|%d|%d",
-            name.c_str(), fileId, line, col, kind, refFileId, refLine, refCol);
+    int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "usr2ref|%s|%s|%d", usr.c_str(), s_compileUnitId.c_str(), s_refCount.GetCount(usr)); 
+    int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d|%d|%d|%d|%d|%d|%d|%d",
+            nameId, fileId, line, col, kind, refFileId, refLine, refCol);
     leveldb_writebatch_put(s_wb_common, gCharBuff0, len0, gCharBuff1, len1);
+#endif
 
     // pos -> usr
-    len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "pos2usr|%s|%d|%d", filename.c_str(),  line, col);
-    len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%s", usr.c_str());
+    int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "pos2usr|%s|%d|%d", filename.c_str(),  line, col);
+    int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%s", usr.c_str());
     leveldb_writebatch_put(s_wb, gCharBuff0, len0, gCharBuff1, len1);
 }
 
-void DbImplLevelDb::insert_decl_value(std::string usr, std::string filename, int fileId, std::string name, int line, int col, int entityKind, int val, int isVirtual, int isDef, int typeUsrId, int typeKind, int isPointer)
+void DbImplLevelDb::insert_decl_value(std::string usr, std::string filename, int fileId, int nameId, int line, int col, int entityKind, int val, int isVirtual, int isDef, int typeUsrId, int typeKind, int isPointer)
 {
     int len0 = 0;
     int len1 = 0;
     const char* keyPrefix = "usr2decl";
     if(isDef) {
         keyPrefix = "usr2def";
-        // usrId -> decl info
-        len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s|%s", keyPrefix, s_compileUnit.c_str(), usr.c_str()); 
-        len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%s|%d|%d|%d|%d|%d|%d|%d|%d|%d",
-                name.c_str(), fileId, line, col, entityKind, val, isVirtual, typeUsrId, typeKind, isPointer);
+        // usrId -> def info
+        len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s|%s", keyPrefix, s_compileUnitId.c_str(), usr.c_str()); 
+        len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d|%d|%d|%d|%d|%d|%d|%d|%d|%d",
+                nameId, fileId, line, col, entityKind, val, isVirtual, typeUsrId, typeKind, isPointer);
         leveldb_writebatch_put(s_wb_common, gCharBuff0, len0, gCharBuff1, len1);
         //printf("%s, %s, %s, %d, %d\n", s_compileUnit.c_str(), usr.c_str(), filename.c_str(), line, col);
     }
     else {
         // usrId -> decl info
         len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s", keyPrefix, usr.c_str()); 
-        len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%s|%d|%d|%d|%d|%d|%d|%d|%d|%d",
-                name.c_str(), fileId, line, col, entityKind, val, isVirtual, typeUsrId, typeKind, isPointer);
+        len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d|%d|%d|%d|%d|%d|%d|%d|%d|%d",
+                nameId, fileId, line, col, entityKind, val, isVirtual, typeUsrId, typeKind, isPointer);
         leveldb_writebatch_put(s_wb, gCharBuff0, len0, gCharBuff1, len1);
     }
 
@@ -217,7 +231,7 @@ void DbImplLevelDb::addIdList(const std::map<std::string, int >& inMap, std::str
     for(std::map<std::string, int >::const_iterator itr = inMap.begin();
             itr != end;
             itr++) {
-        int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s|%d", tableName.c_str(), s_compileUnit.c_str(), itr->second); 
+        int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s|%d", tableName.c_str(), s_compileUnitId.c_str(), itr->second); 
         int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%s", itr->first.c_str());
 
         leveldb_writebatch_put(s_wb, gCharBuff0, len0, gCharBuff1, len1);
@@ -233,7 +247,7 @@ void addFilesToFileList(const std::map<std::string, int >& inMap)
             itr++) {
         leveldb_writeoptions_t* woptions = leveldb_writeoptions_create();
         std::string key = "file_list|" + itr->first;
-        leveldb_put(s_dbFileList, woptions, key.c_str(), key.size(), s_compileUnit.c_str(), s_compileUnit.size(), &s_dbErr);
+        leveldb_put(s_dbFileList, woptions, key.c_str(), key.size(), s_compileUnitId.c_str(), s_compileUnitId.size(), &s_dbErr);
         if (s_dbErr != NULL) {
             fprintf(stderr, "Write fail.\n");
             return;
@@ -248,7 +262,15 @@ void DbImplLevelDb::fin(const std::map<std::string, int >& fileMap, const std::m
     addIdList(fileMap, "id2file");
     addFilesToFileList(fileMap);
     //addIdList(usrMap, "id2usr");
-    //addIdList(nameMap, "id2name");
+    addIdList(nameMap, "id2name");
+    // dump map
+    std::map<std::string, std::string>::const_iterator end = s_refMap.end();
+    for(std::map<std::string, std::string>::const_iterator itr = s_refMap.begin();
+            itr != end;
+            itr++) {
+        int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "usr2ref|%s|%s", itr->first.c_str(), s_compileUnitId.c_str()); 
+        leveldb_writebatch_put(s_wb_common, gCharBuff0, len0, itr->second.c_str(), itr->second.size());
+    }
 
     leveldb_free(s_dbErr);
     s_dbErr = NULL;

@@ -36,26 +36,33 @@ class HandlerBase:
     mUsrDbName = None
     m_srcFileName = ""
     m_cuName = ""
+    m_cuId = 0
     m_colNo = 0
 
     def __init__(self, dbDir):
         self.mDbDir = dbDir + "/"
         self.mFileListDb = plyvel.DB(dbDir + "/file_list")
 
+    def Filename2CompileUnit(self, fn):
+        cuId = self.mFileListDb.get("file_list|" + fn)
+        DEBUG_PRINT("cuId: " + str(cuId))
+        cuName = self.mFileListDb.get("id2cu|" + cuId)
+        return cuName, cuId
+
     def InitDb(self, srcFileName):
-        self.m_cuName = self.mFileListDb.get("file_list|" + srcFileName)
+        (self.m_cuName, self.m_cuId) = self.Filename2CompileUnit(srcFileName)
         if self.m_cuName == None:
             print("ERROR: could not determin compile unit name: " + srcFileName)
             return None
         DEBUG_PRINT("CU: " + self.m_cuName)
-        self.mDb = self.OpenDb(self.m_cuName)
+        self.mDb = self.OpenDbName(self.m_cuName)
         if self.mDb == None:
             print("ERROR: db open")
             return None
         return self.mDb
 
     def InitRefDb(self, srcFileName):
-        self.m_cuName = self.mFileListDb.get("file_list|" + srcFileName)
+        (self.m_cuName, self.m_cuId) = self.Filename2CompileUnit(srcFileName)
         if self.m_cuName == None:
             print("ERROR: could not determin compile unit name: " + srcFileName)
             return None
@@ -63,12 +70,27 @@ class HandlerBase:
         self.mRefDb = self.OpenRefDb(self.m_cuName)
         return self.mRefDb
 
-    def OpenDb(self, cuName):
-        dirNo = self.mFileListDb.get("db_dir|" + cuName)
+    def Cu2Id(self, cuName):
+        return self.mFileListDb.get("cu2id|" + cuName)
+
+    def Id2Cu(self, cuId):
+        return self.mFileListDb.get("id2cu|" + cuId)
+
+    def OpenDbId(self, cuId):
+        cmd = self.mDbDir + cuId
+        DEBUG_PRINT("OpenDbId: " + cmd)
+        db = plyvel.DB(cmd)
+        if db == None:
+            print("ERROR:1: db_dir: "  + cuId)
+            return None
+        return db
+
+    def OpenDbName(self, cuName):
+        dirNo = self.mFileListDb.get("cu2id|" + cuName)
         if dirNo == None:
             print("ERROR:0: db_dir: "  + cuName)
             return None
-        DEBUG_PRINT("OpenDb: " + self.mDbDir + dirNo + ", " + cuName)
+        DEBUG_PRINT("OpenDbName: " + self.mDbDir + dirNo + ", " + cuName)
         db = plyvel.DB(self.mDbDir + dirNo)
         if db == None:
             print("ERROR:1: db_dir: "  + cuName)
@@ -82,7 +104,7 @@ class HandlerBase:
             return None
         return db
 
-    def GetCompileUnitList(self):
+    def GetCompileUnitIdList(self):
         cuList = []
         for fileName, v in self.mFileListDb:
             if fileName.startswith("file_list|"):
@@ -110,15 +132,7 @@ class HandlerBase:
             return None
         return usr
 
-    def GetMainSrcName(self):
-        #db = cxxtags_util.db_connect(self.mUsrDbName)
-        #cur = db.cursor()
-        #cur.execute("SELECT src_file_name FROM db_info;")
-        result = cur.fetchone()
-        db.close()
-        return result[0]
-
-    def closeDb(self):
+    def CloseDb(self):
         if self.mDb:
             self.mDb.close()
         if self.mRefDb:
@@ -133,8 +147,8 @@ class HandlerBase:
 def id2name(db, src, id):
     result = db.get("id2name|%s|%s"%(src, str(id)))
     return result
-def id2file(db, src, id):
-    result = db.get("id2file|%s|%s"%(src, str(id)))
+def id2file(db, cuId, id):
+    result = db.get("id2file|%s|%s"%(cuId, str(id)))
     return result
 
 class QueryHandlerDecl(HandlerBase):
@@ -160,10 +174,14 @@ class QueryHandlerDecl(HandlerBase):
         DEBUG_PRINT("decl: " + str(decl))
         if decl:
             declList = decl.split("|")
-            name, fileId, line, col, entityKind, val, isVirtual, typeUsrId, typeKind, isPointer = tuple(declList)
-            fileName = id2file(self.mDb, self.m_cuName, fileId)
+            nameId, fileId, line, col, entityKind, val, isVirtual, typeUsrId, typeKind, isPointer = tuple(declList)
+            fileName = id2file(self.mDb, self.m_cuId, fileId)
             if fileName == None:
-                print "ERROR: id2file: " + str(fileId) + "," + self.m_cuName
+                print "ERROR: id2file: " + str(fileId) + "," + str(self.m_cuId)
+                return None
+            name = id2name(self.mDb, self.m_cuId, nameId)
+            if fileName == None:
+                print "ERROR: id2name: " + str(nameid) + "," + str(self.m_cuId)
                 return None
             return name, fileName, line, col
         return None
@@ -196,21 +214,25 @@ class QueryHandlerDef(HandlerBase):
                 self.PrintResult(name, fileName, line, col)
 
     def GetDef(self, usr):
-        cuList = self.GetCompileUnitList()
+        cuIdList = self.GetCompileUnitIdList()
         result = []
-        for cu in cuList:
-            if cu == self.m_cuName:
+        for cuId in cuIdList:
+            if cuId == self.m_cuId:
                 db = self.mDb
             else:
-                db = self.OpenDb(cu)
-            q = "usr2def|%s|%s"%(cu, usr)
+                db = self.OpenDbId(cuId)
+            q = "usr2def|%s|%s"%(cuId, usr)
             DEBUG_PRINT("q: " + q)
             resDef = self.mRefDb.get(q)
             DEBUG_PRINT("def: " + str(resDef))
             if resDef:
                 defList = resDef.split("|")
-                name, fileId, line, col, entityKind, val, isVirtual, typeUsrId, typeKind, isPointer = tuple(defList)
-                fileName = id2file(db, cu, fileId)
+                nameId, fileId, line, col, entityKind, val, isVirtual, typeUsrId, typeKind, isPointer = tuple(defList)
+                name = id2name(db, cuId, nameId)
+                if name == None:
+                    print("ERRRO: name lookup failed: " + str(fileId))
+                    return None
+                fileName = id2file(db, cuId, fileId)
                 if fileName == None:
                     print("ERRRO: file name lookup failed: " + str(fileId))
                     return None
@@ -245,29 +267,32 @@ class QueryHandlerRef(HandlerBase):
 
     def GetAllRefs(self, usr):
         resultList = []
-        cuList = self.GetCompileUnitList()
-        for cu in cuList:
-            if cu == self.m_cuName:
+        cuIdList = self.GetCompileUnitIdList()
+        for cuId in cuIdList:
+            if cuId == self.m_cuId:
                 db = self.mDb
             else:
-                db = self.OpenDb(cu)
+                db = self.OpenDbId(cuId)
             count = 0
-            while True:
-                q = "usr2ref|" + usr + "|" + cu + "|" + str(count)
-                rv = self.mRefDb.get(q)
-                if rv:
-                    name, fileId, line, col, kind, refFileId, refLine, refCol = \
+            q = "usr2ref|" + usr + "|" + cuId
+            rv = self.mRefDb.get(q)
+            DEBUG_PRINT("usr2ref: " + str(rv))
+            if rv:
+                rvList = rv.split(",")
+                for rv in rvList:
+                    nameId, fileId, line, col, kind, refFileId, refLine, refCol = \
                             rv.split("|")
-                    fn = id2file(db, cu, fileId)
+                    name = id2name(db, cuId, nameId)
+                    if name == None:
+                        print("ERRRO: name lookup failed: " + str(nameId) + ": " + cuId)
+                        return None
+                    fn = id2file(db, cuId, fileId)
                     if fn == None:
-                        print("ERRRO: file name lookup failed: " + str(fileId) + ": " + cu)
+                        print("ERRRO: file name lookup failed: " + str(fileId) + ": " + cuId)
                         return None
                     resultList.append((name, fn, line, col))
-                else:
-                    break;
-                count += 1
-            if db != self.mDb:
-                db.close()
+                if db != self.mDb:
+                    db.close()
         for i in resultList:
             resultName, resultFileName, resultLine, resultCol = i
             self.PrintResult(resultName, resultFileName, resultLine, resultCol)
@@ -564,46 +589,46 @@ def main():
         handler = QueryHandlerRef(dbDir)
         handler.parseArg(argv[2:])
         handler.DoQuery()
-        handler.closeDb()
+        handler.CloseDb()
     elif queryType == 'decl': # get a declaration or definition
         handler = QueryHandlerDecl(dbDir)
         handler.parseArg(argv[2:])
         if False == handler.DoQuery():
-            handler.closeDb()
+            handler.CloseDb()
             handler = QueryHandlerDef(dbDir)
             handler.parseArg(argv[2:])
             handler.DoQuery()
-            handler.closeDb()
+            handler.CloseDb()
     elif queryType == 'def': # get a definition
         handler = QueryHandlerDef(dbDir)
         handler.parseArg(argv[2:])
         handler.DoQuery()
-        handler.closeDb()
+        handler.CloseDb()
     elif queryType == 'override': # get override information
         handler = QueryHandlerOverride(dbDir)
         handler.parseArg(argv[2:])
         handler.DoQuery()
-        handler.closeDb()
+        handler.CloseDb()
     elif queryType == 'overriden': # get overriden items
         handler = QueryHandlerOverrideN(dbDir)
         handler.parseArg(argv[2:])
         handler.DoQuery()
-        handler.closeDb()
+        handler.CloseDb()
     elif queryType == 'name': # search a name
         handler = QueryHandlerName(dbDir)
         handler.parseArg(argv[2:])
         handler.DoQuery()
-        handler.closeDb()
+        handler.CloseDb()
     elif queryType == 'dump': # dump the contents of a table
         handler = QueryHandlerTable(dbDir)
         handler.parseArg(argv[2:])
         handler.DoQuery()
-        handler.closeDb()
+        handler.CloseDb()
     elif queryType == 'type': # get type info
         handler = QueryHandlerType(dbDir)
         handler.parseArg(argv[2:])
         handler.DoQuery()
-        handler.closeDb()
+        handler.CloseDb()
     else:
         print "ERROR: query type must be ref, decl, def, override, overriden, name, dump or type"
         sys.exit(1)

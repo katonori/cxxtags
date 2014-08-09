@@ -232,7 +232,7 @@ static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::strin
         }
     }
     // insert to database
-    gDb->insert_decl_value(cUsr, fileName, fileId, nameId, line, column, kind, val, 0, isDef, typeUsrId, typeKind, isPointer);
+    gDb->insert_decl_value(cUsr, usrId, fileName, fileId, nameId, line, column, kind, val, 0, isDef, typeUsrId, typeKind, isPointer);
 }
 
 // process declarations
@@ -252,7 +252,7 @@ static inline void procFuncDecl(const CXCursor& Cursor, const char* cUsr, std::s
     int isDef = clang_isCursorDefinition(Cursor);
     int nameId = nameIdTbl->GetId(name);
     // insert to database
-    gDb->insert_decl_value(cUsr, fileName, fileId, nameId, line, column, kind, 0, isVirt, isDef, typeUsrId, typeKind, isPointer);
+    gDb->insert_decl_value(cUsr, usrId, fileName, fileId, nameId, line, column, kind, 0, isVirt, isDef, typeUsrId, typeKind, isPointer);
 }
 
 // process c++ method declarations
@@ -335,7 +335,7 @@ static inline void procRef(const CXCursor& Cursor, std::string name, std::string
         }
         int nameId = nameIdTbl->GetId(name);
         // insert to database.
-        gDb->insert_ref_value(cUsr, fileName, fileId, nameId, line, column, kind, refFid, ref_line, ref_column);
+        gDb->insert_ref_value(cUsr, refUsrId, fileName, fileId, nameId, line, column, kind, refFid, ref_line, ref_column);
         clang_disposeString(cxRefUSR);
     }
 }

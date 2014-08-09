@@ -44,7 +44,10 @@ class HandlerBase:
         self.mFileListDb = plyvel.DB(dbDir + "/file_list")
 
     def Filename2CompileUnit(self, fn):
-        cuId = self.mFileListDb.get("file_list|" + fn)
+        DEBUG_PRINT("fn: " + fn)
+        q = "file_list|" + fn
+        cuId = self.mFileListDb.get(q)
+        DEBUG_PRINT("q: " + str(q))
         DEBUG_PRINT("cuId: " + str(cuId))
         cuName = self.mFileListDb.get("id2cu|" + cuId)
         return cuName, cuId
@@ -119,14 +122,15 @@ class HandlerBase:
     #
     # get USR from location information.
     #
-    def GetUsr(self, fileName, lineNo, colNo):
+    def GetUsrId(self, fileName, lineNo, colNo):
         if fileName == "":
             print "ERROR: specify file name"
             sys.exit(1)
-        q = "pos2usr|%s|%s|%s"%(fileName, lineNo, colNo)
+        fid = file2id(self.mDb, fileName)
+        q = "pos2usr|%s|%s|%s"%(fid, lineNo, colNo)
         DEBUG_PRINT("q: " + q)
         usr = self.mDb.get(q)
-        DEBUG_PRINT("usr: " + str(usr))
+        DEBUG_PRINT("usrId: " + str(usr))
         if usr == None:
             DEBUG_PRINT("pos2usr failed: " + q)
             return None
@@ -144,11 +148,17 @@ class HandlerBase:
         DEBUG_PRINT("res: " + str(name) + OUTPUT_DELIMITER + str(fileName) + OUTPUT_DELIMITER + str(line) + OUTPUT_DELIMITER + str(col))
         print str(name) + OUTPUT_DELIMITER + str(fileName) + OUTPUT_DELIMITER + str(line) + OUTPUT_DELIMITER + str(col) + OUTPUT_DELIMITER + str(cxxtags_util.get_line_from_file(fileName, line))
 
-def id2name(db, src, id):
-    result = db.get("id2name|%s|%s"%(src, str(id)))
+def id2name(db, id):
+    result = db.get("id2name|%s"%(str(id)))
     return result
-def id2file(db, cuId, id):
-    result = db.get("id2file|%s|%s"%(cuId, str(id)))
+def id2file(db, id):
+    result = db.get("id2file|%s"%(str(id)))
+    return result
+def file2id(db, filename):
+    result = db.get("file2id|%s"%(filename))
+    return result
+def id2usr(db, id):
+    result = db.get("id2usr|%s"%(str(id)))
     return result
 
 class QueryHandlerDecl(HandlerBase):
@@ -159,10 +169,10 @@ class QueryHandlerDecl(HandlerBase):
         if None == self.InitDb(self.m_srcFileName):
             print("ERROR: InitDb() failed")
             return None
-        usr = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
-        DEBUG_PRINT("usr: " + str(usr))
-        if usr:
-            result = self.QueryDeclInfo(usr)
+        usrId = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
+        DEBUG_PRINT("usrId: " + str(usrId))
+        if usrId:
+            result = self.QueryDeclInfo(usrId)
             if result:
                 name, fileName, line, col = result
                 self.PrintResult(name, fileName, line, col)
@@ -175,11 +185,11 @@ class QueryHandlerDecl(HandlerBase):
         if decl:
             declList = decl.split("|")
             nameId, fileId, line, col, entityKind, val, isVirtual, typeUsrId, typeKind, isPointer = tuple(declList)
-            fileName = id2file(self.mDb, self.m_cuId, fileId)
+            fileName = id2file(self.mDb, fileId)
             if fileName == None:
                 print "ERROR: id2file: " + str(fileId) + "," + str(self.m_cuId)
                 return None
-            name = id2name(self.mDb, self.m_cuId, nameId)
+            name = id2name(self.mDb, nameId)
             if fileName == None:
                 print "ERROR: id2name: " + str(nameid) + "," + str(self.m_cuId)
                 return None
@@ -205,7 +215,8 @@ class QueryHandlerDef(HandlerBase):
         if None == self.InitDb(self.m_srcFileName):
             print "ERROR: Db open"
             return None
-        usr = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
+        usrId = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
+        usr = id2usr(self.mDb, usrId)
         DEBUG_PRINT("usr: " + str(usr))
         if usr:
             result = self.GetDef(usr)
@@ -223,16 +234,17 @@ class QueryHandlerDef(HandlerBase):
                 db = self.OpenDbId(cuId)
             q = "usr2def|%s|%s"%(cuId, usr)
             DEBUG_PRINT("q: " + q)
-            resDef = self.mRefDb.get(q)
+            #resDef = self.mRefDb.get(q)
+            resDef = db.get(q)
             DEBUG_PRINT("def: " + str(resDef))
             if resDef:
                 defList = resDef.split("|")
                 nameId, fileId, line, col, entityKind, val, isVirtual, typeUsrId, typeKind, isPointer = tuple(defList)
-                name = id2name(db, cuId, nameId)
+                name = id2name(db, nameId)
                 if name == None:
                     print("ERRRO: name lookup failed: " + str(fileId))
                     return None
-                fileName = id2file(db, cuId, fileId)
+                fileName = id2file(db, fileId)
                 if fileName == None:
                     print("ERRRO: file name lookup failed: " + str(fileId))
                     return None
@@ -260,42 +272,44 @@ class QueryHandlerRef(HandlerBase):
         if self.mDb == None:
             print "ERROR: DB oopen"
             return None
-        usr = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
+        usrId = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
+        usr = id2usr(self.mDb, usrId)
         DEBUG_PRINT("usr: " + str(usr))
         if usr:
             self.GetAllRefs(usr)
 
     def GetAllRefs(self, usr):
-        resultList = []
         cuIdList = self.GetCompileUnitIdList()
         for cuId in cuIdList:
+            resultList = []
             if cuId == self.m_cuId:
                 db = self.mDb
             else:
                 db = self.OpenDbId(cuId)
             count = 0
-            q = "usr2ref|" + usr + "|" + cuId
-            rv = self.mRefDb.get(q)
+            q = "usr2ref|" + str(usr) + "|" + str(cuId)
+            #rv = self.mRefDb.get(q)
+            rv = db.get(q)
             DEBUG_PRINT("usr2ref: " + str(rv))
             if rv:
                 rvList = rv.split(",")
                 for rv in rvList:
                     nameId, fileId, line, col, kind, refFileId, refLine, refCol = \
                             rv.split("|")
-                    name = id2name(db, cuId, nameId)
+                    name = id2name(db, nameId)
                     if name == None:
                         print("ERRRO: name lookup failed: " + str(nameId) + ": " + cuId)
                         return None
-                    fn = id2file(db, cuId, fileId)
+                    fn = id2file(db, fileId)
                     if fn == None:
                         print("ERRRO: file name lookup failed: " + str(fileId) + ": " + cuId)
                         return None
                     resultList.append((name, fn, line, col))
                 if db != self.mDb:
                     db.close()
-        for i in resultList:
-            resultName, resultFileName, resultLine, resultCol = i
-            self.PrintResult(resultName, resultFileName, resultLine, resultCol)
+            for i in resultList:
+                resultName, resultFileName, resultLine, resultCol = i
+                self.PrintResult(resultName, resultFileName, resultLine, resultCol)
 
     def parseArg(self, argv):
         if len(argv) != 3:
@@ -308,7 +322,7 @@ class QueryHandlerOverride(HandlerBase):
     # Handle Rquest for infomation about reference
     #
     def DoQuery(self):
-        usr = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
+        usr = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         if usr:
             self.GetAllOverrides(usr)
 
@@ -345,7 +359,7 @@ class QueryHandlerOverrideN(HandlerBase):
     # Handle Rquest for infomation about reference
     #
     def DoQuery(self):
-        usr = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
+        usr = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         if usr:
             self.GetAllOverriders(usr)
 
@@ -476,7 +490,7 @@ class QueryHandlerType(HandlerBase):
     # Handle Rquest for infomation about type
     #
     def DoQuery(self):
-        usr = self.GetUsr(self.m_srcFileName, self.m_lineNo, self.m_colNo)
+        usr = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         DEBUG_PRINT("usr: " + str(usr))
         if usr:
             typeUsr = self.GetTypeUsr(usr, self.m_srcFileName, self.m_lineNo, self.m_colNo)

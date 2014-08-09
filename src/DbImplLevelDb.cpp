@@ -162,7 +162,7 @@ public:
 
 std::map<std::string, std::string> s_refMap;
 RefCount s_refCount;
-void DbImplLevelDb::insert_ref_value(std::string usr, std::string filename, int fileId, int nameId, int line, int col, int kind, int refFileId, int refLine, int refCol)
+void DbImplLevelDb::insert_ref_value(std::string usr, int usrId, std::string filename, int fileId, int nameId, int line, int col, int kind, int refFileId, int refLine, int refCol)
 {
     int len = snprintf(gCharBuff0, sizeof(gCharBuff0), "%d|%d|%d|%d|%d|%d|%d|%d",
             nameId, fileId, line, col, kind, refFileId, refLine, refCol);
@@ -183,12 +183,12 @@ void DbImplLevelDb::insert_ref_value(std::string usr, std::string filename, int 
 #endif
 
     // pos -> usr
-    int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "pos2usr|%s|%d|%d", filename.c_str(),  line, col);
-    int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%s", usr.c_str());
+    int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "pos2usr|%d|%d|%d", fileId,  line, col);
+    int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d", usrId);
     leveldb_writebatch_put(s_wb, gCharBuff0, len0, gCharBuff1, len1);
 }
 
-void DbImplLevelDb::insert_decl_value(std::string usr, std::string filename, int fileId, int nameId, int line, int col, int entityKind, int val, int isVirtual, int isDef, int typeUsrId, int typeKind, int isPointer)
+void DbImplLevelDb::insert_decl_value(std::string usr, int usrId, std::string filename, int fileId, int nameId, int line, int col, int entityKind, int val, int isVirtual, int isDef, int typeUsrId, int typeKind, int isPointer)
 {
     int len0 = 0;
     int len1 = 0;
@@ -199,20 +199,20 @@ void DbImplLevelDb::insert_decl_value(std::string usr, std::string filename, int
         len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s|%s", keyPrefix, s_compileUnitId.c_str(), usr.c_str()); 
         len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d|%d|%d|%d|%d|%d|%d|%d|%d|%d",
                 nameId, fileId, line, col, entityKind, val, isVirtual, typeUsrId, typeKind, isPointer);
-        leveldb_writebatch_put(s_wb_common, gCharBuff0, len0, gCharBuff1, len1);
+        leveldb_writebatch_put(s_wb, gCharBuff0, len0, gCharBuff1, len1);
         //printf("%s, %s, %s, %d, %d\n", s_compileUnit.c_str(), usr.c_str(), filename.c_str(), line, col);
     }
     else {
         // usrId -> decl info
-        len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s", keyPrefix, usr.c_str()); 
+        len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%d", keyPrefix, usrId); 
         len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d|%d|%d|%d|%d|%d|%d|%d|%d|%d",
                 nameId, fileId, line, col, entityKind, val, isVirtual, typeUsrId, typeKind, isPointer);
         leveldb_writebatch_put(s_wb, gCharBuff0, len0, gCharBuff1, len1);
     }
 
     // pos -> usr
-    len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "pos2usr|%s|%d|%d", filename.c_str(), line, col); 
-    len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%s", usr.c_str());
+    len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "pos2usr|%d|%d|%d", fileId, line, col); 
+    len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d", usrId);
     leveldb_writebatch_put(s_wb, gCharBuff0, len0, gCharBuff1, len1);
 }
 
@@ -231,7 +231,7 @@ void DbImplLevelDb::addIdList(const std::map<std::string, int >& inMap, std::str
     for(std::map<std::string, int >::const_iterator itr = inMap.begin();
             itr != end;
             itr++) {
-        int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s|%d", tableName.c_str(), s_compileUnitId.c_str(), itr->second); 
+        int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%d", tableName.c_str(), itr->second); 
         int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%s", itr->first.c_str());
 
         leveldb_writebatch_put(s_wb, gCharBuff0, len0, gCharBuff1, len1);
@@ -260,16 +260,42 @@ void addFilesToFileList(const std::map<std::string, int >& inMap)
 void DbImplLevelDb::fin(const std::map<std::string, int >& fileMap, const std::map<std::string, int >& usrMap, const std::map<std::string, int >& nameMap)
 {
     addIdList(fileMap, "id2file");
+    {
+        // lookup map
+        std::map<std::string, int >::const_iterator end = fileMap.end();
+        for(std::map<std::string, int >::const_iterator itr = fileMap.begin();
+                itr != end;
+                itr++) {
+            int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s", "file2id", itr->first.c_str()); 
+            int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d", itr->second);
+
+            leveldb_writebatch_put(s_wb, gCharBuff0, len0, gCharBuff1, len1);
+        }
+    }
     addFilesToFileList(fileMap);
-    //addIdList(usrMap, "id2usr");
+    addIdList(usrMap, "id2usr");
+    {
+        // lookup map
+        std::map<std::string, int >::const_iterator end = usrMap.end();
+        for(std::map<std::string, int >::const_iterator itr = usrMap.begin();
+                itr != end;
+                itr++) {
+            int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s", "usr2id", itr->first.c_str()); 
+            int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d", itr->second);
+
+            leveldb_writebatch_put(s_wb, gCharBuff0, len0, gCharBuff1, len1);
+        }
+    }
     addIdList(nameMap, "id2name");
     // dump map
     std::map<std::string, std::string>::const_iterator end = s_refMap.end();
     for(std::map<std::string, std::string>::const_iterator itr = s_refMap.begin();
             itr != end;
             itr++) {
-        int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "usr2ref|%s|%s", itr->first.c_str(), s_compileUnitId.c_str()); 
-        leveldb_writebatch_put(s_wb_common, gCharBuff0, len0, itr->second.c_str(), itr->second.size());
+        if(itr->first != "") {
+            int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "usr2ref|%s|%s", itr->first.c_str(), s_compileUnitId.c_str()); 
+            leveldb_writebatch_put(s_wb, gCharBuff0, len0, itr->second.c_str(), itr->second.size());
+        }
     }
 
     leveldb_free(s_dbErr);

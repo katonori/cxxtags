@@ -41,7 +41,7 @@ class HandlerBase:
 
     def __init__(self, dbDir):
         self.mDbDir = dbDir + "/"
-        self.mFileListDb = plyvel.DB(dbDir + "/file_list")
+        self.mFileListDb = plyvel.DB(dbDir + "/common")
 
     def Filename2CompileUnit(self, fn):
         DEBUG_PRINT("fn: " + fn)
@@ -195,7 +195,7 @@ class QueryHandlerDef(HandlerBase):
             print "ERROR: Db open"
             return None
         usrId = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
-        usr = id2usr(self.mId2usrDb, usrId)
+        usr = id2usr(self.mDb, usrId)
         DEBUG_PRINT("usr: " + str(usr))
         if usr:
             result = self.GetDef(usr)
@@ -252,7 +252,7 @@ class QueryHandlerRef(HandlerBase):
             print "ERROR: DB oopen"
             return None
         usrId = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
-        usr = id2usr(self.mId2usrDb, usrId)
+        usr = id2usr(self.mDb, usrId)
         endTime = time.time()
         DEBUG_PRINT("usr: " + str(usr) + ": " + str((endTime-startTime)*1000) + " ms")
         if usr:

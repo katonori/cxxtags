@@ -10,6 +10,7 @@ import cxxtags_util
 import getopt
 import re
 import os
+import time
 
 OUTPUT_DELIMITER = '|'
 SCRIPT_DIR = os.path.dirname(__file__)
@@ -31,7 +32,6 @@ class HandlerBase:
     mAllDbFileList = None
     mDbDir = ""
     mDb = None
-    mRefDb = None
     mFileListDb = None
     mUsrDbName = None
     m_srcFileName = ""
@@ -63,15 +63,6 @@ class HandlerBase:
             print("ERROR: db open")
             return None
         return self.mDb
-
-    def InitRefDb(self, srcFileName):
-        (self.m_cuName, self.m_cuId) = self.Filename2CompileUnit(srcFileName)
-        if self.m_cuName == None:
-            print("ERROR: could not determin compile unit name: " + srcFileName)
-            return None
-        DEBUG_PRINT("CU: " + self.m_cuName)
-        self.mRefDb = self.OpenRefDb(self.m_cuName)
-        return self.mRefDb
 
     def Cu2Id(self, cuName):
         return self.mFileListDb.get("cu2id|" + cuName)
@@ -107,13 +98,6 @@ class HandlerBase:
             return None
         return db
 
-    def GetCompileUnitIdList(self):
-        cuList = []
-        for fileName, v in self.mFileListDb:
-            if fileName.startswith("file_list|"):
-                cuList.append(v)
-        return list(set(cuList))
-
     def GetAllDbFiles(self):
         if self.mAllDbFileList == None:
             self.mAllDbFileList = cxxtags_util.get_db_file_list(self.mDbDir)
@@ -139,8 +123,6 @@ class HandlerBase:
     def CloseDb(self):
         if self.mDb:
             self.mDb.close()
-        if self.mRefDb:
-            self.mRefDb.close()
         if self.mFileListDb:
             self.mFileListDb.close()
 
@@ -209,14 +191,11 @@ class QueryHandlerDef(HandlerBase):
     # Handle Rquest for infomation about definition
     #
     def DoQuery(self):
-        if None == self.InitRefDb(self.m_srcFileName):
-            print "ERROR: RefDB open"
-            return None
         if None == self.InitDb(self.m_srcFileName):
             print "ERROR: Db open"
             return None
         usrId = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
-        usr = id2usr(self.mDb, usrId)
+        usr = id2usr(self.mId2usrDb, usrId)
         DEBUG_PRINT("usr: " + str(usr))
         if usr:
             result = self.GetDef(usr)
@@ -225,7 +204,11 @@ class QueryHandlerDef(HandlerBase):
                 self.PrintResult(name, fileName, line, col)
 
     def GetDef(self, usr):
-        cuIdList = self.GetCompileUnitIdList()
+        cuListTmp = self.mFileListDb.get("usr2cuid|" + usr)
+        if cuListTmp == None:
+            print "ERROR: usr2cuid"
+            return None
+        cuIdList = cuListTmp.split(",")
         result = []
         for cuId in cuIdList:
             if cuId == self.m_cuId:
@@ -234,7 +217,6 @@ class QueryHandlerDef(HandlerBase):
                 db = self.OpenDbId(cuId)
             q = "usr2def|%s|%s"%(cuId, usr)
             DEBUG_PRINT("q: " + q)
-            #resDef = self.mRefDb.get(q)
             resDef = db.get(q)
             DEBUG_PRINT("def: " + str(resDef))
             if resDef:
@@ -263,32 +245,35 @@ class QueryHandlerRef(HandlerBase):
     # Handle Rquest for infomation about reference
     #
     def DoQuery(self):
+        startTime = time.time()
         # get compileunit
-        self.InitRefDb(self.m_srcFileName)
-        if self.mRefDb == None:
-            print "ERROR: RefDB oopen"
-            return None
         self.InitDb(self.m_srcFileName)
         if self.mDb == None:
             print "ERROR: DB oopen"
             return None
         usrId = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
-        usr = id2usr(self.mDb, usrId)
-        DEBUG_PRINT("usr: " + str(usr))
+        usr = id2usr(self.mId2usrDb, usrId)
+        endTime = time.time()
+        DEBUG_PRINT("usr: " + str(usr) + ": " + str((endTime-startTime)*1000) + " ms")
         if usr:
             self.GetAllRefs(usr)
 
     def GetAllRefs(self, usr):
-        cuIdList = self.GetCompileUnitIdList()
+        cuListTmp = self.mFileListDb.get("usr2cuid|" + usr)
+        cuIdList = cuListTmp.split(",")
+        DEBUG_PRINT("usr2cuid: " + str(cuListTmp))
+        prevTime = 0
         for cuId in cuIdList:
+            DEBUG_PRINT("ref interval: " + str((time.time()-prevTime)*1000))
+            prevTime = time.time()
             resultList = []
             if cuId == self.m_cuId:
                 db = self.mDb
             else:
                 db = self.OpenDbId(cuId)
             count = 0
+            DEBUG_PRINT("time: open: " + str((time.time()-prevTime)*1000) + " ms")
             q = "usr2ref|" + str(usr) + "|" + str(cuId)
-            #rv = self.mRefDb.get(q)
             rv = db.get(q)
             DEBUG_PRINT("usr2ref: " + str(rv))
             if rv:

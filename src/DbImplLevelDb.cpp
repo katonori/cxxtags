@@ -10,11 +10,10 @@
 namespace cxxtags {
 
 static leveldb_t* s_db;
-static leveldb_t* s_db_common;
 static leveldb_t* s_dbFileList;
 static char *s_dbErr = NULL;
 static leveldb_writebatch_t* s_wb;
-static leveldb_writebatch_t* s_wb_common;
+static leveldb_writebatch_t* s_wb_fileList;
 static std::string s_compileUnit;
 static char gCharBuff0[2048];
 static char gCharBuff1[2048];
@@ -22,9 +21,11 @@ static char gCharBuff1[2048];
 static std::string s_compileUnitId;
 
 void dbWrite(leveldb_t* db, std::string key, std::string value);
+void dbWriteBatch(leveldb_writebatch_t* wb, std::string key, std::string value);
 int dbRead(std::string& value, leveldb_t* db, std::string key);
 void DbImplLevelDb::init(std::string out_dir, std::string src_file_name, std::string excludeList, int isPartial, int isSkel, const char* curDir, int argc, const char** argv)
 {
+    clock_t startTime = clock();
     leveldb_options_t* options = leveldb_options_create();
     leveldb_options_set_create_if_missing(options, 1);
 
@@ -82,13 +83,6 @@ void DbImplLevelDb::init(std::string out_dir, std::string src_file_name, std::st
         return;
     }
 
-    db_dir = out_dir + "/common";
-    s_db_common = leveldb_open(options, db_dir.c_str(), &s_dbErr);
-    if (s_dbErr != NULL) {
-        fprintf(stderr, "Open fail.\n");
-        return;
-    }
-
     s_wb = leveldb_writebatch_create();
     if(s_wb == NULL) {
         fprintf(stderr, "ERROR: Write Batch fail.\n");
@@ -96,12 +90,14 @@ void DbImplLevelDb::init(std::string out_dir, std::string src_file_name, std::st
     }
     leveldb_writebatch_clear(s_wb);
 
-    s_wb_common = leveldb_writebatch_create();
-    if(s_wb_common == NULL) {
+    s_wb_fileList = leveldb_writebatch_create();
+    if(s_wb_fileList == NULL) {
         fprintf(stderr, "ERROR: Write Batch fail.\n");
         return;
     }
-    leveldb_writebatch_clear(s_wb_common);
+    leveldb_writebatch_clear(s_wb_fileList);
+    clock_t endTime = clock();
+    printf("time: init: %f sec\n", (endTime-startTime)/(double)CLOCKS_PER_SEC);
 }
 
 void dbWrite(leveldb_t* db, std::string key, std::string value)
@@ -109,6 +105,18 @@ void dbWrite(leveldb_t* db, std::string key, std::string value)
     s_dbErr = NULL;
     leveldb_writeoptions_t* woptions = leveldb_writeoptions_create();
     leveldb_put(db, woptions, key.c_str(), key.size(), value.c_str(), value.size(), &s_dbErr);
+    // TODO: add error handling
+    if (s_dbErr != NULL) {
+        fprintf(stderr, "Write fail.\n");
+    }
+    leveldb_free(s_dbErr);
+    s_dbErr = NULL;
+}
+
+void dbWriteBatch(leveldb_writebatch_t* wb, std::string key, std::string value)
+{
+    s_dbErr = NULL;
+    leveldb_writebatch_put(wb, key.c_str(), key.size(), value.c_str(), value.size());
     // TODO: add error handling
     if (s_dbErr != NULL) {
         fprintf(stderr, "Write fail.\n");
@@ -174,14 +182,6 @@ void DbImplLevelDb::insert_ref_value(std::string usr, int usrId, std::string fil
         s_refMap[usr] = itr->second + "," + gCharBuff0;
     }
 
-#if 0
-    // ref usrId -> decl info
-    int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "usr2ref|%s|%s|%d", usr.c_str(), s_compileUnitId.c_str(), s_refCount.GetCount(usr)); 
-    int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d|%d|%d|%d|%d|%d|%d|%d",
-            nameId, fileId, line, col, kind, refFileId, refLine, refCol);
-    leveldb_writebatch_put(s_wb_common, gCharBuff0, len0, gCharBuff1, len1);
-#endif
-
     // pos -> usr
     int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "pos2usr|%d|%d|%d", fileId,  line, col);
     int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d", usrId);
@@ -224,7 +224,7 @@ void DbImplLevelDb::insert_base_class_value(int classUsrId, int baseClassUsrId, 
 {
 }
 
-void DbImplLevelDb::addIdList(const std::map<std::string, int >& inMap, std::string tableName)
+void DbImplLevelDb::addIdList(leveldb_writebatch_t* db, const std::map<std::string, int >& inMap, std::string tableName)
 {
     // lookup map
     std::map<std::string, int >::const_iterator end = inMap.end();
@@ -234,7 +234,7 @@ void DbImplLevelDb::addIdList(const std::map<std::string, int >& inMap, std::str
         int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%d", tableName.c_str(), itr->second); 
         int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%s", itr->first.c_str());
 
-        leveldb_writebatch_put(s_wb, gCharBuff0, len0, gCharBuff1, len1);
+        leveldb_writebatch_put(db, gCharBuff0, len0, gCharBuff1, len1);
     }
     return ;
 }
@@ -257,9 +257,60 @@ void addFilesToFileList(const std::map<std::string, int >& inMap)
     }
 }
 
+int dbFlush(leveldb_t* db, leveldb_writebatch_t* wb)
+{
+    leveldb_writeoptions_t *woptions = leveldb_writeoptions_create();
+    leveldb_write(db, woptions, wb, &s_dbErr);
+    if (s_dbErr != NULL) {
+        fprintf(stderr, "Write fail.\n");
+        return 1;
+    }
+    return 0;
+}
+
+int dbClose(leveldb_t* db)
+{
+    leveldb_close(db);
+    if (s_dbErr != NULL) {
+        fprintf(stderr, "Close fail.\n");
+        return 1;
+    }
+    return 0;
+}
+
 void DbImplLevelDb::fin(const std::map<std::string, int >& fileMap, const std::map<std::string, int >& usrMap, const std::map<std::string, int >& nameMap)
 {
-    addIdList(fileMap, "id2file");
+    clock_t clockStart = clock();
+    // usr
+    addIdList(s_wb, usrMap, "id2usr");
+    {
+        // lookup map
+        std::map<std::string, int >::const_iterator end = usrMap.end();
+        for(std::map<std::string, int >::const_iterator itr = usrMap.begin();
+                itr != end;
+                itr++) {
+            int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s", "usr2id", itr->first.c_str()); 
+            int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d", itr->second);
+
+            leveldb_writebatch_put(s_wb, gCharBuff0, len0, gCharBuff1, len1);
+
+            std::string value;
+            // check if already registered
+            int rv = dbRead(value, s_dbFileList, "usr2cuid|" + itr->first);
+            if(rv == 1) {
+                dbWriteBatch(s_wb_fileList, "usr2cuid|" + itr->first, s_compileUnitId);
+            }
+            else if(rv == 0) {
+                // alread exists
+                dbWriteBatch(s_wb_fileList, "usr2cuid|" + itr->first, value + "," + s_compileUnitId);
+            }
+        }
+    }
+    addFilesToFileList(fileMap);
+    dbFlush(s_dbFileList, s_wb_fileList);
+    dbClose(s_dbFileList);
+
+    addIdList(s_wb, fileMap, "id2file");
     {
         // lookup map
         std::map<std::string, int >::const_iterator end = fileMap.end();
@@ -272,21 +323,8 @@ void DbImplLevelDb::fin(const std::map<std::string, int >& fileMap, const std::m
             leveldb_writebatch_put(s_wb, gCharBuff0, len0, gCharBuff1, len1);
         }
     }
-    addFilesToFileList(fileMap);
-    addIdList(usrMap, "id2usr");
-    {
-        // lookup map
-        std::map<std::string, int >::const_iterator end = usrMap.end();
-        for(std::map<std::string, int >::const_iterator itr = usrMap.begin();
-                itr != end;
-                itr++) {
-            int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s", "usr2id", itr->first.c_str()); 
-            int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d", itr->second);
 
-            leveldb_writebatch_put(s_wb, gCharBuff0, len0, gCharBuff1, len1);
-        }
-    }
-    addIdList(nameMap, "id2name");
+    addIdList(s_wb, nameMap, "id2name");
     // dump map
     std::map<std::string, std::string>::const_iterator end = s_refMap.end();
     for(std::map<std::string, std::string>::const_iterator itr = s_refMap.begin();
@@ -297,36 +335,13 @@ void DbImplLevelDb::fin(const std::map<std::string, int >& fileMap, const std::m
             leveldb_writebatch_put(s_wb, gCharBuff0, len0, itr->second.c_str(), itr->second.size());
         }
     }
+    dbFlush(s_db, s_wb);
+    dbClose(s_db);
 
     leveldb_free(s_dbErr);
     s_dbErr = NULL;
-    leveldb_writeoptions_t *woptions = leveldb_writeoptions_create();
-
-    leveldb_write(s_db, woptions, s_wb, &s_dbErr);
-    if (s_dbErr != NULL) {
-        fprintf(stderr, "Write fail.\n");
-    }
-    leveldb_close(s_db);
-    if (s_dbErr != NULL) {
-        fprintf(stderr, "Close fail.\n");
-    }
-
-    leveldb_write(s_db_common, woptions, s_wb_common, &s_dbErr);
-    if (s_dbErr != NULL) {
-        fprintf(stderr, "Write fail.\n");
-    }
-    leveldb_close(s_db_common);
-    if (s_dbErr != NULL) {
-        fprintf(stderr, "Close fail.\n");
-    }
-
-    leveldb_close(s_dbFileList);
-    if (s_dbErr != NULL) {
-        fprintf(stderr, "Close fail.\n");
-    }
-
-    leveldb_free(s_dbErr);
-    s_dbErr = NULL;
+    clock_t clockEnd = clock();
+    printf("time: fin: %f sec\n", (clockEnd-clockStart)/(double)CLOCKS_PER_SEC);
 }
 
 };

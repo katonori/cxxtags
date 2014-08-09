@@ -15,6 +15,7 @@ static leveldb::DB* s_db;
 static leveldb::WriteBatch s_wb;
 static std::string s_compileUnit;
 static std::string s_commonDbDir;
+static std::string s_dbDir;
 static char gCharBuff0[2048];
 static char gCharBuff1[2048];
 leveldb::ReadOptions s_defaultRoptions;
@@ -33,7 +34,7 @@ int dbTryOpen(leveldb::DB*& db, std::string dir)
     clock_t start = clock();
     leveldb::Status st;
     while(1) {
-        st= leveldb::DB::Open(s_defaultOptions, s_commonDbDir, &db);
+        st= leveldb::DB::Open(s_defaultOptions, dir, &db);
         if(st.ok()) {
             break;
         }
@@ -42,6 +43,7 @@ int dbTryOpen(leveldb::DB*& db, std::string dir)
             // timeout
             break;
         }
+        //printf("WAITING: %f ms\n", (now - start)*1000.0f/CLOCKS_PER_SEC);
         usleep(1000);
     }
     if (!st.ok()) {
@@ -57,6 +59,7 @@ void DbImplLevelDb::init(std::string out_dir, std::string src_file_name, std::st
     clock_t startTime = clock();
     s_defaultOptions.create_if_missing = true;
 
+    s_dbDir = out_dir;
     s_compileUnit = src_file_name;
 
     //
@@ -264,15 +267,8 @@ int dbClose(leveldb::DB*& db)
 
 void DbImplLevelDb::fin(const std::map<std::string, int >& fileMap, const std::map<std::string, int >& usrMap, const std::map<std::string, int >& nameMap)
 {
-    leveldb::DB* dbCommon;
-    int rv = dbTryOpen(dbCommon, s_commonDbDir);
-    if(rv < 0) {
-        printf("ERROR: fin: common db open: %s\n", s_commonDbDir.c_str());
-        return ;
-    }
-    leveldb::WriteBatch wb_common;
-
     clock_t clockStart = clock();
+
     // usr
     addIdList(&s_wb, usrMap, "id2usr");
     {
@@ -285,22 +281,55 @@ void DbImplLevelDb::fin(const std::map<std::string, int >& fileMap, const std::m
             int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d", itr->second);
 
             s_wb.Put(gCharBuff0, gCharBuff1);
-
-            std::string value;
-            // check if already registered
-            int rv = dbRead(value, dbCommon, "usr2cuid|" + itr->first);
-            if(rv < 0) {
-                wb_common.Put("usr2cuid|" + itr->first, s_compileUnitId);
-            }
-            else if(rv == 0) {
-                // alread exists
-                wb_common.Put("usr2cuid|" + itr->first, value + "," + s_compileUnitId);
-            }
         }
     }
-    addFilesToFileList(&wb_common, fileMap);
-    dbFlush(dbCommon, &wb_common);
-    dbClose(dbCommon);
+
+    {
+        clock_t timeStart = clock();
+        leveldb::DB* dbUsrDb;
+        leveldb::WriteBatch wb_usrdb;
+        std::string dbName = s_dbDir + "/usr_db";
+        int rv = dbTryOpen(dbUsrDb, dbName);
+        if(rv < 0) {
+            printf("ERROR: fin: common db open: %s\n", dbName.c_str());
+            return ;
+        }
+        // lookup map
+        std::map<std::string, int >::const_iterator end = usrMap.end();
+        for(std::map<std::string, int >::const_iterator itr = usrMap.begin();
+                itr != end;
+                itr++) {
+            if(itr->first != "") {
+                std::string value;
+                // check if already registered
+                int rv = dbRead(value, dbUsrDb, "usr2cuid|" + itr->first);
+                if(rv < 0) {
+                    wb_usrdb.Put("usr2cuid|" + itr->first, s_compileUnitId);
+                }
+                else if(rv == 0) {
+                    // alread exists
+                    wb_usrdb.Put("usr2cuid|" + itr->first, value + "," + s_compileUnitId);
+                }
+            }
+        }
+        dbFlush(dbUsrDb, &wb_usrdb);
+        dbClose(dbUsrDb);
+        clock_t timeEnd = clock();
+        printf("time: usr_wb: %f ms\n", (timeEnd-timeStart)*1000.0/CLOCKS_PER_SEC);
+    }
+
+    {
+        leveldb::WriteBatch wb;
+        addFilesToFileList(&wb, fileMap);
+        leveldb::DB* db;
+        int rv = dbTryOpen(db, s_commonDbDir);
+        if(rv < 0) {
+            printf("ERROR: fin: common db open: %s\n", s_commonDbDir.c_str());
+            return ;
+        }
+        dbFlush(db, &wb);
+        dbClose(db);
+    }
 
     addIdList(&s_wb, fileMap, "id2file");
     {
@@ -331,7 +360,7 @@ void DbImplLevelDb::fin(const std::map<std::string, int >& fileMap, const std::m
     dbClose(s_db);
 
     clock_t clockEnd = clock();
-    //printf("time: fin: %f sec\n", (clockEnd-clockStart)/(double)CLOCKS_PER_SEC);
+    printf("time: fin: %f sec\n", (clockEnd-clockStart)/(double)CLOCKS_PER_SEC);
 }
 
 };

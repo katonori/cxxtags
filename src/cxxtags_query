@@ -34,6 +34,7 @@ class HandlerBase:
     mDb = None
     mFileListDb = None
     mUsrDbName = None
+    mUsrDb = None
     m_srcFileName = ""
     m_cuName = ""
     m_cuId = 0
@@ -42,6 +43,7 @@ class HandlerBase:
     def __init__(self, dbDir):
         self.mDbDir = dbDir + "/"
         self.mFileListDb = plyvel.DB(dbDir + "/common")
+        self.mUsrDb = plyvel.DB(dbDir + "/usr_db")
 
     def Filename2CompileUnit(self, fn):
         DEBUG_PRINT("fn: " + fn)
@@ -125,6 +127,8 @@ class HandlerBase:
             self.mDb.close()
         if self.mFileListDb:
             self.mFileListDb.close()
+        if self.mUsrDb:
+            self.mUsrDb.close()
 
     def PrintResult(self, name, fileName, line, col):
         DEBUG_PRINT("res: " + str(name) + OUTPUT_DELIMITER + str(fileName) + OUTPUT_DELIMITER + str(line) + OUTPUT_DELIMITER + str(col))
@@ -204,7 +208,7 @@ class QueryHandlerDef(HandlerBase):
                 self.PrintResult(name, fileName, line, col)
 
     def GetDef(self, usr):
-        cuListTmp = self.mFileListDb.get("usr2cuid|" + usr)
+        cuListTmp = self.mUsrDb.get("usr2cuid|" + usr)
         if cuListTmp == None:
             print "ERROR: usr2cuid"
             return None
@@ -259,7 +263,7 @@ class QueryHandlerRef(HandlerBase):
             self.GetAllRefs(usr)
 
     def GetAllRefs(self, usr):
-        cuListTmp = self.mFileListDb.get("usr2cuid|" + usr)
+        cuListTmp = self.mUsrDb.get("usr2cuid|" + usr)
         cuIdList = cuListTmp.split(",")
         DEBUG_PRINT("usr2cuid: " + str(cuListTmp))
         prevTime = 0

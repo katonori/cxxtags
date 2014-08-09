@@ -4,7 +4,7 @@
 #include <map>
 #include <stdint.h>
 #include <sstream>
-#include <leveldb/c.h>
+#include <leveldb/db.h>
 #include "IIndexDb.h"
 
 namespace cxxtags {
@@ -21,7 +21,7 @@ public:
     virtual void insert_decl_value(std::string usr, int usrId, std::string filename, int fileId, int nameId, int line, int col, int entityKind, int val, int isVirtual, int isDef, int typeUsrId, int typeKind, int isPointer);
     virtual void insert_overriden_value(int usrId, int nameId, int fileId, int line, int col, int entityKind, int overriderUsrId, int isDef);
     virtual void insert_base_class_value(int classUsrId, int baseClassUsrId, int line, int col, int accessibility);
-    void addIdList(leveldb_writebatch_t* db, const std::map<std::string, int >& inMap, std::string tableName);
+    void addIdList(leveldb::WriteBatch* db, const std::map<std::string, int >& inMap, std::string tableName);
 private:
 private:
 };

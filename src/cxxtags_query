@@ -34,16 +34,15 @@ class HandlerBase:
     mDb = None
     mFileListDb = None
     mUsrDbName = None
-    mUsrDb = None
     m_srcFileName = ""
     m_cuName = ""
     m_cuId = 0
     m_colNo = 0
 
     def __init__(self, dbDir):
+        self.mUsrDbList = []
         self.mDbDir = dbDir + "/"
         self.mFileListDb = plyvel.DB(dbDir + "/common")
-        self.mUsrDb = plyvel.DB(dbDir + "/usr_db")
 
     def Filename2CompileUnit(self, fn):
         DEBUG_PRINT("fn: " + fn)
@@ -64,6 +63,15 @@ class HandlerBase:
         if self.mDb == None:
             print("ERROR: db open")
             return None
+        dbList = os.listdir(self.mDbDir + "/usr_db")
+        for dir in dbList:
+            if re.match("^[0-9]+$", dir):
+                db = plyvel.DB(self.mDbDir + "/usr_db/" + dir)
+                if db == None:
+                    print("ERROR: db open: " + str(dir))
+                    return None
+                self.mUsrDbList.append(db)
+        DEBUG_PRINT("usrDbList: " + str(self.mUsrDbList))
         return self.mDb
 
     def Cu2Id(self, cuName):
@@ -127,8 +135,8 @@ class HandlerBase:
             self.mDb.close()
         if self.mFileListDb:
             self.mFileListDb.close()
-        if self.mUsrDb:
-            self.mUsrDb.close()
+        for db in self.mUsrDbList:
+            db.close()
 
     def PrintResult(self, name, fileName, line, col):
         DEBUG_PRINT("res: " + str(name) + OUTPUT_DELIMITER + str(fileName) + OUTPUT_DELIMITER + str(line) + OUTPUT_DELIMITER + str(col))
@@ -208,11 +216,15 @@ class QueryHandlerDef(HandlerBase):
                 self.PrintResult(name, fileName, line, col)
 
     def GetDef(self, usr):
-        cuListTmp = self.mUsrDb.get("usr2cuid|" + usr)
-        if cuListTmp == None:
+        cuIdList = []
+        for db in self.mUsrDbList:
+            cuListTmp = db.get("usr2cuid|" + usr)
+            if cuListTmp:
+                cuIdList.extend(cuListTmp.split(","))
+        if cuIdList == []:
             print "ERROR: usr2cuid"
             return None
-        cuIdList = cuListTmp.split(",")
+
         result = []
         for cuId in cuIdList:
             if cuId == self.m_cuId:
@@ -221,6 +233,7 @@ class QueryHandlerDef(HandlerBase):
                 db = self.OpenDbId(cuId)
             q = "usr2def|%s|%s"%(cuId, usr)
             DEBUG_PRINT("q: " + q)
+            DEBUG_PRINT("db: " + str(db))
             resDef = db.get(q)
             DEBUG_PRINT("def: " + str(resDef))
             if resDef:
@@ -235,6 +248,8 @@ class QueryHandlerDef(HandlerBase):
                     print("ERRRO: file name lookup failed: " + str(fileId))
                     return None
                 result.append((name, fileName, line, col))
+            if db != self.mDb:
+                db.close()
         return result
 
     def parseArg(self, argv):
@@ -251,8 +266,7 @@ class QueryHandlerRef(HandlerBase):
     def DoQuery(self):
         startTime = time.time()
         # get compileunit
-        self.InitDb(self.m_srcFileName)
-        if self.mDb == None:
+        if None == self.InitDb(self.m_srcFileName):
             print "ERROR: DB oopen"
             return None
         usrId = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
@@ -263,9 +277,15 @@ class QueryHandlerRef(HandlerBase):
             self.GetAllRefs(usr)
 
     def GetAllRefs(self, usr):
-        cuListTmp = self.mUsrDb.get("usr2cuid|" + usr)
-        cuIdList = cuListTmp.split(",")
-        DEBUG_PRINT("usr2cuid: " + str(cuListTmp))
+        cuIdList = []
+        for db in self.mUsrDbList:
+            cuListTmp = db.get("usr2cuid|" + usr)
+            if cuListTmp:
+                cuIdList.extend(cuListTmp.split(","))
+        if cuIdList == []:
+            print "ERROR: usr2cuid"
+            return None
+
         prevTime = 0
         for cuId in cuIdList:
             DEBUG_PRINT("ref interval: " + str((time.time()-prevTime)*1000))
@@ -294,8 +314,8 @@ class QueryHandlerRef(HandlerBase):
                         print("ERRRO: file name lookup failed: " + str(fileId) + ": " + cuId)
                         return None
                     resultList.append((name, fn, line, col))
-                if db != self.mDb:
-                    db.close()
+            if db != self.mDb:
+                db.close()
             for i in resultList:
                 resultName, resultFileName, resultLine, resultCol = i
                 self.PrintResult(resultName, resultFileName, resultLine, resultCol)
@@ -594,10 +614,12 @@ def main():
         handler.DoQuery()
         handler.CloseDb()
     elif queryType == 'decl': # get a declaration or definition
+        DEBUG_PRINT("decl start")
         handler = QueryHandlerDecl(dbDir)
         handler.parseArg(argv[2:])
         if False == handler.DoQuery():
             handler.CloseDb()
+            DEBUG_PRINT("def start")
             handler = QueryHandlerDef(dbDir)
             handler.parseArg(argv[2:])
             handler.DoQuery()

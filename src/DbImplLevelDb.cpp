@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <unistd.h>
+#include <boost/filesystem/path.hpp>
+#include <boost/filesystem/operations.hpp>
 
 namespace cxxtags {
 
@@ -61,6 +63,13 @@ void DbImplLevelDb::init(std::string out_dir, std::string src_file_name, std::st
 
     s_dbDir = out_dir;
     s_compileUnit = src_file_name;
+
+    if(!boost::filesystem::exists(s_dbDir)) {
+        if(!boost::filesystem::create_directory(s_dbDir)) {
+            printf("ERROR: create directory: %s\n", s_dbDir.c_str());
+            return;
+        }
+    }
 
     //
     // update file list
@@ -286,12 +295,22 @@ void DbImplLevelDb::fin(const std::map<std::string, int >& fileMap, const std::m
 
     {
         clock_t timeStart = clock();
-        leveldb::DB* dbUsrDb;
+        leveldb::DB* dbUsrDb = NULL;
         leveldb::WriteBatch wb_usrdb;
-        std::string dbName = s_dbDir + "/usr_db";
-        int rv = dbTryOpen(dbUsrDb, dbName);
+        std::string curDir = s_dbDir + "/usr_db";
+        if(!boost::filesystem::exists(curDir)) {
+            if(!boost::filesystem::create_directory(curDir)) {
+                printf("ERROR: create directory: %s\n", curDir.c_str());
+                return;
+            }
+        }
+        const int k_usrDbDirNum = 8; 
+        int cuId = atoi(s_compileUnitId.c_str());
+        snprintf(gCharBuff0, sizeof(gCharBuff0), "%d", (cuId % k_usrDbDirNum)); 
+        curDir = curDir + "/" + std::string(gCharBuff0);
+        int rv = dbTryOpen(dbUsrDb, curDir);
         if(rv < 0) {
-            printf("ERROR: fin: common db open: %s\n", dbName.c_str());
+            printf("ERROR: fin: common db open: %s\n", curDir.c_str());
             return ;
         }
         // lookup map

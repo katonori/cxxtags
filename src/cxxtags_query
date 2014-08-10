@@ -233,8 +233,9 @@ class QueryHandlerDef(HandlerBase):
                     name, cuid = self.GlobalFileId2CompileUnit(fid)
                     cuIdList.append(cuid)
         if cuIdList == []:
-            print "ERROR: usr2file: " + usr
-            return None
+            #print "ERROR: usr2file: " + usr
+            #return None
+            cuIdList.append(self.m_cuId)
 
         result = []
         for cuId in cuIdList:
@@ -296,8 +297,9 @@ class QueryHandlerRef(HandlerBase):
                     name, cuid = self.GlobalFileId2CompileUnit(fid)
                     cuIdList.append(cuid)
         if cuIdList == []:
-            print "ERROR: usr2file: " + usr
-            return None
+            cuIdList.append(self.m_cuId)
+            #print "ERROR: usr2file: " + usr
+            #return None
 
         prevTime = 0
         for cuId in cuIdList:

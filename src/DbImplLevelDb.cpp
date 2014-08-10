@@ -356,6 +356,7 @@ void DbImplLevelDb::fin(const std::map<std::string, int >& fileMap, const std::m
     }
 
     // update UsrDb
+    // TODO: speed up this part
     {
         clock_t timeStart = clock();
         leveldb::DB* dbUsrDb = NULL;
@@ -390,7 +391,13 @@ void DbImplLevelDb::fin(const std::map<std::string, int >& fileMap, const std::m
                 itr != end;
                 itr++) {
             const std::string& usr = itr->first;
+            size_t pos_global = usr.find("c:@", 0);
+            size_t pos_macro = usr.find("c:macro", 0);
+#if 0
             if(usr != "") {
+#else
+            if(usr != "" && (pos_global == 0 || pos_macro == 0)) {
+#endif
                 std::string value;
                 std::list<std::string> file_id_list;
                 timeArray[8] = clock();
@@ -399,6 +406,10 @@ void DbImplLevelDb::fin(const std::map<std::string, int >& fileMap, const std::m
                         itr_file_list++) {
                     file_id_list.push_back(s_file2fidMap[itr_file_list->first].c_str());
                 }
+                std::map<std::string ,int> file_list_map;
+                BOOST_FOREACH(std::string s, file_id_list) {
+                    file_list_map[s] = 0;
+                }
                 timeArray[9] = clock();
 
                 // check if already registered
@@ -406,20 +417,16 @@ void DbImplLevelDb::fin(const std::map<std::string, int >& fileMap, const std::m
                 int rv = dbRead(value, dbUsrDb, "usr2file|" + usr);
                 timeArray[1] = clock();
                 std::string file_list_string = "";
-                std::map<std::string ,std::string> file_list_map;
                 if(rv == 0) {
                     std::string delim = ",";
                     std::list<std::string> old_list;
                     boost::split(old_list, value, boost::is_any_of(delim));
                     BOOST_FOREACH(std::string s, old_list) {
-                        file_list_map[s] = "";
+                        file_list_map[s] = 0;
                     }
                 }
-                BOOST_FOREACH(std::string s, file_id_list) {
-                    file_list_map[s] = "";
-                }
                 timeArray[2] = clock();
-                for(std::map<std::string, std::string>::iterator itr_str = file_list_map.begin();
+                for(std::map<std::string, int>::iterator itr_str = file_list_map.begin();
                         itr_str != file_list_map.end();
                         itr_str++) {
                     if(file_list_string == "") {

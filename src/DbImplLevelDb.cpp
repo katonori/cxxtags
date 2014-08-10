@@ -15,25 +15,30 @@
 
 namespace cxxtags {
 
+using namespace std;
+
+typedef map<string, string> SsMap;
+typedef map<string, int> SiMap;
+
 static leveldb::DB* s_db;
 static leveldb::WriteBatch s_wb;
-static std::string s_compileUnit;
-static std::string s_commonDbDir;
-static std::string s_dbDir;
+static string s_compileUnit;
+static string s_commonDbDir;
+static string s_dbDir;
 static char gCharBuff0[2048];
 static char gCharBuff1[2048];
 leveldb::ReadOptions s_defaultRoptions;
 leveldb::WriteOptions s_defaultWoptions;
 leveldb::Options s_defaultOptions;
 
-static std::string s_compileUnitId;
+static string s_compileUnitId;
 
-void dbWrite(leveldb::DB* db, std::string key, std::string value);
-int dbRead(std::string& value, leveldb::DB* db, std::string key);
+void dbWrite(leveldb::DB* db, string key, string value);
+int dbRead(string& value, leveldb::DB* db, string key);
 int dbClose(leveldb::DB*& db);
 int dbTryOpen(leveldb::DB*& db);
 
-int dbTryOpen(leveldb::DB*& db, std::string dir)
+int dbTryOpen(leveldb::DB*& db, string dir)
 {
     clock_t start = clock();
     leveldb::Status st;
@@ -57,7 +62,7 @@ int dbTryOpen(leveldb::DB*& db, std::string dir)
     return 0;
 }
 
-void DbImplLevelDb::init(std::string out_dir, std::string src_file_name, std::string excludeList, int isPartial, int isSkel, const char* curDir, int argc, const char** argv)
+void DbImplLevelDb::init(string out_dir, string src_file_name, string excludeList, int isPartial, int isSkel, const char* curDir, int argc, const char** argv)
 {
     leveldb::DB* dbCommon = NULL;
     clock_t startTime = clock();
@@ -83,17 +88,16 @@ void DbImplLevelDb::init(std::string out_dir, std::string src_file_name, std::st
         fprintf(stderr, "Open fail.: %s\n", s_commonDbDir.c_str());
         return;
     }
-    fflush(stdout);
     assert(dbCommon != NULL);
-    std::string value;
-    std::string keyFile = s_compileUnit;
+    string value;
+    string keyFile = s_compileUnit;
     int rv = 0;
     // check if already registered
     rv = dbRead(value, dbCommon, "cu2id|" + s_compileUnit);
     if(rv < 0) {
         // not found
         // add file
-        std::string keyFileCount = "compile_unit_count";
+        string keyFileCount = "compile_unit_count";
         rv = dbRead(value, dbCommon, keyFileCount);
         if(rv < 0) {
             // key not found 
@@ -121,7 +125,7 @@ void DbImplLevelDb::init(std::string out_dir, std::string src_file_name, std::st
 
     // open database for this compile unit
     assert(s_compileUnitId != "");
-    std::string db_dir = out_dir + "/" + s_compileUnitId;
+    string db_dir = out_dir + "/" + s_compileUnitId;
     status = leveldb::DB::Open(s_defaultOptions, db_dir.c_str(), &s_db);
     if (!status.ok()) {
         fprintf(stderr, "Open fail: %s\n", status.ToString().c_str());
@@ -132,7 +136,7 @@ void DbImplLevelDb::init(std::string out_dir, std::string src_file_name, std::st
     //printf("time: init: %f sec\n", (endTime-startTime)/(double)CLOCKS_PER_SEC);
 }
 
-void dbWrite(leveldb::DB* db, std::string key, std::string value)
+void dbWrite(leveldb::DB* db, string key, string value)
 {
     leveldb::Status st = db->Put(s_defaultWoptions, key, value);
     // TODO: add error handling
@@ -141,9 +145,9 @@ void dbWrite(leveldb::DB* db, std::string key, std::string value)
     }
 }
 
-int dbRead(std::string& value, leveldb::DB* db, std::string key)
+int dbRead(string& value, leveldb::DB* db, string key)
 {
-    std::string result;
+    string result;
     leveldb::Status st = db->Get(s_defaultRoptions, key, &result);
     if(!st.ok()) {
         return -1;
@@ -152,41 +156,15 @@ int dbRead(std::string& value, leveldb::DB* db, std::string key)
     return 0;
 }
 
-class RefCount
-{
-public:
-    RefCount()
-    {
-        mMap[""] = 0;
-    }
-    std::map<std::string, int > mMap;
-    int GetCount(std::string str)
-    {
-        // lookup map
-        std::map<std::string, int >::iterator mapItr = mMap.find(str);
-        if(mapItr != mMap.end()){ 
-            mapItr->second++;
-            return mapItr->second;
-        }
-        mMap[str] = 0;
-        return 0;
-    }
-    const std::map<std::string, int >& GetTbl(void) const
-    {
-        return mMap;
-    }
-};
-
-static std::map<std::string, std::map<std::string, std::string> > s_usr2fileMap;
-std::map<std::string, std::string> s_refMap;
-RefCount s_refCount;
-void DbImplLevelDb::insert_ref_value(std::string usr, int usrId, std::string filename, int fileId, int nameId, int line, int col, int kind, int refFileId, int refLine, int refCol)
+static map<string, SsMap > s_usr2fileMap;
+SsMap s_refMap;
+void DbImplLevelDb::insert_ref_value(string usr, int usrId, string filename, int fileId, int nameId, int line, int col, int kind, int refFileId, int refLine, int refCol)
 {
     int len = snprintf(gCharBuff0, sizeof(gCharBuff0), "%d|%d|%d|%d|%d|%d|%d|%d",
             nameId, fileId, line, col, kind, refFileId, refLine, refCol);
-    std::map<std::string, std::string>::iterator itr = s_refMap.find(usr);
+    SsMap::iterator itr = s_refMap.find(usr);
     if(itr == s_refMap.end()){ 
-        s_refMap[usr] = std::string(gCharBuff0);
+        s_refMap[usr] = string(gCharBuff0);
     }
     else {
         s_refMap[usr] = itr->second + "," + gCharBuff0;
@@ -202,7 +180,7 @@ void DbImplLevelDb::insert_ref_value(std::string usr, int usrId, std::string fil
     s_wb.Put(gCharBuff0, gCharBuff1);
 }
 
-void DbImplLevelDb::insert_decl_value(std::string usr, int usrId, std::string filename, int fileId, int nameId, int line, int col, int entityKind, int val, int isVirtual, int isDef, int typeUsrId, int typeKind, int isPointer)
+void DbImplLevelDb::insert_decl_value(string usr, int usrId, string filename, int fileId, int nameId, int line, int col, int entityKind, int val, int isVirtual, int isDef, int typeUsrId, int typeKind, int isPointer)
 {
     int len0 = 0;
     int len1 = 0;
@@ -242,11 +220,11 @@ void DbImplLevelDb::insert_base_class_value(int classUsrId, int baseClassUsrId, 
 {
 }
 
-void DbImplLevelDb::addIdList(leveldb::WriteBatch* db, const std::map<std::string, int >& inMap, std::string tableName)
+void DbImplLevelDb::addIdList(leveldb::WriteBatch* db, const SiMap& inMap, string tableName)
 {
     // lookup map
-    std::map<std::string, int >::const_iterator end = inMap.end();
-    for(std::map<std::string, int >::const_iterator itr = inMap.begin();
+    SiMap::const_iterator end = inMap.end();
+    for(SiMap::const_iterator itr = inMap.begin();
             itr != end;
             itr++) {
         int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%d", tableName.c_str(), itr->second); 
@@ -257,14 +235,14 @@ void DbImplLevelDb::addIdList(leveldb::WriteBatch* db, const std::map<std::strin
     return ;
 }
 
-static std::map<std::string, std::string> s_file2fidMap;
-void addFilesToFileList(leveldb::DB* db, leveldb::WriteBatch* wb, const std::map<std::string, int >& inMap)
+static SsMap s_file2fidMap;
+void addFilesToFileList(leveldb::DB* db, leveldb::WriteBatch* wb, const SiMap& inMap)
 {
     char buf[1024];
     int startId = 0;
-    std::string valStr;
-    std::string keyFileCount = "file_count";
-    std::string keyFid2Cuid = "fid2cuid";
+    string valStr;
+    string keyFileCount = "file_count";
+    string keyFid2Cuid = "fid2cuid";
     int rv = dbRead(valStr, db, keyFileCount);
     if(rv < 0) {
         // key not found 
@@ -279,23 +257,23 @@ void addFilesToFileList(leveldb::DB* db, leveldb::WriteBatch* wb, const std::map
     }
 
     int id = startId;
-    std::map<std::string, int >::const_iterator end = inMap.end();
-    for(std::map<std::string, int >::const_iterator itr = inMap.begin();
+    SiMap::const_iterator end = inMap.end();
+    for(SiMap::const_iterator itr = inMap.begin();
             itr != end;
             itr++) {
-        std::string key = "file_list|" + itr->first;
+        string key = "file_list|" + itr->first;
         int rv = dbRead(valStr, db, key);
         if(rv < 0) {
             snprintf(buf, sizeof(buf), "%d", id);
-            dbWrite(db, key, s_compileUnitId + "," + std::string(buf));
+            dbWrite(db, key, s_compileUnitId + "," + string(buf));
             s_file2fidMap[itr->first] = buf;
-            dbWrite(db, keyFid2Cuid + "|" + std::string(buf), s_compileUnitId);
+            dbWrite(db, keyFid2Cuid + "|" + string(buf), s_compileUnitId);
             id++;
         }
         else {
             size_t pos = valStr.find(",");
-            assert(pos != std::string::npos);
-            std::string fid = valStr.substr(pos+1, valStr.size()-1);
+            assert(pos != string::npos);
+            string fid = valStr.substr(pos+1, valStr.size()-1);
             s_file2fidMap[itr->first] = fid;
             dbWrite(db, keyFid2Cuid + "|" + fid, s_compileUnitId);
         }
@@ -321,7 +299,7 @@ int dbClose(leveldb::DB*& db)
     return 0;
 }
 
-void DbImplLevelDb::fin(const std::map<std::string, int >& fileMap, const std::map<std::string, int >& usrMap, const std::map<std::string, int >& nameMap)
+void DbImplLevelDb::fin(const SiMap& fileMap, const SiMap& usrMap, const SiMap& nameMap)
 {
     clock_t clockStart = clock();
 
@@ -330,8 +308,8 @@ void DbImplLevelDb::fin(const std::map<std::string, int >& fileMap, const std::m
 #if 0
     {
         // lookup map
-        std::map<std::string, int >::const_iterator end = usrMap.end();
-        for(std::map<std::string, int >::const_iterator itr = usrMap.begin();
+        map<string, int >::const_iterator end = usrMap.end();
+        for(map<string, int >::const_iterator itr = usrMap.begin();
                 itr != end;
                 itr++) {
             int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s", "usr2id", itr->first.c_str()); 
@@ -361,7 +339,7 @@ void DbImplLevelDb::fin(const std::map<std::string, int >& fileMap, const std::m
         clock_t timeStart = clock();
         leveldb::DB* dbUsrDb = NULL;
         leveldb::WriteBatch wb_usrdb;
-        std::string curDir = s_dbDir + "/usr_db";
+        string curDir = s_dbDir + "/usr_db";
         if(!boost::filesystem::exists(curDir)) {
             if(!boost::filesystem::create_directory(curDir)) {
                 printf("ERROR: create directory: %s\n", curDir.c_str());
@@ -371,7 +349,7 @@ void DbImplLevelDb::fin(const std::map<std::string, int >& fileMap, const std::m
         const int k_usrDbDirNum = 8; 
         int cuId = atoi(s_compileUnitId.c_str());
         snprintf(gCharBuff0, sizeof(gCharBuff0), "%d", (cuId % k_usrDbDirNum)); 
-        curDir = curDir + "/" + std::string(gCharBuff0);
+        curDir = curDir + "/" + string(gCharBuff0);
         int rv = dbTryOpen(dbUsrDb, curDir);
         if(rv < 0) {
             printf("ERROR: fin: common db open: %s\n", curDir.c_str());
@@ -386,11 +364,11 @@ void DbImplLevelDb::fin(const std::map<std::string, int >& fileMap, const std::m
         timeArray[102] = 0;
         timeArray[103] = 0;
         int count = 0;
-        std::map<std::string, int >::const_iterator end = usrMap.end();
-        for(std::map<std::string, int >::const_iterator itr = usrMap.begin();
+        SiMap::const_iterator end = usrMap.end();
+        for(SiMap::const_iterator itr = usrMap.begin();
                 itr != end;
                 itr++) {
-            const std::string& usr = itr->first;
+            const string& usr = itr->first;
             size_t pos_global = usr.find("c:@", 0);
             size_t pos_macro = usr.find("c:macro", 0);
 #if 0
@@ -398,16 +376,16 @@ void DbImplLevelDb::fin(const std::map<std::string, int >& fileMap, const std::m
 #else
             if(usr != "" && (pos_global == 0 || pos_macro == 0)) {
 #endif
-                std::string value;
-                std::list<std::string> file_id_list;
+                string value;
+                list<string> file_id_list;
                 timeArray[8] = clock();
-                for(std::map<std::string, std::string>::iterator itr_file_list = s_usr2fileMap[usr].begin();
+                for(SsMap::iterator itr_file_list = s_usr2fileMap[usr].begin();
                         itr_file_list != s_usr2fileMap[usr].end();
                         itr_file_list++) {
                     file_id_list.push_back(s_file2fidMap[itr_file_list->first].c_str());
                 }
-                std::map<std::string ,int> file_list_map;
-                BOOST_FOREACH(std::string s, file_id_list) {
+                SiMap file_list_map;
+                BOOST_FOREACH(string s, file_id_list) {
                     file_list_map[s] = 0;
                 }
                 timeArray[9] = clock();
@@ -416,17 +394,17 @@ void DbImplLevelDb::fin(const std::map<std::string, int >& fileMap, const std::m
                 timeArray[0] = clock();
                 int rv = dbRead(value, dbUsrDb, "usr2file|" + usr);
                 timeArray[1] = clock();
-                std::string file_list_string = "";
+                string file_list_string = "";
                 if(rv == 0) {
-                    std::string delim = ",";
-                    std::list<std::string> old_list;
+                    string delim = ",";
+                    list<string> old_list;
                     boost::split(old_list, value, boost::is_any_of(delim));
-                    BOOST_FOREACH(std::string s, old_list) {
+                    BOOST_FOREACH(string s, old_list) {
                         file_list_map[s] = 0;
                     }
                 }
                 timeArray[2] = clock();
-                for(std::map<std::string, int>::iterator itr_str = file_list_map.begin();
+                for(SiMap::iterator itr_str = file_list_map.begin();
                         itr_str != file_list_map.end();
                         itr_str++) {
                     if(file_list_string == "") {
@@ -471,8 +449,8 @@ void DbImplLevelDb::fin(const std::map<std::string, int >& fileMap, const std::m
     addIdList(&s_wb, fileMap, "id2file");
     {
         // lookup map
-        std::map<std::string, int >::const_iterator end = fileMap.end();
-        for(std::map<std::string, int >::const_iterator itr = fileMap.begin();
+        SiMap::const_iterator end = fileMap.end();
+        for(SiMap::const_iterator itr = fileMap.begin();
                 itr != end;
                 itr++) {
             int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s", "file2id", itr->first.c_str()); 
@@ -484,8 +462,8 @@ void DbImplLevelDb::fin(const std::map<std::string, int >& fileMap, const std::m
 
     addIdList(&s_wb, nameMap, "id2name");
     // dump map
-    std::map<std::string, std::string>::const_iterator end = s_refMap.end();
-    for(std::map<std::string, std::string>::const_iterator itr = s_refMap.begin();
+    SsMap::const_iterator end = s_refMap.end();
+    for(SsMap::const_iterator itr = s_refMap.begin();
             itr != end;
             itr++) {
         if(itr->first != "") {

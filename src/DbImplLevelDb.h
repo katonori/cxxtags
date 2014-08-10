@@ -23,7 +23,6 @@ public:
     virtual void insert_base_class_value(int classUsrId, int baseClassUsrId, int line, int col, int accessibility);
     void addIdList(leveldb::WriteBatch* db, const std::map<std::string, int >& inMap, std::string tableName);
 private:
-private:
 };
 };
 

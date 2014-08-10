@@ -47,6 +47,15 @@ class HandlerBase:
     def Filename2CompileUnit(self, fn):
         DEBUG_PRINT("fn: " + fn)
         q = "file_list|" + fn
+        cuId, fileId = self.mFileListDb.get(q).split(",")
+        DEBUG_PRINT("q: " + str(q))
+        DEBUG_PRINT("cuId: " + str(cuId))
+        cuName = self.mFileListDb.get("id2cu|" + cuId)
+        return cuName, cuId
+
+    def GlobalFileId2CompileUnit(self, id):
+        DEBUG_PRINT("global fid: " + id)
+        q = "fid2cuid|" + id
         cuId = self.mFileListDb.get(q)
         DEBUG_PRINT("q: " + str(q))
         DEBUG_PRINT("cuId: " + str(cuId))
@@ -218,11 +227,13 @@ class QueryHandlerDef(HandlerBase):
     def GetDef(self, usr):
         cuIdList = []
         for db in self.mUsrDbList:
-            cuListTmp = db.get("usr2cuid|" + usr)
-            if cuListTmp:
-                cuIdList.extend(cuListTmp.split(","))
+            res = db.get("usr2file|" + usr)
+            if res:
+                for fid in res.split(","):
+                    name, cuid = self.GlobalFileId2CompileUnit(fid)
+                    cuIdList.append(cuid)
         if cuIdList == []:
-            print "ERROR: usr2cuid"
+            print "ERROR: usr2file: " + usr
             return None
 
         result = []
@@ -279,11 +290,13 @@ class QueryHandlerRef(HandlerBase):
     def GetAllRefs(self, usr):
         cuIdList = []
         for db in self.mUsrDbList:
-            cuListTmp = db.get("usr2cuid|" + usr)
-            if cuListTmp:
-                cuIdList.extend(cuListTmp.split(","))
+            res = db.get("usr2file|" + usr)
+            if res:
+                for fid in res.split(","):
+                    name, cuid = self.GlobalFileId2CompileUnit(fid)
+                    cuIdList.append(cuid)
         if cuIdList == []:
-            print "ERROR: usr2cuid"
+            print "ERROR: usr2file: " + usr
             return None
 
         prevTime = 0

@@ -180,6 +180,7 @@ class QueryHandlerDecl(HandlerBase):
                 name, fileName, line, col = result
                 self.PrintResult(name, fileName, line, col)
                 return True
+        # search def table in this compile unit
         return False
 
     def QueryDeclInfo(self, usr):
@@ -211,7 +212,9 @@ class QueryHandlerDef(HandlerBase):
     #
     # Handle Rquest for infomation about definition
     #
-    def DoQuery(self):
+    m_isOnlyMainCompileUnit = False
+    def DoQuery(self, isOnlyMainCompileUnit):
+        self.m_isOnlyMainCompileUnit = isOnlyMainCompileUnit
         if None == self.InitDb(self.m_srcFileName):
             print "ERROR: Db open"
             return None
@@ -226,12 +229,13 @@ class QueryHandlerDef(HandlerBase):
 
     def GetDef(self, usr):
         cuIdList = []
-        for db in self.mUsrDbList:
-            res = db.get("usr2file|" + usr)
-            if res:
-                for fid in res.split(","):
-                    name, cuid = self.GlobalFileId2CompileUnit(fid)
-                    cuIdList.append(cuid)
+        if self.m_isOnlyMainCompileUnit == False:
+            for db in self.mUsrDbList:
+                res = db.get("usr2file|" + usr)
+                if res:
+                    for fid in res.split(","):
+                        name, cuid = self.GlobalFileId2CompileUnit(fid)
+                        cuIdList.append(cuid)
         if cuIdList == []:
             #print "ERROR: usr2file: " + usr
             #return None
@@ -637,12 +641,12 @@ def main():
             DEBUG_PRINT("def start")
             handler = QueryHandlerDef(dbDir)
             handler.parseArg(argv[2:])
-            handler.DoQuery()
+            handler.DoQuery(True)
             handler.CloseDb()
     elif queryType == 'def': # get a definition
         handler = QueryHandlerDef(dbDir)
         handler.parseArg(argv[2:])
-        handler.DoQuery()
+        handler.DoQuery(False)
         handler.CloseDb()
     elif queryType == 'override': # get override information
         handler = QueryHandlerOverride(dbDir)

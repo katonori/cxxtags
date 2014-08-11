@@ -424,7 +424,6 @@ a_list = [
 # 13 5
 [
 "NS0|"+cur_dir+"/subdir/ns0.h|2|11|namespace NS0 {",
-"NS0|"+cur_dir+"/ns0.cpp|2|11|namespace NS0 {"
 ],
 [
 "NS0|"+cur_dir+"/subdir/ns0.h|2|11|namespace NS0 {",
@@ -450,7 +449,6 @@ a_list = [
 # 14 5
 [
 "NS1|"+cur_dir+"/ns1.h|2|11|namespace NS1 {",
-"NS1|"+cur_dir+"/subdir/ns1.cpp|2|11|namespace NS1 {",
 ],
 [
 "NS1|"+cur_dir+"/ns1.h|2|11|namespace NS1 {",
@@ -474,7 +472,6 @@ a_list = [
 # 15 5
 [
 "NS0|"+cur_dir+"/subdir/ns0.h|2|11|namespace NS0 {",
-"NS0|"+cur_dir+"/ns0.cpp|2|11|namespace NS0 {",
 ],
 [
 "NS0|"+cur_dir+"/subdir/ns0.h|2|11|namespace NS0 {",
@@ -501,7 +498,6 @@ a_list = [
 # 16 5
 [
 "NS1|"+cur_dir+"/ns1.h|2|11|namespace NS1 {",
-"NS1|"+cur_dir+"/subdir/ns1.cpp|2|11|namespace NS1 {",
 ],
 [
 "NS1|"+cur_dir+"/ns1.h|2|11|namespace NS1 {",
@@ -578,7 +574,7 @@ a_list = [
 # ns0.h
 # 2 11
 [
-"NS0|"+cur_dir+"/subdir/ns0.h|2|11|namespace NS0 {",
+#"NS0|"+cur_dir+"/subdir/ns0.h|2|11|namespace NS0 {",
 "NS0|"+cur_dir+"/ns0.cpp|2|11|namespace NS0 {",
 ],
 [
@@ -678,7 +674,7 @@ a_list = [
 # ns1.h
 # 2 11
 [
-"NS1|"+cur_dir+"/ns1.h|2|11|namespace NS1 {",
+#"NS1|"+cur_dir+"/ns1.h|2|11|namespace NS1 {",
 "NS1|"+cur_dir+"/subdir/ns1.cpp|2|11|namespace NS1 {",
 ],
 [
@@ -748,7 +744,7 @@ a_list = [
 # ns1.cpp
 # 2 11
 [
-"NS1|"+cur_dir+"/ns1.h|2|11|namespace NS1 {",
+#"NS1|"+cur_dir+"/ns1.h|2|11|namespace NS1 {",
 "NS1|"+cur_dir+"/subdir/ns1.cpp|2|11|namespace NS1 {",
 ],
 [
@@ -800,7 +796,7 @@ a_list = [
 # ns0.cpp
 # 2 11
 [
-"NS0|"+cur_dir+"/subdir/ns0.h|2|11|namespace NS0 {",
+#"NS0|"+cur_dir+"/subdir/ns0.h|2|11|namespace NS0 {",
 "NS0|"+cur_dir+"/ns0.cpp|2|11|namespace NS0 {",
 ],
 [

@@ -18,7 +18,9 @@ namespace cxxtags {
 using namespace std;
 
 typedef map<string, string> SsMap;
+typedef pair<string, string> SsPair;
 typedef map<string, int> SiMap;
+typedef pair<string, int> SiPair;
 
 static leveldb::DB* s_db;
 static leveldb::WriteBatch s_wb;
@@ -32,6 +34,7 @@ leveldb::WriteOptions s_defaultWoptions;
 leveldb::Options s_defaultOptions;
 
 static string s_compileUnitId;
+static IdTbl *fileIdTbl;
 
 void dbWrite(leveldb::DB* db, string key, string value);
 int dbRead(string& value, leveldb::DB* db, string key);
@@ -70,6 +73,7 @@ void DbImplLevelDb::init(string out_dir, string src_file_name, string excludeLis
 
     s_dbDir = out_dir;
     s_compileUnit = src_file_name;
+    fileIdTbl = new IdTbl();
 
     if(!boost::filesystem::exists(s_dbDir)) {
         if(!boost::filesystem::create_directory(s_dbDir)) {
@@ -158,8 +162,10 @@ int dbRead(string& value, leveldb::DB* db, string key)
 
 static map<string, SsMap > s_usr2fileMap;
 SsMap s_refMap;
-void DbImplLevelDb::insert_ref_value(string usr, int usrId, string filename, int fileId, int nameId, int line, int col, int kind, int refFileId, int refLine, int refCol)
+void DbImplLevelDb::insert_ref_value(string usr, int usrId, string filename, int nameId, int line, int col, int kind, std::string refFilename, int refLine, int refCol)
 {
+    int fileId = fileIdTbl->GetId(filename);
+    int refFileId = fileIdTbl->GetId(refFilename);
     int len = snprintf(gCharBuff0, sizeof(gCharBuff0), "%d|%d|%d|%d|%d|%d|%d|%d",
             nameId, fileId, line, col, kind, refFileId, refLine, refCol);
     SsMap::iterator itr = s_refMap.find(usr);
@@ -180,11 +186,12 @@ void DbImplLevelDb::insert_ref_value(string usr, int usrId, string filename, int
     s_wb.Put(gCharBuff0, gCharBuff1);
 }
 
-void DbImplLevelDb::insert_decl_value(string usr, int usrId, string filename, int fileId, int nameId, int line, int col, int entityKind, int val, int isVirtual, int isDef, int typeUsrId, int typeKind, int isPointer)
+void DbImplLevelDb::insert_decl_value(string usr, int usrId, string filename, int nameId, int line, int col, int entityKind, int val, int isVirtual, int isDef, int typeUsrId, int typeKind, int isPointer)
 {
     int len0 = 0;
     int len1 = 0;
     const char* keyPrefix = "usr2decl";
+    int fileId = fileIdTbl->GetId(filename);
     if(isDef) {
         keyPrefix = "usr2def";
         // usrId -> def info
@@ -212,8 +219,9 @@ void DbImplLevelDb::insert_decl_value(string usr, int usrId, string filename, in
     s_wb.Put(gCharBuff0, gCharBuff1);
 }
 
-void DbImplLevelDb::insert_overriden_value(int usrId, int nameId, int fileId, int line, int col, int entityKind, int usrIdOverrider, int isDef)
+void DbImplLevelDb::insert_overriden_value(int usrId, int nameId, int line, int col, int entityKind, int usrIdOverrider, int isDef)
 {
+    //int fileId = fileIdTbl->GetId(fileName);
 }
 
 void DbImplLevelDb::insert_base_class_value(int classUsrId, int baseClassUsrId, int line, int col, int accessibility)
@@ -223,13 +231,9 @@ void DbImplLevelDb::insert_base_class_value(int classUsrId, int baseClassUsrId, 
 void DbImplLevelDb::addIdList(leveldb::WriteBatch* db, const SiMap& inMap, string tableName)
 {
     // lookup map
-    SiMap::const_iterator end = inMap.end();
-    for(SiMap::const_iterator itr = inMap.begin();
-            itr != end;
-            itr++) {
-        int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%d", tableName.c_str(), itr->second); 
-        int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%s", itr->first.c_str());
-
+    BOOST_FOREACH(SiPair itr, inMap) {
+        int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%d", tableName.c_str(), itr.second); 
+        int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%s", itr.first.c_str());
         db->Put(gCharBuff0, gCharBuff1);
     }
     return ;
@@ -257,16 +261,13 @@ void addFilesToFileList(leveldb::DB* db, leveldb::WriteBatch* wb, const SiMap& i
     }
 
     int id = startId;
-    SiMap::const_iterator end = inMap.end();
-    for(SiMap::const_iterator itr = inMap.begin();
-            itr != end;
-            itr++) {
-        string key = "file_list|" + itr->first;
+    BOOST_FOREACH(SiPair itr, inMap) {
+        string key = "file_list|" + itr.first;
         int rv = dbRead(valStr, db, key);
         if(rv < 0) {
             snprintf(buf, sizeof(buf), "%d", id);
             dbWrite(db, key, s_compileUnitId + "," + string(buf));
-            s_file2fidMap[itr->first] = buf;
+            s_file2fidMap[itr.first] = buf;
             dbWrite(db, keyFid2Cuid + "|" + string(buf), s_compileUnitId);
             id++;
         }
@@ -274,7 +275,7 @@ void addFilesToFileList(leveldb::DB* db, leveldb::WriteBatch* wb, const SiMap& i
             size_t pos = valStr.find(",");
             assert(pos != string::npos);
             string fid = valStr.substr(pos+1, valStr.size()-1);
-            s_file2fidMap[itr->first] = fid;
+            s_file2fidMap[itr.first] = fid;
             dbWrite(db, keyFid2Cuid + "|" + fid, s_compileUnitId);
         }
     }
@@ -299,8 +300,9 @@ int dbClose(leveldb::DB*& db)
     return 0;
 }
 
-void DbImplLevelDb::fin(const SiMap& fileMap, const SiMap& usrMap, const SiMap& nameMap)
+void DbImplLevelDb::fin(const SiMap& usrMap, const SiMap& nameMap)
 {
+    const SiMap& fileMap = fileIdTbl->GetTbl();
     clock_t clockStart = clock();
 
     // usr
@@ -364,11 +366,8 @@ void DbImplLevelDb::fin(const SiMap& fileMap, const SiMap& usrMap, const SiMap& 
         timeArray[102] = 0;
         timeArray[103] = 0;
         int count = 0;
-        SiMap::const_iterator end = usrMap.end();
-        for(SiMap::const_iterator itr = usrMap.begin();
-                itr != end;
-                itr++) {
-            const string& usr = itr->first;
+        BOOST_FOREACH(SiPair itr, usrMap) {
+            const string& usr = itr.first;
             size_t pos_global = usr.find("c:@", 0);
             size_t pos_macro = usr.find("c:macro", 0);
 #if 0
@@ -376,13 +375,10 @@ void DbImplLevelDb::fin(const SiMap& fileMap, const SiMap& usrMap, const SiMap& 
 #else
             if(usr != "" && (pos_global == 0 || pos_macro == 0)) {
 #endif
-                string value;
                 list<string> file_id_list;
                 timeArray[8] = clock();
-                for(SsMap::iterator itr_file_list = s_usr2fileMap[usr].begin();
-                        itr_file_list != s_usr2fileMap[usr].end();
-                        itr_file_list++) {
-                    file_id_list.push_back(s_file2fidMap[itr_file_list->first].c_str());
+                BOOST_FOREACH(SsPair itr_file_list, s_usr2fileMap[usr]) {
+                    file_id_list.push_back(s_file2fidMap[itr_file_list.first].c_str());
                 }
                 SiMap file_list_map;
                 BOOST_FOREACH(string s, file_id_list) {
@@ -392,6 +388,7 @@ void DbImplLevelDb::fin(const SiMap& fileMap, const SiMap& usrMap, const SiMap& 
 
                 // check if already registered
                 timeArray[0] = clock();
+                string value;
                 int rv = dbRead(value, dbUsrDb, "usr2file|" + usr);
                 timeArray[1] = clock();
                 string file_list_string = "";
@@ -404,18 +401,16 @@ void DbImplLevelDb::fin(const SiMap& fileMap, const SiMap& usrMap, const SiMap& 
                     }
                 }
                 timeArray[2] = clock();
-                for(SiMap::iterator itr_str = file_list_map.begin();
-                        itr_str != file_list_map.end();
-                        itr_str++) {
+                BOOST_FOREACH(SiPair itr_str, file_list_map) {
                     if(file_list_string == "") {
-                        file_list_string = itr_str->first;
+                        file_list_string = itr_str.first;
                     }
                     else {
-                        file_list_string += ","+itr_str->first;
+                        file_list_string += ","+itr_str.first;
                     }
                 }
                 timeArray[3] = clock();
-                wb_usrdb.Put("usr2file|" + itr->first, file_list_string);
+                wb_usrdb.Put("usr2file|" + usr, file_list_string);
                 timeArray[4] = clock();
                 timeArray[100] += timeArray[9] - timeArray[8];
                 timeArray[101] += timeArray[2] - timeArray[0];
@@ -449,26 +444,19 @@ void DbImplLevelDb::fin(const SiMap& fileMap, const SiMap& usrMap, const SiMap& 
     addIdList(&s_wb, fileMap, "id2file");
     {
         // lookup map
-        SiMap::const_iterator end = fileMap.end();
-        for(SiMap::const_iterator itr = fileMap.begin();
-                itr != end;
-                itr++) {
-            int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s", "file2id", itr->first.c_str()); 
-            int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d", itr->second);
-
+        BOOST_FOREACH(SiPair itr, fileMap) {
+            int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s", "file2id", itr.first.c_str()); 
+            int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d", itr.second);
             s_wb.Put(gCharBuff0, gCharBuff1);
         }
     }
 
     addIdList(&s_wb, nameMap, "id2name");
     // dump map
-    SsMap::const_iterator end = s_refMap.end();
-    for(SsMap::const_iterator itr = s_refMap.begin();
-            itr != end;
-            itr++) {
-        if(itr->first != "") {
-            int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "usr2ref|%s|%s", itr->first.c_str(), s_compileUnitId.c_str()); 
-            s_wb.Put(gCharBuff0, itr->second);
+    BOOST_FOREACH(SsPair itr, s_refMap) {
+        if(itr.first != "") {
+            int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "usr2ref|%s|%s", itr.first.c_str(), s_compileUnitId.c_str()); 
+            s_wb.Put(gCharBuff0, itr.second);
         }
     }
     dbFlush(s_db, &s_wb);
@@ -476,6 +464,7 @@ void DbImplLevelDb::fin(const SiMap& fileMap, const SiMap& usrMap, const SiMap& 
 
     clock_t clockEnd = clock();
     printf("time: fin: %f sec\n", (clockEnd-clockStart)/(double)CLOCKS_PER_SEC);
+    delete fileIdTbl;
 }
 
 };

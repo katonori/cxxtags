@@ -35,6 +35,8 @@ leveldb::Options s_defaultOptions;
 
 static string s_compileUnitId;
 static IdTbl *fileIdTbl;
+static IdTbl *nameIdTbl;
+static IdTbl *usrIdTbl;
 
 void dbWrite(leveldb::DB* db, string key, string value);
 int dbRead(string& value, leveldb::DB* db, string key);
@@ -65,7 +67,7 @@ int dbTryOpen(leveldb::DB*& db, string dir)
     return 0;
 }
 
-void DbImplLevelDb::init(string out_dir, string src_file_name, string excludeList, int isPartial, int isSkel, const char* curDir, int argc, const char** argv)
+void DbImplLevelDb::init(const string& out_dir, const string& src_file_name, const string& excludeList, int isPartial, int isSkel, const char* curDir, int argc, const char** argv)
 {
     leveldb::DB* dbCommon = NULL;
     clock_t startTime = clock();
@@ -74,6 +76,8 @@ void DbImplLevelDb::init(string out_dir, string src_file_name, string excludeLis
     s_dbDir = out_dir;
     s_compileUnit = src_file_name;
     fileIdTbl = new IdTbl();
+    nameIdTbl = new IdTbl();
+    usrIdTbl = new IdTbl();
 
     if(!boost::filesystem::exists(s_dbDir)) {
         if(!boost::filesystem::create_directory(s_dbDir)) {
@@ -162,10 +166,12 @@ int dbRead(string& value, leveldb::DB* db, string key)
 
 static map<string, SsMap > s_usr2fileMap;
 SsMap s_refMap;
-void DbImplLevelDb::insert_ref_value(string usr, int usrId, string filename, int nameId, int line, int col, int kind, std::string refFilename, int refLine, int refCol)
+void DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, const string& name, int line, int col, int kind, const string& refFilename, int refLine, int refCol)
 {
     int fileId = fileIdTbl->GetId(filename);
     int refFileId = fileIdTbl->GetId(refFilename);
+    int nameId = nameIdTbl->GetId(name);
+    int usrId = usrIdTbl->GetId(usr);
     int len = snprintf(gCharBuff0, sizeof(gCharBuff0), "%d|%d|%d|%d|%d|%d|%d|%d",
             nameId, fileId, line, col, kind, refFileId, refLine, refCol);
     SsMap::iterator itr = s_refMap.find(usr);
@@ -186,12 +192,15 @@ void DbImplLevelDb::insert_ref_value(string usr, int usrId, string filename, int
     s_wb.Put(gCharBuff0, gCharBuff1);
 }
 
-void DbImplLevelDb::insert_decl_value(string usr, int usrId, string filename, int nameId, int line, int col, int entityKind, int val, int isVirtual, int isDef, int typeUsrId, int typeKind, int isPointer)
+void DbImplLevelDb::insert_decl_value(const string& usr, const string& filename, const string& name, int line, int col, int entityKind, int val, int isVirtual, int isDef, const string& typeUsr, int typeKind, int isPointer)
 {
     int len0 = 0;
     int len1 = 0;
     const char* keyPrefix = "usr2decl";
     int fileId = fileIdTbl->GetId(filename);
+    int nameId = nameIdTbl->GetId(name);
+    int usrId = usrIdTbl->GetId(usr);
+    int typeUsrId = usrIdTbl->GetId(typeUsr);
     if(isDef) {
         keyPrefix = "usr2def";
         // usrId -> def info
@@ -219,16 +228,17 @@ void DbImplLevelDb::insert_decl_value(string usr, int usrId, string filename, in
     s_wb.Put(gCharBuff0, gCharBuff1);
 }
 
-void DbImplLevelDb::insert_overriden_value(int usrId, int nameId, int line, int col, int entityKind, int usrIdOverrider, int isDef)
+void DbImplLevelDb::insert_overriden_value(const string& usr, const string& name, int line, int col, int entityKind, const string& usrOverrider, int isDef)
 {
     //int fileId = fileIdTbl->GetId(fileName);
+    //int nameId = nameIdTbl->GetId(name);
 }
 
-void DbImplLevelDb::insert_base_class_value(int classUsrId, int baseClassUsrId, int line, int col, int accessibility)
+void DbImplLevelDb::insert_base_class_value(const string& classUsr, const string& baseClassUsr, int line, int col, int accessibility)
 {
 }
 
-void DbImplLevelDb::addIdList(leveldb::WriteBatch* db, const SiMap& inMap, string tableName)
+void DbImplLevelDb::addIdList(leveldb::WriteBatch* db, const SiMap& inMap, const string& tableName)
 {
     // lookup map
     BOOST_FOREACH(SiPair itr, inMap) {
@@ -300,9 +310,11 @@ int dbClose(leveldb::DB*& db)
     return 0;
 }
 
-void DbImplLevelDb::fin(const SiMap& usrMap, const SiMap& nameMap)
+void DbImplLevelDb::fin(void)
 {
     const SiMap& fileMap = fileIdTbl->GetTbl();
+    const SiMap& nameMap = nameIdTbl->GetTbl();
+    const SiMap& usrMap = usrIdTbl->GetTbl();
     clock_t clockStart = clock();
 
     // usr
@@ -465,6 +477,8 @@ void DbImplLevelDb::fin(const SiMap& usrMap, const SiMap& nameMap)
     clock_t clockEnd = clock();
     printf("time: fin: %f sec\n", (clockEnd-clockStart)/(double)CLOCKS_PER_SEC);
     delete fileIdTbl;
+    delete nameIdTbl;
+    delete usrIdTbl;
 }
 
 };

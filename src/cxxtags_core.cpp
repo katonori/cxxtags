@@ -91,9 +91,6 @@ typedef struct {
   const char *CommentSchemaFile;
 } CommentXMLValidationData;
 
-static IdTbl *usrIdTbl;
-static IdTbl *nameIdTbl;
-
 // Table to keep which cursor types are to be tagged.
 #define AVAILABLE_TABLE_MAX 1024
 static char isCursorTypeAvailableTable[AVAILABLE_TABLE_MAX];
@@ -110,7 +107,7 @@ static inline char isCursorTypeAvailable(int val)
 #undef AVAILABLE_TABLE_MAX
 
 // get type information
-static void getCXTypeInfo(CXCursor& typeCur, int& typeUsrId, int& typeKind, int& isPointer, const CXType& inType)
+static void getCXTypeInfo(std::string& typeUsr, CXCursor& typeCur, int& typeKind, int& isPointer, const CXType& inType)
 {
     CXType cxType = clang_getCanonicalType(inType);
     if(cxType.kind == CXType_Pointer) {
@@ -120,7 +117,7 @@ static void getCXTypeInfo(CXCursor& typeCur, int& typeUsrId, int& typeKind, int&
     typeKind = cxType.kind;
     typeCur = clang_getTypeDeclaration(cxType);
     CXString cxTypeUSR = clang_getCursorUSR(typeCur);
-    typeUsrId = usrIdTbl->GetId(clang_getCString(cxTypeUSR));
+    typeUsr = clang_getCString(cxTypeUSR);
     clang_disposeString(cxTypeUSR);
 }
 
@@ -175,14 +172,13 @@ static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::strin
     int typeUsrId = 0;
     int isPointer = 0;
     int typeKind = 0;
+    std::string typeUsr;
     CXType curTypeOrig = clang_getCursorType(Cursor);
-    getCXTypeInfo(typeCur, typeUsrId, typeKind, isPointer, curTypeOrig);
-    int usrId = usrIdTbl->GetId(cUsr);
+    getCXTypeInfo(typeUsr, typeCur, typeKind, isPointer, curTypeOrig);
     if(gIsSkelton) {
         return;
     }
     int isDef = clang_isCursorDefinition(Cursor);
-    int nameId = nameIdTbl->GetId(name);
     //printf("decl: %s: %s, %s, %d, %d, kind=%d, typeKind=%d, typeKind2=%d\n", cUsr, name.c_str(), fileName.c_str(), line, column, kind, curTypeOrig.kind, typeKind);
     //
     // if the option '-p' is specified
@@ -202,7 +198,7 @@ static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::strin
         }
     }
     // insert to database
-    gDb->insert_decl_value(cUsr, usrId, fileName, nameId, line, column, kind, val, 0, isDef, typeUsrId, typeKind, isPointer);
+    gDb->insert_decl_value(cUsr, fileName, name, line, column, kind, val, 0, isDef, typeUsr, typeKind, isPointer);
 }
 
 // process declarations
@@ -213,15 +209,14 @@ static inline void procFuncDecl(const CXCursor& Cursor, const char* cUsr, std::s
     int typeUsrId = 0;
     int isPointer = 0;
     int typeKind = 0;
-    getCXTypeInfo(typeCur, typeUsrId, typeKind, isPointer, clang_getCursorResultType(Cursor));
-    int usrId = usrIdTbl->GetId(cUsr);
+    std::string typeUsr;
+    getCXTypeInfo(typeUsr, typeCur, typeKind, isPointer, clang_getCursorResultType(Cursor));
     if(gIsSkelton) {
         return;
     }
     int isDef = clang_isCursorDefinition(Cursor);
-    int nameId = nameIdTbl->GetId(name);
     // insert to database
-    gDb->insert_decl_value(cUsr, usrId, fileName, nameId, line, column, kind, 0, isVirt, isDef, typeUsrId, typeKind, isPointer);
+    gDb->insert_decl_value(cUsr, fileName, name, line, column, kind, 0, isVirt, isDef, typeUsr, typeKind, isPointer);
 }
 
 // process c++ method declarations
@@ -236,15 +231,12 @@ static inline void procCXXMethodDecl(const CXCursor& Cursor, const char* cUsr, s
         CXString cxRefUSR = clang_getCursorUSR(cursorOverridden[i]);
         const char *cRefUsr = clang_getCString(cxRefUSR);
         assert(cRefUsr);
-        int usrId = usrIdTbl->GetId(cUsr);
         if(gIsSkelton) {
             return;
         }
-        int refUsrId = usrIdTbl->GetId(cRefUsr);
         int isDef = clang_isCursorDefinition(Cursor);
-        int nameId = nameIdTbl->GetId(name);
         // insert information about overrides to database
-        gDb->insert_overriden_value(refUsrId, nameId, line, column, kind, usrId, isDef);
+        gDb->insert_overriden_value(cRefUsr, name, line, column, kind, cUsr, isDef);
     }
     int isVirt = clang_CXXMethod_isVirtual(Cursor);
     clang_disposeOverriddenCursors(cursorOverridden);
@@ -265,7 +257,6 @@ static inline void procRef(const CXCursor& Cursor, std::string name, std::string
         CXString cxRefUSR = clang_getCursorUSR(refCur);
         cUsr = clang_getCString(cxRefUSR);
         assert(cUsr);
-        int refUsrId = usrIdTbl->GetId(cUsr);
         if(gIsSkelton) {
             return;
         }
@@ -299,11 +290,9 @@ static inline void procRef(const CXCursor& Cursor, std::string name, std::string
             if(isInExcludeList(cRefFileName)) {
                 return;
             }
-            //refFid = fileIdTbl->GetId(cRefFileName);
         }
-        int nameId = nameIdTbl->GetId(name);
         // insert to database.
-        gDb->insert_ref_value(cUsr, refUsrId, fileName, nameId, line, column, kind, cRefFileName, ref_line, ref_column);
+        gDb->insert_ref_value(cUsr, fileName, name, line, column, kind, cRefFileName, ref_line, ref_column);
         clang_disposeString(cxRefUSR);
     }
 }
@@ -320,13 +309,11 @@ static inline void procCXXBaseClassInfo(const CXCursor& Cursor, std::string name
     cBaseUsr = clang_getCString(cxBaseUsr);
     int accessibility = clang_getCXXAccessSpecifier(Cursor);
     // convert to ID
-    int baseClassUsrId = usrIdTbl->GetId(cBaseUsr);
     if(gIsSkelton) {
         return;
     }
-    int classUsrId = usrIdTbl->GetId(gLastClassUsr);
     // insert to database
-    gDb->insert_base_class_value(classUsrId, baseClassUsrId, line, column, accessibility);
+    gDb->insert_base_class_value(gLastClassUsr, cBaseUsr, line, column, accessibility);
     clang_disposeString(cxBaseUsr);
 }
 
@@ -552,22 +539,10 @@ static int perform_test_load_source(int argc, const char **argv,
   setCursorTypeAvailable(CXCursor_OverloadedDeclRef);
   setCursorTypeAvailable(CXCursor_CXXBaseSpecifier);
 
-  usrIdTbl = new IdTbl();
-  nameIdTbl = new IdTbl();
-
   //gDb = reinterpret_cast<cxxtags::DbImplSqlite3*>(new cxxtags::DbImplSqlite3());
   gDb = reinterpret_cast<cxxtags::DbImplLevelDb*>(new cxxtags::DbImplLevelDb());
   gDb->init(out_dir, in_file_name, gExcludeListStr, gIsPartial, gIsSkelton, cur_dir, argc-1, argv+1);
 
-#if 0
-  if(gIsEmpty) {
-      result = 0;
-      // add the source file to the file list
-      fileIdTbl->GetId(in_file_name);
-      goto FUNC_END;
-  }
-#endif
-  
   Idx = clang_createIndex(/* excludeDeclsFromPCH */0,
                           /* displayDiagnosics=*/0);
 
@@ -588,9 +563,7 @@ FUNC_END:
   if(Idx) {
     clang_disposeIndex(Idx);
   }
-  gDb->fin(usrIdTbl->GetTbl(), nameIdTbl->GetTbl());
-  delete usrIdTbl;
-  delete nameIdTbl;
+  gDb->fin();
   return result;
 }
 

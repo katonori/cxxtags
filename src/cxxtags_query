@@ -252,7 +252,7 @@ class QueryHandlerDef(HandlerBase):
                 db = self.mDb
             else:
                 db = self.OpenDbId(cuId)
-            q = "usr2def|%s|%s"%(cuId, usr)
+            q = "usr2def|%s"%(usr)
             DEBUG_PRINT("q: " + q)
             DEBUG_PRINT("db: " + str(db))
             resDef = db.get(q)

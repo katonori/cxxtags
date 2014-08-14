@@ -33,6 +33,8 @@ leveldb::ReadOptions s_defaultRoptions;
 leveldb::WriteOptions s_defaultWoptions;
 leveldb::Options s_defaultOptions;
 
+const int k_usrDbDirNum = 4; 
+
 static string s_compileUnitId;
 static IdTbl *fileIdTbl;
 static IdTbl *nameIdTbl;
@@ -169,7 +171,7 @@ int dbRead(string& value, leveldb::DB* db, const string& key)
 }
 
 static map<string, SsMap > s_usr2fileMap;
-SsMap s_refMap;
+SsMap s_usr2refMap;
 void DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, const string& name, int line, int col)
 {
     int fileId = fileIdTbl->GetId(filename);
@@ -177,12 +179,12 @@ void DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, 
     int usrId = usrIdTbl->GetId(usr);
     int len = snprintf(gCharBuff0, sizeof(gCharBuff0), "%x|%x|%x|%x",
             nameId, fileId, line, col);
-    SsMap::iterator itr = s_refMap.find(usr);
-    if(itr == s_refMap.end()){ 
-        s_refMap[usr] = string(gCharBuff0);
+    SsMap::iterator itr = s_usr2refMap.find(usr);
+    if(itr == s_usr2refMap.end()){ 
+        s_usr2refMap[usr] = string(gCharBuff0);
     }
     else {
-        s_refMap[usr] = itr->second + "," + gCharBuff0;
+        s_usr2refMap[usr] = itr->second + "," + gCharBuff0;
     }
 
     if(usr != "") {
@@ -205,11 +207,8 @@ void DbImplLevelDb::insert_decl_value(const string& usr, const string& filename,
     int usrId = usrIdTbl->GetId(usr);
     if(isDef) {
         keyPrefix = "usr2def";
-        if(usr == "c:@C@CppCheckExecutor@F@check#I#*1*1C#") {
-            printf("MATCHED: %s, %s: %x, %x, %x, %x\n", s_compileUnit.c_str(), usr.c_str(), nameId, fileId, line, col);
-        }
         // usrId -> def info
-        len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s|%s", keyPrefix, s_compileUnitId.c_str(), usr.c_str()); 
+        len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s", keyPrefix, usr.c_str()); 
         len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x|%x|%x|%x",
                 nameId, fileId, line, col);
         s_wb.Put(gCharBuff0, gCharBuff1);
@@ -246,7 +245,7 @@ void DbImplLevelDb::insert_base_class_value(const string& classUsr, const string
 void DbImplLevelDb::addIdList(leveldb::WriteBatch* db, const SiMap& inMap, const string& tableName)
 {
     // lookup map
-    BOOST_FOREACH(SiPair itr, inMap) {
+    BOOST_FOREACH(const SiPair& itr, inMap) {
         int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%x", tableName.c_str(), itr.second); 
         int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%s", itr.first.c_str());
         db->Put(gCharBuff0, gCharBuff1);
@@ -278,7 +277,7 @@ void addFilesToFileList(leveldb::DB* db, leveldb::WriteBatch* wb, const SiMap& i
     }
 
     int id = startId;
-    BOOST_FOREACH(SiPair itr, inMap) {
+    BOOST_FOREACH(const SiPair& itr, inMap) {
         string fn = itr.first;
         string key = "file_list|" + fn;
         int rv = dbRead(valStr, db, key);
@@ -346,7 +345,6 @@ void DbImplLevelDb::fin(void)
     // update UsrDb
     // TODO: speed up this part
     {
-        clock_t timeStart = clock();
         leveldb::DB* dbUsrDb = NULL;
         leveldb::WriteBatch wb_usrdb;
         string curDir = s_dbDir + "/usr_db";
@@ -356,12 +354,26 @@ void DbImplLevelDb::fin(void)
                 return;
             }
         }
-        const int k_usrDbDirNum = 1; 
+        map<string, SiMap> usrFidMap;
+        BOOST_FOREACH(const SiPair& itr, usrMap) {
+            const string& usr = itr.first;
+            if(usr != "") {
+                SiMap& fidMap = usrFidMap[usr];
+                BOOST_FOREACH(const SsPair& itr_file_list, s_usr2fileMap[usr]) {
+                    fidMap[s_file2fidMap[itr_file_list.first]] = 0;
+                }
+            }
+        }
+
         char* errp = NULL;
         int cuId = strtol(s_compileUnitId.c_str(), &errp, 16);
         assert(*errp == '\0');
         snprintf(gCharBuff0, sizeof(gCharBuff0), "%x", (cuId % k_usrDbDirNum)); 
         curDir = curDir + "/" + string(gCharBuff0);
+
+        clock_t timeStart = clock();
+        //////
+        // open db
         int rv = dbTryOpen(dbUsrDb, curDir);
         if(rv < 0) {
             printf("ERROR: fin: common db open: %s\n", curDir.c_str());
@@ -375,8 +387,9 @@ void DbImplLevelDb::fin(void)
         timeArray[101] = 0;
         timeArray[102] = 0;
         timeArray[103] = 0;
+        timeArray[104] = 0;
         int count = 0;
-        BOOST_FOREACH(SiPair itr, usrMap) {
+        BOOST_FOREACH(const SiPair& itr, usrMap) {
             const string& usr = itr.first;
             size_t pos_global = usr.find("c:@", 0);
             size_t pos_macro = usr.find("c:macro", 0);
@@ -385,15 +398,8 @@ void DbImplLevelDb::fin(void)
 #else
             if(usr != "" && (pos_global == 0 || pos_macro == 0)) {
 #endif
-                list<string> file_id_list;
                 timeArray[8] = clock();
-                BOOST_FOREACH(SsPair itr_file_list, s_usr2fileMap[usr]) {
-                    file_id_list.push_back(s_file2fidMap[itr_file_list.first].c_str());
-                }
-                SiMap file_list_map;
-                BOOST_FOREACH(string s, file_id_list) {
-                    file_list_map[s] = 0;
-                }
+                SiMap& file_list_map = usrFidMap[usr];
                 timeArray[9] = clock();
 
                 // check if already registered
@@ -401,24 +407,20 @@ void DbImplLevelDb::fin(void)
                 string value;
                 int rv = dbRead(value, dbUsrDb, "usr2file|" + usr);
                 timeArray[1] = clock();
-                string file_list_string = "";
                 if(rv == 0) {
-                    string delim = ",";
+                    const string delim = ",";
                     list<string> old_list;
                     boost::split(old_list, value, boost::is_any_of(delim));
-                    BOOST_FOREACH(string s, old_list) {
+                    BOOST_FOREACH(const string& s, old_list) {
                         file_list_map[s] = 0;
                     }
                 }
                 timeArray[2] = clock();
-                BOOST_FOREACH(SiPair itr_str, file_list_map) {
-                    if(file_list_string == "") {
-                        file_list_string = itr_str.first;
-                    }
-                    else {
-                        file_list_string += ","+itr_str.first;
-                    }
+                string file_list_string = "";
+                BOOST_FOREACH(const SiPair& itr_str, file_list_map) {
+                    file_list_string += itr_str.first+",";
                 }
+                file_list_string = file_list_string.substr(0, file_list_string.size()-1);
                 timeArray[3] = clock();
                 wb_usrdb.Put("usr2file|" + usr, file_list_string);
                 timeArray[4] = clock();
@@ -426,6 +428,7 @@ void DbImplLevelDb::fin(void)
                 timeArray[101] += timeArray[2] - timeArray[0];
                 timeArray[102] += timeArray[3] - timeArray[2];
                 timeArray[103] += timeArray[1] - timeArray[0];
+                timeArray[104] += timeArray[2] - timeArray[1];
                 count++;
             }
         }
@@ -433,6 +436,8 @@ void DbImplLevelDb::fin(void)
         dbFlush(dbUsrDb, &wb_usrdb);
         timeArray[6] = clock();
         dbClose(dbUsrDb);
+        // close db
+        //////
         timeArray[7] = clock();
         clock_t timeEnd = clock();
         printf("time: 0-1: %f ms\n", (timeArray[1]-timeArray[0])*1000.0/CLOCKS_PER_SEC);
@@ -448,13 +453,14 @@ void DbImplLevelDb::fin(void)
         printf("time: 101: %f ms\n", (timeArray[101])*1000.0/CLOCKS_PER_SEC);
         printf("time: 102: %f ms\n", (timeArray[102])*1000.0/CLOCKS_PER_SEC);
         printf("time: 103: %f ms\n", (timeArray[103])*1000.0/CLOCKS_PER_SEC);
+        printf("time: 104: %f ms\n", (timeArray[104])*1000.0/CLOCKS_PER_SEC);
         printf("time: %d times\n", count);
     }
 
     addIdList(&s_wb, fileMap, "id2file");
     {
         // lookup map
-        BOOST_FOREACH(SiPair itr, fileMap) {
+        BOOST_FOREACH(const SiPair& itr, fileMap) {
             int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s", "file2id", itr.first.c_str()); 
             int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", itr.second);
             s_wb.Put(gCharBuff0, gCharBuff1);
@@ -463,9 +469,10 @@ void DbImplLevelDb::fin(void)
 
     addIdList(&s_wb, nameMap, "id2name");
     // dump map
-    BOOST_FOREACH(SsPair itr, s_refMap) {
-        if(itr.first != "") {
-            int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "usr2ref|%s|%s", itr.first.c_str(), s_compileUnitId.c_str()); 
+    BOOST_FOREACH(const SsPair& itr, s_usr2refMap) {
+        const string& usr = itr.first;
+        if(usr != "") {
+            int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "usr2ref|%s|%s", usr.c_str(), s_compileUnitId.c_str()); 
             s_wb.Put(gCharBuff0, itr.second);
         }
     }

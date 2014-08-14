@@ -2,45 +2,12 @@
 
 import sys
 import os
-import sqlite3
 sys.path.append("../../src/")
 sys.path.append("../util/")
 import commands
+import common
 
 CXXTAGS_QUERY = "../../bin/cxxtags_query"
-
-g_err = 0
-g_testCount = 0
-
-def test_one(q, a):
-    global g_err
-    global g_testCount
-    (rv, out) = commands.getstatusoutput(CXXTAGS_QUERY + " " + q)
-    #print out
-    if rv != 0:
-        print "ERROR: rv = %d"%(rv)
-        print "    q = ", q
-        g_err += 1
-    else:
-        outList = list(set(out.split("\n")))
-        outList.sort()
-        a.sort()
-        if len(outList) != len(a):
-            print "ERROR: len out=%d, ref=%d"%(len(outList), len(a))
-            print "ERROR: q: " + q
-            g_err += 1
-        i = 0
-        while i < len(outList):
-            if outList[i] != a[i]:
-                print q
-                print "DIFFER:"
-                print "    ", outList[i]
-                print "    ", a[i]
-                g_err += 1
-            i += 1
-        if g_err == 0:
-            #print "OK: " + q
-            g_testCount += 1
 
 if len(sys.argv) != 2:
     print "usage: cmd db_file"
@@ -48,9 +15,6 @@ if len(sys.argv) != 2:
 
 cur_dir = os.getcwd()
 db_dir = sys.argv[1]
-
-decl_col = "name_list.name, file_list.name, decl.line, decl.col, decl.kind, decl.val, decl.is_virtual, decl.is_def, usr_list_type.name, type_kind, is_pointer"
-ref_col = "name_list.name, file_list.name, ref.line, ref.col, ref.kind, ref_file_list.name, ref.ref_line, ref.ref_col"
 
 q_list = [
 # main.cpp
@@ -919,13 +883,15 @@ a_list = [
 ],
 ]
 
+err = 0
+
 i = 0
 for q in q_list:
-    test_one(q, a_list[i])
+    err += common.test_one(q, a_list[i])
     i+=1
-if g_err == 0:
+if err == 0:
     print "OK"
 else:
-    print "ERR: %d"%(g_err)
+    print "ERR: %d"%(err)
 
-exit(g_err)
+exit(err)

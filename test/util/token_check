@@ -18,7 +18,9 @@ keywords = [
 "return",
 "static",
 "virtual",
+"namespace",
 "void",
+"enum",
 ]
 
 class FIN(Exception):
@@ -61,7 +63,9 @@ def proc_file(fn):
                 if m:
                     val = m.group()
                     if val not in keywords:
-                        print "\"SELECT \"+ref_col+\" WHERE line=%d and col=%d and file_list.name='\"+cur_dir+\"/%s'\", #%s"%(line_no, idx+1, sys.argv[1], val)
+                        #print "\"SELECT \"+ref_col+\" WHERE line=%d and col=%d and file_list.name='\"+cur_dir+\"/%s'\", #%s"%(line_no, idx+1, sys.argv[1], val)
+                        #"decl " + db_dir + " " + cur_dir + "/main.cpp 5 9"
+                        print '"decl "+db_dir+" "+cur_dir+"/%s %d %d", #%s'%(sys.argv[1], line_no, idx+1, val)
                     raise FIN
                 # find string
                 m = re.search("^\"[^\"]+\"", line[idx:line_len-1])

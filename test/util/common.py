@@ -102,3 +102,29 @@ def DoRefTest(test_data_list_ref, test_data_list_decl):
             i+=1
     return err
 
+def test_one(q, a):
+    result = 0
+    (rv, out) = commands.getstatusoutput(CXXTAGS_QUERY + " " + q)
+    #print out
+    if rv != 0:
+        print "ERROR: rv = %d"%(rv)
+        print "    q = ", q
+        result += 1
+    else:
+        outList = list(set(out.split("\n")))
+        outList.sort()
+        a.sort()
+        if len(outList) != len(a):
+            print "ERROR: len out=%d, ref=%d"%(len(outList), len(a))
+            print "ERROR: q: " + q
+            result += 1
+        i = 0
+        while i < len(outList):
+            if outList[i] != a[i]:
+                print q
+                print "DIFFER:"
+                print "    ", outList[i]
+                print "    ", a[i]
+                result += 1
+            i += 1
+    return result

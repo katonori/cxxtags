@@ -148,8 +148,9 @@ class HandlerBase:
             db.close()
 
     def PrintResult(self, name, fileName, line, col):
-        DEBUG_PRINT("res: " + str(name) + OUTPUT_DELIMITER + str(fileName) + OUTPUT_DELIMITER + str(line) + OUTPUT_DELIMITER + str(col))
-        print str(name) + OUTPUT_DELIMITER + str(fileName) + OUTPUT_DELIMITER + str(line) + OUTPUT_DELIMITER + str(col) + OUTPUT_DELIMITER + str(cxxtags_util.get_line_from_file(fileName, line))
+        lineInt = int(line, 16)
+        colInt = int(col, 16)
+        print str(name) + OUTPUT_DELIMITER + str(fileName) + OUTPUT_DELIMITER + str(lineInt) + OUTPUT_DELIMITER + str(colInt) + OUTPUT_DELIMITER + str(cxxtags_util.get_line_from_file(fileName, lineInt))
 
 def id2name(db, id):
     result = db.get("id2name|%s"%(str(id)))
@@ -183,8 +184,8 @@ class QueryHandlerDecl(HandlerBase):
         # search def table in this compile unit
         return False
 
-    def QueryDeclInfo(self, usr):
-        decl = self.mDb.get("usr2decl|%s"%(usr))
+    def QueryDeclInfo(self, usrId):
+        decl = self.mDb.get("usr2decl|%s"%(usrId))
         DEBUG_PRINT("decl: " + str(decl))
         if decl:
             declList = decl.split("|")
@@ -205,6 +206,8 @@ class QueryHandlerDecl(HandlerBase):
             usage()
             sys.exit(1)
         self.m_srcFileName, self.m_lineNo, self.m_colNo = argv
+        self.m_lineNo = format(int(self.m_lineNo), 'x')
+        self.m_colNo = format(int(self.m_colNo), 'x')
         self.m_srcFileName = os.path.abspath(self.m_srcFileName)
         DEBUG_PRINT("src: " + self.m_srcFileName)
 
@@ -233,8 +236,10 @@ class QueryHandlerDef(HandlerBase):
             for db in self.mUsrDbList:
                 res = db.get("usr2file|" + usr)
                 if res:
+                    DEBUG_PRINT("usr2file: " +  res)
                     for fid in res.split(","):
                         name, cuid = self.GlobalFileId2CompileUnit(fid)
+                        DEBUG_PRINT("cu: " + name + "," + str(cuid))
                         cuIdList.append(cuid)
         if cuIdList == []:
             #print "ERROR: usr2file: " + usr
@@ -273,6 +278,8 @@ class QueryHandlerDef(HandlerBase):
             usage()
             sys.exit(1)
         self.m_srcFileName, self.m_lineNo, self.m_colNo = argv
+        self.m_lineNo = format(int(self.m_lineNo), 'x')
+        self.m_colNo = format(int(self.m_colNo), 'x')
         self.m_srcFileName = os.path.abspath(self.m_srcFileName)
 
 class QueryHandlerRef(HandlerBase):
@@ -344,6 +351,8 @@ class QueryHandlerRef(HandlerBase):
             usage()
             sys.exit(1)
         self.m_srcFileName, self.m_lineNo, self.m_colNo = argv
+        self.m_lineNo = format(int(self.m_lineNo), 'x')
+        self.m_colNo = format(int(self.m_colNo), 'x')
 
 class QueryHandlerOverride(HandlerBase):
     #

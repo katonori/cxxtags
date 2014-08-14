@@ -38,7 +38,7 @@ static IdTbl *fileIdTbl;
 static IdTbl *nameIdTbl;
 static IdTbl *usrIdTbl;
 
-void dbWrite(leveldb::DB* db, const string& key, const string& value);
+int dbWrite(leveldb::DB* db, const string& key, const string& value);
 int dbRead(string& value, leveldb::DB* db, const string& key);
 int dbClose(leveldb::DB*& db);
 int dbTryOpen(leveldb::DB*& db);
@@ -115,8 +115,10 @@ void DbImplLevelDb::init(const string& out_dir, const string& src_file_name, con
         else if(rv == 0) {
             char buf[1024];
             s_compileUnitId = value;
-            int id = atoi(s_compileUnitId.c_str());
-            snprintf(buf, sizeof(buf), "%d", id+1);
+            char* errp = NULL;
+            int id = strtol(s_compileUnitId.c_str(), &errp, 16);
+            assert(*errp == '\0');
+            snprintf(buf, sizeof(buf), "%x", id+1);
             dbWrite(dbCommon, keyFileCount, buf);
         }
         else {
@@ -144,13 +146,15 @@ void DbImplLevelDb::init(const string& out_dir, const string& src_file_name, con
     //printf("time: init: %f sec\n", (endTime-startTime)/(double)CLOCKS_PER_SEC);
 }
 
-void dbWrite(leveldb::DB* db, const string& key, const string& value)
+int dbWrite(leveldb::DB* db, const string& key, const string& value)
 {
     leveldb::Status st = db->Put(s_defaultWoptions, key, value);
     // TODO: add error handling
     if (!st.ok()) {
         fprintf(stderr, "Write fail.: %s\n", st.ToString().c_str());
+        return -1;
     }
+    return 0;
 }
 
 int dbRead(string& value, leveldb::DB* db, const string& key)
@@ -171,7 +175,7 @@ void DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, 
     int fileId = fileIdTbl->GetId(filename);
     int nameId = nameIdTbl->GetId(name);
     int usrId = usrIdTbl->GetId(usr);
-    int len = snprintf(gCharBuff0, sizeof(gCharBuff0), "%d|%d|%d|%d",
+    int len = snprintf(gCharBuff0, sizeof(gCharBuff0), "%x|%x|%x|%x",
             nameId, fileId, line, col);
     SsMap::iterator itr = s_refMap.find(usr);
     if(itr == s_refMap.end()){ 
@@ -186,8 +190,8 @@ void DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, 
     }
 
     // pos -> usr
-    int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "pos2usr|%d|%d|%d", fileId,  line, col);
-    int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d", usrId);
+    int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "pos2usr|%x|%x|%x", fileId,  line, col);
+    int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", usrId);
     s_wb.Put(gCharBuff0, gCharBuff1);
 }
 
@@ -201,17 +205,20 @@ void DbImplLevelDb::insert_decl_value(const string& usr, const string& filename,
     int usrId = usrIdTbl->GetId(usr);
     if(isDef) {
         keyPrefix = "usr2def";
+        if(usr == "c:@C@CppCheckExecutor@F@check#I#*1*1C#") {
+            printf("MATCHED: %s, %s: %x, %x, %x, %x\n", s_compileUnit.c_str(), usr.c_str(), nameId, fileId, line, col);
+        }
         // usrId -> def info
         len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s|%s", keyPrefix, s_compileUnitId.c_str(), usr.c_str()); 
-        len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d|%d|%d|%d",
+        len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x|%x|%x|%x",
                 nameId, fileId, line, col);
         s_wb.Put(gCharBuff0, gCharBuff1);
-        //printf("%s, %s, %s, %d, %d\n", s_compileUnit.c_str(), usr.c_str(), filename.c_str(), line, col);
+        //printf("%s, %s, %s, %x, %x\n", s_compileUnit.c_str(), usr.c_str(), filename.c_str(), line, col);
     }
     else {
         // usrId -> decl info
-        len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%d", keyPrefix, usrId); 
-        len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d|%d|%d|%d",
+        len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%x", keyPrefix, usrId); 
+        len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x|%x|%x|%x",
                 nameId, fileId, line, col);
         s_wb.Put(gCharBuff0, gCharBuff1);
     }
@@ -221,8 +228,8 @@ void DbImplLevelDb::insert_decl_value(const string& usr, const string& filename,
     }
 
     // pos -> usr
-    len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "pos2usr|%d|%d|%d", fileId, line, col); 
-    len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d", usrId);
+    len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "pos2usr|%x|%x|%x", fileId, line, col); 
+    len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", usrId);
     s_wb.Put(gCharBuff0, gCharBuff1);
 }
 
@@ -240,7 +247,7 @@ void DbImplLevelDb::addIdList(leveldb::WriteBatch* db, const SiMap& inMap, const
 {
     // lookup map
     BOOST_FOREACH(SiPair itr, inMap) {
-        int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%d", tableName.c_str(), itr.second); 
+        int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%x", tableName.c_str(), itr.second); 
         int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%s", itr.first.c_str());
         db->Put(gCharBuff0, gCharBuff1);
     }
@@ -262,7 +269,9 @@ void addFilesToFileList(leveldb::DB* db, leveldb::WriteBatch* wb, const SiMap& i
         startId = 0;
     }
     else if(rv == 0) {
-        startId = atoi(valStr.c_str());
+        char* errp = NULL;
+        startId = strtol(valStr.c_str(), &errp, 16);
+        assert(*errp == '\0');
     }
     else {
         printf("ERROR: db info\n");
@@ -270,24 +279,27 @@ void addFilesToFileList(leveldb::DB* db, leveldb::WriteBatch* wb, const SiMap& i
 
     int id = startId;
     BOOST_FOREACH(SiPair itr, inMap) {
-        string key = "file_list|" + itr.first;
+        string fn = itr.first;
+        string key = "file_list|" + fn;
         int rv = dbRead(valStr, db, key);
         if(rv < 0) {
-            snprintf(buf, sizeof(buf), "%d", id);
+            snprintf(buf, sizeof(buf), "%x", id);
             dbWrite(db, key, s_compileUnitId + "," + string(buf));
-            s_file2fidMap[itr.first] = buf;
+            s_file2fidMap[fn] = buf;
             dbWrite(db, keyFid2Cuid + "|" + string(buf), s_compileUnitId);
             id++;
         }
         else {
+            // get fid
             size_t pos = valStr.find(",");
             assert(pos != string::npos);
             string fid = valStr.substr(pos+1, valStr.size()-1);
-            s_file2fidMap[itr.first] = fid;
+            // set fid to map
+            s_file2fidMap[fn] = fid;
             dbWrite(db, keyFid2Cuid + "|" + fid, s_compileUnitId);
         }
     }
-    snprintf(buf, sizeof(buf), "%d", id);
+    snprintf(buf, sizeof(buf), "%x", id);
     dbWrite(db, keyFileCount, buf);
 }
 
@@ -317,20 +329,6 @@ void DbImplLevelDb::fin(void)
 
     // usr
     addIdList(&s_wb, usrMap, "id2usr");
-#if 0
-    {
-        // lookup map
-        map<string, int >::const_iterator end = usrMap.end();
-        for(map<string, int >::const_iterator itr = usrMap.begin();
-                itr != end;
-                itr++) {
-            int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s", "usr2id", itr->first.c_str()); 
-            int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d", itr->second);
-
-            s_wb.Put(gCharBuff0, gCharBuff1);
-        }
-    }
-#endif
 
     {
         leveldb::WriteBatch wb_common;
@@ -358,9 +356,11 @@ void DbImplLevelDb::fin(void)
                 return;
             }
         }
-        const int k_usrDbDirNum = 8; 
-        int cuId = atoi(s_compileUnitId.c_str());
-        snprintf(gCharBuff0, sizeof(gCharBuff0), "%d", (cuId % k_usrDbDirNum)); 
+        const int k_usrDbDirNum = 1; 
+        char* errp = NULL;
+        int cuId = strtol(s_compileUnitId.c_str(), &errp, 16);
+        assert(*errp == '\0');
+        snprintf(gCharBuff0, sizeof(gCharBuff0), "%x", (cuId % k_usrDbDirNum)); 
         curDir = curDir + "/" + string(gCharBuff0);
         int rv = dbTryOpen(dbUsrDb, curDir);
         if(rv < 0) {
@@ -456,7 +456,7 @@ void DbImplLevelDb::fin(void)
         // lookup map
         BOOST_FOREACH(SiPair itr, fileMap) {
             int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s", "file2id", itr.first.c_str()); 
-            int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d", itr.second);
+            int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", itr.second);
             s_wb.Put(gCharBuff0, gCharBuff1);
         }
     }

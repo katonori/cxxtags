@@ -188,7 +188,7 @@ class QueryHandlerDecl(HandlerBase):
         DEBUG_PRINT("decl: " + str(decl))
         if decl:
             declList = decl.split("|")
-            nameId, fileId, line, col, entityKind, val, isVirtual, typeUsrId, typeKind, isPointer = tuple(declList)
+            nameId, fileId, line, col = tuple(declList)
             fileName = id2file(self.mDb, fileId)
             if fileName == None:
                 print "ERROR: id2file: " + str(fileId) + "," + str(self.m_cuId)
@@ -254,7 +254,7 @@ class QueryHandlerDef(HandlerBase):
             DEBUG_PRINT("def: " + str(resDef))
             if resDef:
                 defList = resDef.split("|")
-                nameId, fileId, line, col, entityKind, val, isVirtual, typeUsrId, typeKind, isPointer = tuple(defList)
+                nameId, fileId, line, col = tuple(defList)
                 name = id2name(db, nameId)
                 if name == None:
                     print("ERRRO: name lookup failed: " + str(fileId))
@@ -322,7 +322,7 @@ class QueryHandlerRef(HandlerBase):
             if rv:
                 rvList = rv.split(",")
                 for rv in rvList:
-                    nameId, fileId, line, col, kind, refFileId, refLine, refCol = \
+                    nameId, fileId, line, col = \
                             rv.split("|")
                     name = id2name(db, nameId)
                     if name == None:

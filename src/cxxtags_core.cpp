@@ -198,7 +198,7 @@ static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::strin
         }
     }
     // insert to database
-    gDb->insert_decl_value(cUsr, fileName, name, line, column, kind, val, 0, isDef, typeUsr, typeKind, isPointer);
+    gDb->insert_decl_value(cUsr, fileName, name, line, column, isDef);
 }
 
 // process declarations
@@ -216,7 +216,7 @@ static inline void procFuncDecl(const CXCursor& Cursor, const char* cUsr, std::s
     }
     int isDef = clang_isCursorDefinition(Cursor);
     // insert to database
-    gDb->insert_decl_value(cUsr, fileName, name, line, column, kind, 0, isVirt, isDef, typeUsr, typeKind, isPointer);
+    gDb->insert_decl_value(cUsr, fileName, name, line, column, isDef);
 }
 
 // process c++ method declarations
@@ -236,7 +236,7 @@ static inline void procCXXMethodDecl(const CXCursor& Cursor, const char* cUsr, s
         }
         int isDef = clang_isCursorDefinition(Cursor);
         // insert information about overrides to database
-        gDb->insert_overriden_value(cRefUsr, name, line, column, kind, cUsr, isDef);
+        gDb->insert_overriden_value(cRefUsr, name, line, column, cUsr, isDef);
     }
     int isVirt = clang_CXXMethod_isVirtual(Cursor);
     clang_disposeOverriddenCursors(cursorOverridden);
@@ -292,7 +292,7 @@ static inline void procRef(const CXCursor& Cursor, std::string name, std::string
             }
         }
         // insert to database.
-        gDb->insert_ref_value(cUsr, fileName, name, line, column, kind, cRefFileName, ref_line, ref_column);
+        gDb->insert_ref_value(cUsr, fileName, name, line, column);
         clang_disposeString(cxRefUSR);
     }
 }

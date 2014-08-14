@@ -38,8 +38,8 @@ static IdTbl *fileIdTbl;
 static IdTbl *nameIdTbl;
 static IdTbl *usrIdTbl;
 
-void dbWrite(leveldb::DB* db, string key, string value);
-int dbRead(string& value, leveldb::DB* db, string key);
+void dbWrite(leveldb::DB* db, const string& key, const string& value);
+int dbRead(string& value, leveldb::DB* db, const string& key);
 int dbClose(leveldb::DB*& db);
 int dbTryOpen(leveldb::DB*& db);
 
@@ -144,7 +144,7 @@ void DbImplLevelDb::init(const string& out_dir, const string& src_file_name, con
     //printf("time: init: %f sec\n", (endTime-startTime)/(double)CLOCKS_PER_SEC);
 }
 
-void dbWrite(leveldb::DB* db, string key, string value)
+void dbWrite(leveldb::DB* db, const string& key, const string& value)
 {
     leveldb::Status st = db->Put(s_defaultWoptions, key, value);
     // TODO: add error handling
@@ -153,7 +153,7 @@ void dbWrite(leveldb::DB* db, string key, string value)
     }
 }
 
-int dbRead(string& value, leveldb::DB* db, string key)
+int dbRead(string& value, leveldb::DB* db, const string& key)
 {
     string result;
     leveldb::Status st = db->Get(s_defaultRoptions, key, &result);
@@ -166,14 +166,13 @@ int dbRead(string& value, leveldb::DB* db, string key)
 
 static map<string, SsMap > s_usr2fileMap;
 SsMap s_refMap;
-void DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, const string& name, int line, int col, int kind, const string& refFilename, int refLine, int refCol)
+void DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, const string& name, int line, int col)
 {
     int fileId = fileIdTbl->GetId(filename);
-    int refFileId = fileIdTbl->GetId(refFilename);
     int nameId = nameIdTbl->GetId(name);
     int usrId = usrIdTbl->GetId(usr);
-    int len = snprintf(gCharBuff0, sizeof(gCharBuff0), "%d|%d|%d|%d|%d|%d|%d|%d",
-            nameId, fileId, line, col, kind, refFileId, refLine, refCol);
+    int len = snprintf(gCharBuff0, sizeof(gCharBuff0), "%d|%d|%d|%d",
+            nameId, fileId, line, col);
     SsMap::iterator itr = s_refMap.find(usr);
     if(itr == s_refMap.end()){ 
         s_refMap[usr] = string(gCharBuff0);
@@ -192,7 +191,7 @@ void DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, 
     s_wb.Put(gCharBuff0, gCharBuff1);
 }
 
-void DbImplLevelDb::insert_decl_value(const string& usr, const string& filename, const string& name, int line, int col, int entityKind, int val, int isVirtual, int isDef, const string& typeUsr, int typeKind, int isPointer)
+void DbImplLevelDb::insert_decl_value(const string& usr, const string& filename, const string& name, int line, int col, int isDef)
 {
     int len0 = 0;
     int len1 = 0;
@@ -200,21 +199,20 @@ void DbImplLevelDb::insert_decl_value(const string& usr, const string& filename,
     int fileId = fileIdTbl->GetId(filename);
     int nameId = nameIdTbl->GetId(name);
     int usrId = usrIdTbl->GetId(usr);
-    int typeUsrId = usrIdTbl->GetId(typeUsr);
     if(isDef) {
         keyPrefix = "usr2def";
         // usrId -> def info
         len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s|%s", keyPrefix, s_compileUnitId.c_str(), usr.c_str()); 
-        len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d|%d|%d|%d|%d|%d|%d|%d|%d|%d",
-                nameId, fileId, line, col, entityKind, val, isVirtual, typeUsrId, typeKind, isPointer);
+        len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d|%d|%d|%d",
+                nameId, fileId, line, col);
         s_wb.Put(gCharBuff0, gCharBuff1);
         //printf("%s, %s, %s, %d, %d\n", s_compileUnit.c_str(), usr.c_str(), filename.c_str(), line, col);
     }
     else {
         // usrId -> decl info
         len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%d", keyPrefix, usrId); 
-        len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d|%d|%d|%d|%d|%d|%d|%d|%d|%d",
-                nameId, fileId, line, col, entityKind, val, isVirtual, typeUsrId, typeKind, isPointer);
+        len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%d|%d|%d|%d",
+                nameId, fileId, line, col);
         s_wb.Put(gCharBuff0, gCharBuff1);
     }
 
@@ -228,7 +226,7 @@ void DbImplLevelDb::insert_decl_value(const string& usr, const string& filename,
     s_wb.Put(gCharBuff0, gCharBuff1);
 }
 
-void DbImplLevelDb::insert_overriden_value(const string& usr, const string& name, int line, int col, int entityKind, const string& usrOverrider, int isDef)
+void DbImplLevelDb::insert_overriden_value(const string& usr, const string& name, int line, int col, const string& usrOverrider, int isDef)
 {
     //int fileId = fileIdTbl->GetId(fileName);
     //int nameId = nameIdTbl->GetId(name);

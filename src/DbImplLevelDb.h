@@ -17,9 +17,9 @@ public:
 #endif
     virtual void init(const std::string& out_dir, const std::string& src_file_name, const std::string& excludeList, int isPartial, int isSkel, const char* curDir, int argc, const char** argv);
     virtual void fin(void);
-    virtual void insert_ref_value(const std::string& usr, const std::string& filename, const std::string& name, int line, int col, int kind, const std::string& refFilename, int refLine, int refCol);
-    virtual void insert_decl_value(const std::string& usr, const std::string& filename, const std::string& name, int line, int col, int entityKind, int val, int isVirtual, int isDef, const std::string& typeUsr, int typeKind, int isPointer);
-    virtual void insert_overriden_value(const std::string& usr, const std::string& name, int line, int col, int entityKind, const std::string& overriderUsr, int isDef);
+    virtual void insert_ref_value(const std::string& usr, const std::string& filename, const std::string& name, int line, int col);
+    virtual void insert_decl_value(const std::string& usr, const std::string& filename, const std::string& name, int line, int col, int isDef);
+    virtual void insert_overriden_value(const std::string& usr, const std::string& name, int line, int col, const std::string& overriderUsr, int isDef);
     virtual void insert_base_class_value(const std::string& classUsr, const std::string& baseClassUsr, int line, int col, int accessibility);
     void addIdList(leveldb::WriteBatch* db, const std::map<std::string, int >& inMap, const std::string& tableName);
 private:

@@ -12,6 +12,7 @@
 #include <boost/filesystem/operations.hpp>
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string.hpp>
+#include <boost/timer/timer.hpp>
 
 namespace cxxtags {
 
@@ -39,6 +40,16 @@ static string s_compileUnitId;
 static IdTbl *fileIdTbl;
 static IdTbl *nameIdTbl;
 static IdTbl *usrIdTbl;
+static const int k_timerNum = 128;
+clock_t s_timeArray[k_timerNum];
+boost::timer::cpu_timer* s_timers;
+
+enum {
+    TIMER_INS_REF = 64,
+    TIMER_INS_DECL,
+    TIMER_USR_DB0,
+    TIMER_USR_DB1,
+};
 
 int dbWrite(leveldb::DB* db, const string& key, const string& value);
 int dbRead(string& value, leveldb::DB* db, const string& key);
@@ -72,7 +83,6 @@ int dbTryOpen(leveldb::DB*& db, string dir)
 void DbImplLevelDb::init(const string& out_dir, const string& src_file_name, const string& excludeList, int isPartial, int isSkel, const char* curDir, int argc, const char** argv)
 {
     leveldb::DB* dbCommon = NULL;
-    clock_t startTime = clock();
     s_defaultOptions.create_if_missing = true;
 
     s_dbDir = out_dir;
@@ -80,6 +90,11 @@ void DbImplLevelDb::init(const string& out_dir, const string& src_file_name, con
     fileIdTbl = new IdTbl();
     nameIdTbl = new IdTbl();
     usrIdTbl = new IdTbl();
+
+    s_timers = new boost::timer::cpu_timer[k_timerNum];
+    for(int i = 0; i < k_timerNum; i++) {
+        s_timers[i].stop();
+    }
 
     if(!boost::filesystem::exists(s_dbDir)) {
         if(!boost::filesystem::create_directory(s_dbDir)) {
@@ -143,9 +158,6 @@ void DbImplLevelDb::init(const string& out_dir, const string& src_file_name, con
         fprintf(stderr, "Open fail: %s\n", status.ToString().c_str());
         return;
     }
-
-    clock_t endTime = clock();
-    //printf("time: init: %f sec\n", (endTime-startTime)/(double)CLOCKS_PER_SEC);
 }
 
 int dbWrite(leveldb::DB* db, const string& key, const string& value)
@@ -174,11 +186,12 @@ static map<string, SsMap > s_usr2fileMap;
 SsMap s_usr2refMap;
 void DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, const string& name, int line, int col)
 {
+    s_timers[TIMER_INS_REF].resume();
+    
     int fileId = fileIdTbl->GetId(filename);
     int nameId = nameIdTbl->GetId(name);
     int usrId = usrIdTbl->GetId(usr);
-    int len = snprintf(gCharBuff0, sizeof(gCharBuff0), "%x|%x|%x|%x",
-            nameId, fileId, line, col);
+    int len = snprintf(gCharBuff0, sizeof(gCharBuff0), "%x|%x|%x|%x", nameId, fileId, line, col);
     SsMap::iterator itr = s_usr2refMap.find(usr);
     if(itr == s_usr2refMap.end()){ 
         s_usr2refMap[usr] = string(gCharBuff0);
@@ -195,10 +208,12 @@ void DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, 
     int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "pos2usr|%x|%x|%x", fileId,  line, col);
     int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", usrId);
     s_wb.Put(gCharBuff0, gCharBuff1);
+    s_timers[TIMER_INS_REF].stop();
 }
 
 void DbImplLevelDb::insert_decl_value(const string& usr, const string& filename, const string& name, int line, int col, int isDef)
 {
+    s_timers[TIMER_INS_DECL].resume();
     int len0 = 0;
     int len1 = 0;
     const char* keyPrefix = "usr2decl";
@@ -230,6 +245,7 @@ void DbImplLevelDb::insert_decl_value(const string& usr, const string& filename,
     len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "pos2usr|%x|%x|%x", fileId, line, col); 
     len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", usrId);
     s_wb.Put(gCharBuff0, gCharBuff1);
+    s_timers[TIMER_INS_DECL].stop();
 }
 
 void DbImplLevelDb::insert_overriden_value(const string& usr, const string& name, int line, int col, const string& usrOverrider, int isDef)
@@ -371,7 +387,7 @@ void DbImplLevelDb::fin(void)
         snprintf(gCharBuff0, sizeof(gCharBuff0), "%x", (cuId % k_usrDbDirNum)); 
         curDir = curDir + "/" + string(gCharBuff0);
 
-        clock_t timeStart = clock();
+        s_timers[TIMER_USR_DB0].start();
         //////
         // open db
         int rv = dbTryOpen(dbUsrDb, curDir);
@@ -379,15 +395,9 @@ void DbImplLevelDb::fin(void)
             printf("ERROR: fin: common db open: %s\n", curDir.c_str());
             return ;
         }
-        clock_t time0 = clock();
-        clock_t timeArray[128];
+        s_timers[TIMER_USR_DB1].start();
 
         // lookup map
-        timeArray[100] = 0;
-        timeArray[101] = 0;
-        timeArray[102] = 0;
-        timeArray[103] = 0;
-        timeArray[104] = 0;
         int count = 0;
         BOOST_FOREACH(const SiPair& itr, usrMap) {
             const string& usr = itr.first;
@@ -398,15 +408,13 @@ void DbImplLevelDb::fin(void)
 #else
             if(usr != "" && (pos_global == 0 || pos_macro == 0)) {
 #endif
-                timeArray[8] = clock();
                 SiMap& file_list_map = usrFidMap[usr];
-                timeArray[9] = clock();
-
                 // check if already registered
-                timeArray[0] = clock();
+                s_timers[2].resume();
                 string value;
                 int rv = dbRead(value, dbUsrDb, "usr2file|" + usr);
-                timeArray[1] = clock();
+                s_timers[2].stop();
+                s_timers[3].resume();
                 if(rv == 0) {
                     const string delim = ",";
                     list<string> old_list;
@@ -415,45 +423,39 @@ void DbImplLevelDb::fin(void)
                         file_list_map[s] = 0;
                     }
                 }
-                timeArray[2] = clock();
+                s_timers[3].stop();
+                s_timers[4].resume();
                 string file_list_string = "";
                 BOOST_FOREACH(const SiPair& itr_str, file_list_map) {
                     file_list_string += itr_str.first+",";
                 }
                 file_list_string = file_list_string.substr(0, file_list_string.size()-1);
-                timeArray[3] = clock();
+                s_timers[4].stop();
                 wb_usrdb.Put("usr2file|" + usr, file_list_string);
-                timeArray[4] = clock();
-                timeArray[100] += timeArray[9] - timeArray[8];
-                timeArray[101] += timeArray[2] - timeArray[0];
-                timeArray[102] += timeArray[3] - timeArray[2];
-                timeArray[103] += timeArray[1] - timeArray[0];
-                timeArray[104] += timeArray[2] - timeArray[1];
                 count++;
             }
         }
-        timeArray[5] = clock();
+        s_timers[5].start();
         dbFlush(dbUsrDb, &wb_usrdb);
-        timeArray[6] = clock();
+        s_timers[5].stop();
+        s_timers[6].start();
         dbClose(dbUsrDb);
+        s_timers[6].stop();
+        s_timers[TIMER_USR_DB1].stop();
+        s_timers[TIMER_USR_DB0].stop();
         // close db
         //////
-        timeArray[7] = clock();
+        s_timeArray[7] = clock();
         clock_t timeEnd = clock();
-        printf("time: 0-1: %f ms\n", (timeArray[1]-timeArray[0])*1000.0/CLOCKS_PER_SEC);
-        printf("time: 1-2: %f ms\n", (timeArray[2]-timeArray[1])*1000.0/CLOCKS_PER_SEC);
-        printf("time: 2-3: %f ms\n", (timeArray[3]-timeArray[2])*1000.0/CLOCKS_PER_SEC);
-        printf("time: 3-4: %f ms\n", (timeArray[4]-timeArray[3])*1000.0/CLOCKS_PER_SEC);
-        printf("time: 5-6: %f ms\n", (timeArray[6]-timeArray[5])*1000.0/CLOCKS_PER_SEC);
-        printf("time: 6-7: %f ms\n", (timeArray[7]-timeArray[6])*1000.0/CLOCKS_PER_SEC);
-        printf("time: 8-9: %f ms\n", (timeArray[9]-timeArray[8])*1000.0/CLOCKS_PER_SEC);
-        printf("time: usr_wb0: %f ms\n", (time0-timeStart)*1000.0/CLOCKS_PER_SEC);
-        printf("time: usr_wb: %f ms\n", (timeEnd-timeStart)*1000.0/CLOCKS_PER_SEC);
-        printf("time: 100: %f ms\n", (timeArray[100])*1000.0/CLOCKS_PER_SEC);
-        printf("time: 101: %f ms\n", (timeArray[101])*1000.0/CLOCKS_PER_SEC);
-        printf("time: 102: %f ms\n", (timeArray[102])*1000.0/CLOCKS_PER_SEC);
-        printf("time: 103: %f ms\n", (timeArray[103])*1000.0/CLOCKS_PER_SEC);
-        printf("time: 104: %f ms\n", (timeArray[104])*1000.0/CLOCKS_PER_SEC);
+        printf("time: TIMER_USR_DB0: %s", s_timers[TIMER_USR_DB0].format().c_str());
+        printf("time: TIMER_USR_DB1: %s", s_timers[TIMER_USR_DB1].format().c_str());
+        printf("time: 2: %s", s_timers[2].format().c_str());
+        printf("time: 3: %s", s_timers[3].format().c_str());
+        printf("time: 4: %s", s_timers[4].format().c_str());
+        printf("time: 5: %s", s_timers[5].format().c_str());
+        printf("time: 6: %s", s_timers[5].format().c_str());
+        printf("time: TIMER_INS_REF: %s", s_timers[TIMER_INS_REF].format().c_str());
+        printf("time: TIMER_INS_DECL: %s", s_timers[TIMER_INS_DECL].format().c_str());
         printf("time: %d times\n", count);
     }
 

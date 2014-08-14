@@ -10,7 +10,7 @@ include_directories(${LLVM_HOME}/include ${LEVELDB_HOME}/include)
 link_directories(${LLVM_HOME}/lib ${LEVELDB_HOME}/lib ${BOOST_HOME}/lib)
 
 add_executable(cxxtags_core cxxtags_core.cpp DbImplLevelDb.cpp)
-target_link_libraries(cxxtags_core sqlite3 clang stdc++ leveldb boost_filesystem-mt boost_system-mt)
+target_link_libraries(cxxtags_core sqlite3 clang stdc++ leveldb boost_filesystem-mt boost_system-mt boost_timer-mt)
 
 install(FILES
     ${PROJECT_BINARY_DIR}/cxxtags_core

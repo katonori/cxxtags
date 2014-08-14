@@ -106,21 +106,6 @@ static inline char isCursorTypeAvailable(int val)
 }
 #undef AVAILABLE_TABLE_MAX
 
-// get type information
-static void getCXTypeInfo(std::string& typeUsr, CXCursor& typeCur, int& typeKind, int& isPointer, const CXType& inType)
-{
-    CXType cxType = clang_getCanonicalType(inType);
-    if(cxType.kind == CXType_Pointer) {
-        isPointer = 1;
-        cxType = clang_getPointeeType(cxType);
-    }
-    typeKind = cxType.kind;
-    typeCur = clang_getTypeDeclaration(cxType);
-    CXString cxTypeUSR = clang_getCursorUSR(typeCur);
-    typeUsr = clang_getCString(cxTypeUSR);
-    clang_disposeString(cxTypeUSR);
-}
-
 static bool isBuiltinType(int typeKind)
 {
     switch(typeKind) {
@@ -165,21 +150,14 @@ static bool isLocalDecl(CXCursorKind parentKind)
 }
 
 // process declarations other than function declarations.
-static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column, int kind, int val)
+static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column)
 {
     // get type information
-    CXCursor typeCur;
-    int typeUsrId = 0;
-    int isPointer = 0;
-    int typeKind = 0;
-    std::string typeUsr;
     CXType curTypeOrig = clang_getCursorType(Cursor);
-    getCXTypeInfo(typeUsr, typeCur, typeKind, isPointer, curTypeOrig);
     if(gIsSkelton) {
         return;
     }
     int isDef = clang_isCursorDefinition(Cursor);
-    //printf("decl: %s: %s, %s, %d, %d, kind=%d, typeKind=%d, typeKind2=%d\n", cUsr, name.c_str(), fileName.c_str(), line, column, kind, curTypeOrig.kind, typeKind);
     //
     // if the option '-p' is specified
     // 
@@ -191,7 +169,6 @@ static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::strin
         while(curTypeOrig.kind == CXType_Pointer) {
             curTypeOrig = clang_getPointeeType(curTypeOrig);
         }
-        //printf("%s, %s, %d, %d, parent=%d, type=%d, cursorKind=%d\n", fileName.c_str(), name.c_str(), line, column, parentCur.kind, curTypeOrig.kind, Cursor.kind);
         // type is canonical && scope is function internal then skip
         if(isBuiltinType(curTypeOrig.kind) && isLocalDecl(parentCur.kind)) {
             return;
@@ -202,15 +179,9 @@ static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::strin
 }
 
 // process declarations
-static inline void procFuncDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column, int kind, int isVirt)
+static inline void procFuncDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column)
 {
     // get result type information
-    CXCursor typeCur;
-    int typeUsrId = 0;
-    int isPointer = 0;
-    int typeKind = 0;
-    std::string typeUsr;
-    getCXTypeInfo(typeUsr, typeCur, typeKind, isPointer, clang_getCursorResultType(Cursor));
     if(gIsSkelton) {
         return;
     }
@@ -220,7 +191,7 @@ static inline void procFuncDecl(const CXCursor& Cursor, const char* cUsr, std::s
 }
 
 // process c++ method declarations
-static inline void procCXXMethodDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column, int kind)
+static inline void procCXXMethodDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column)
 {
     unsigned int numOverridden = 0;
     CXCursor *cursorOverridden;
@@ -241,11 +212,11 @@ static inline void procCXXMethodDecl(const CXCursor& Cursor, const char* cUsr, s
     int isVirt = clang_CXXMethod_isVirtual(Cursor);
     clang_disposeOverriddenCursors(cursorOverridden);
     // process as a function declaration is also done. 
-    procFuncDecl(Cursor, cUsr, name, fileName, line, column, kind, isVirt);
+    procFuncDecl(Cursor, cUsr, name, fileName, line, column);
 }
 
 // process c++ references.
-static inline void procRef(const CXCursor& Cursor, std::string name, std::string fileName, int line, int column, int kind)
+static inline void procRef(const CXCursor& Cursor, std::string name, std::string fileName, int line, int column)
 {
     const char* cUsr = "";
     unsigned int ref_line = 0;
@@ -298,7 +269,7 @@ static inline void procRef(const CXCursor& Cursor, std::string name, std::string
 }
 
 // process c++ base class informations
-static inline void procCXXBaseClassInfo(const CXCursor& Cursor, std::string name, std::string fileName, int line, int column, int kind)
+static inline void procCXXBaseClassInfo(const CXCursor& Cursor, std::string name, std::string fileName, int line, int column)
 {
     // USR of class
     CXString cxBaseUsr = clang_getCursorUSR(Cursor);
@@ -367,28 +338,28 @@ static inline void procCursor(const CXCursor& Cursor) {
         case CXCursor_ParmDecl:
         case CXCursor_FieldDecl:
         case CXCursor_MacroDefinition: {
-            procDecl(Cursor, cUsr, name, fileName, line, column, kind, val);
+            procDecl(Cursor, cUsr, name, fileName, line, column);
             break;
         }
         case CXCursor_StructDecl:
         case CXCursor_ClassDecl:
         case CXCursor_EnumDecl: {
             gLastClassUsr = cUsr;
-            procDecl(Cursor, cUsr, name, fileName, line, column, kind, val);
+            procDecl(Cursor, cUsr, name, fileName, line, column);
             break;
         }
         case CXCursor_CXXMethod: {
-            procCXXMethodDecl(Cursor, cUsr, name, fileName, line, column, kind);
+            procCXXMethodDecl(Cursor, cUsr, name, fileName, line, column);
             break;
         }
         case CXCursor_FunctionDecl:
         case CXCursor_Constructor:
         case CXCursor_Destructor: {
-            procFuncDecl(Cursor, cUsr, name, fileName, line, column, kind, 0);
+            procFuncDecl(Cursor, cUsr, name, fileName, line, column);
             break;
         }
         case CXCursor_CXXBaseSpecifier: {
-            procCXXBaseClassInfo(Cursor, name, fileName, line, column, kind);
+            procCXXBaseClassInfo(Cursor, name, fileName, line, column);
             break;
         }
         case CXCursor_DeclRefExpr:
@@ -399,7 +370,7 @@ static inline void procCursor(const CXCursor& Cursor) {
         case CXCursor_TemplateRef:
         case CXCursor_OverloadedDeclRef:
         case CXCursor_MacroExpansion: {
-            procRef(Cursor, name, fileName, line, column, kind);
+            procRef(Cursor, name, fileName, line, column);
             break;
         }
         // TODO:

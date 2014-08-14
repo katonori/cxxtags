@@ -47,6 +47,7 @@ boost::timer::cpu_timer* s_timers;
 enum {
     TIMER_INS_REF = 64,
     TIMER_INS_DECL,
+    TIMER_INS_OVERRIDEN,
     TIMER_USR_DB0,
     TIMER_USR_DB1,
 };
@@ -248,10 +249,31 @@ void DbImplLevelDb::insert_decl_value(const string& usr, const string& filename,
     s_timers[TIMER_INS_DECL].stop();
 }
 
-void DbImplLevelDb::insert_overriden_value(const string& usr, const string& name, int line, int col, const string& usrOverrider, int isDef)
+void DbImplLevelDb::insert_overriden_value(const string& usr, const string& name, const string& filename, int line, int col, const string& usrOverrider, int isDef)
 {
-    //int fileId = fileIdTbl->GetId(fileName);
-    //int nameId = nameIdTbl->GetId(name);
+    s_timers[TIMER_INS_OVERRIDEN].resume();
+    //printf("overriden: %s, %s, %s\n", usr.c_str(), filename.c_str(), name.c_str());
+    int len0 = 0;
+    int len1 = 0;
+    const char* key = "usr2overrirden";
+    int fileId = fileIdTbl->GetId(filename);
+    int nameId = nameIdTbl->GetId(name);
+    int usrId = usrIdTbl->GetId(usr);
+    // usrId -> decl info
+    len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s", key, usr.c_str()); 
+    len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x|%x|%x|%x",
+            nameId, fileId, line, col);
+    s_wb.Put(gCharBuff0, gCharBuff1);
+
+    if(usr != "") {
+        s_usr2fileMap[usr][filename] = "";
+    }
+
+    // pos -> usr
+    len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "pos2usr|%x|%x|%x", fileId, line, col); 
+    len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", usrId);
+    s_wb.Put(gCharBuff0, gCharBuff1);
+    s_timers[TIMER_INS_OVERRIDEN].stop();
 }
 
 void DbImplLevelDb::insert_base_class_value(const string& classUsr, const string& baseClassUsr, int line, int col, int accessibility)

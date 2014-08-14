@@ -139,6 +139,18 @@ class HandlerBase:
             return None
         return usr
 
+    def GetCuidListFromUsr(self, usr):
+        cuIdList = []
+        for db in self.mUsrDbList:
+            res = db.get("usr2file|" + usr)
+            if res:
+                for fid in res.split(","):
+                    name, cuid = self.GlobalFileId2CompileUnit(fid)
+                    cuIdList.append(cuid)
+        if cuIdList == []:
+            cuIdList.append(self.m_cuId)
+        return list(set(cuIdList))
+
     def CloseDb(self):
         if self.mDb:
             self.mDb.close()
@@ -359,69 +371,119 @@ class QueryHandlerOverride(HandlerBase):
     # Handle Rquest for infomation about reference
     #
     def DoQuery(self):
-        usr = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
+        startTime = time.time()
+        # get compileunit
+        if None == self.InitDb(self.m_srcFileName):
+            print "ERROR: DB oopen"
+            return None
+        usrId = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
+        usr = id2usr(self.mDb, usrId)
+        DEBUG_PRINT("usr: " + str(usr))
         if usr:
             self.GetAllOverrides(usr)
 
     def GetAllOverrides(self, usr):
-        resultList = []
-        for fn in self.GetAllDbFiles():
-            db = cxxtags_util.db_connect(fn)
-            cur = db.cursor()
-            cur.execute('SELECT usr_list.id FROM usr_list WHERE name=?;', (usr,))
-            row = cur.fetchone()
-            if row:
-                usrId = row[0]
-                cur.execute('SELECT overriden.usr_id, overriden.is_def FROM '+ cxxtags_util.QUERY_JOINED_TABLE_FILELIST_OVERRIDEN + ' WHERE overriden.overrider_usr_id=?;', (usrId,))
-                overriderUsrList = cur.fetchall()
-                for i in overriderUsrList:
-                    overriderUsrId, overriderIsDef = i
-                    overriderRow = cur.execute('SELECT name_list.name, file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE decl.usr_id=? AND decl.is_def=?;', (overriderUsrId, overriderIsDef))
-                    result = overriderRow.fetchone()
-                    resultList += (result,)
-            db.close()
-        resultList = set(resultList)
-        for i in resultList:
-            resultName, resultFileName, resultLine, resultCol = i
-            self.PrintResult(resultName, resultFileName, resultLine, resultCol)
+        cuIdList = self.GetCuidListFromUsr(usr)
+        DEBUG_PRINT("cuIdList: " + str(cuIdList))
+        for cuId in cuIdList:
+            resultList = []
+            if cuId == self.m_cuId:
+                db = self.mDb
+            else:
+                db = self.OpenDbId(cuId)
+            count = 0
+            q = "usr2overrirden|" + str(usr)
+            rv = db.get(q)
+            DEBUG_PRINT("usr2overrirden: " + str(rv))
+            if rv:
+                rvList = rv.split(",")
+                for rv in rvList:
+                    nameId, fileId, line, col = \
+                            rv.split("|")
+                    name = id2name(db, nameId)
+                    if name == None:
+                        print("ERRRO: name lookup failed: " + str(nameId) + ": " + cuId)
+                        return None
+                    fn = id2file(db, fileId)
+                    if fn == None:
+                        print("ERRRO: file name lookup failed: " + str(fileId) + ": " + cuId)
+                        return None
+                    resultList.append((name, fn, line, col))
+            if db != self.mDb:
+                db.close()
+            for i in resultList:
+                resultName, resultFileName, resultLine, resultCol = i
+                self.PrintResult(resultName, resultFileName, resultLine, resultCol)
 
     def parseArg(self, argv):
         if len(argv) != 3:
             usage()
             sys.exit(1)
         self.m_srcFileName, self.m_lineNo, self.m_colNo = argv
+        self.m_lineNo = format(int(self.m_lineNo), 'x')
+        self.m_colNo = format(int(self.m_colNo), 'x')
 
 class QueryHandlerOverrideN(HandlerBase):
     #
     # Handle Rquest for infomation about reference
     #
     def DoQuery(self):
-        usr = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
+        startTime = time.time()
+        # get compileunit
+        if None == self.InitDb(self.m_srcFileName):
+            print "ERROR: DB oopen"
+            return None
+        usrId = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
+        usr = id2usr(self.mDb, usrId)
+        DEBUG_PRINT("usr: " + str(usr))
         if usr:
             self.GetAllOverriders(usr)
 
     def GetAllOverriders(self, usr):
-        resultList = []
-        for fn in self.GetAllDbFiles():
-            db = cxxtags_util.db_connect(fn)
-            cur = db.cursor()
-            cur.execute('SELECT usr_list.id FROM usr_list WHERE name=?;', (usr,))
-            row = cur.fetchone()
-            if row:
-                usrId = row[0]
-                cur.execute('SELECT name_list.name, file_list.name, overriden.line, overriden.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_OVERRIDEN + ' WHERE overriden.usr_id=?;', (usrId,))
-                resultList += cur.fetchall()
-            db.close()
-        resultList = set(resultList)
-        for i in resultList:
-            resultName, resultFileName, resultLine, resultCol = i
-            self.PrintResult(resultName, resultFileName, resultLine, resultCol)
+        cuIdList = self.GetCuidListFromUsr(usr)
+        DEBUG_PRINT("cuIdList: " + str(cuIdList))
+        for cuId in cuIdList:
+            resultList = []
+            if cuId == self.m_cuId:
+                db = self.mDb
+            else:
+                db = self.OpenDbId(cuId)
+            count = 0
+            q = "usr2overrirden|" + str(usr)
+            DEBUG_PRINT("q: " + q)
+            rv = db.get(q)
+            DEBUG_PRINT("usr2overrirden: " + str(rv))
+            if rv:
+                rvList = rv.split(",")
+                for rv in rvList:
+                    print rv
+                    nameId, fileId, line, col = rv.split("|")
+                    name = id2name(db, nameId)
+                    if name == None:
+                        print("ERRRO: name lookup failed: " + str(nameId) + ": " + cuId)
+                        return None
+                    fn = id2file(db, fileId)
+                    DEBUG_PRINT("name: " + str(nameId) + "," + str(name))
+                    DEBUG_PRINT("filename: " + str(fileId) + "," + str(fn))
+                    if fn == None:
+                        print("ERRRO: file name lookup failed: " + str(fileId) + ": " + cuId)
+                        return None
+                    resultList.append((name, fn, line, col))
+            if db != self.mDb:
+                db.close()
+            for i in resultList:
+                resultName, resultFileName, resultLine, resultCol = i
+                DEBUG_PRINT("n: " + str(resultName))
+                DEBUG_PRINT("fn: " + str(resultFileName))
+                self.PrintResult(resultName, resultFileName, resultLine, resultCol)
 
     def parseArg(self, argv):
         if len(argv) != 3:
             usage()
             sys.exit(1)
         self.m_srcFileName, self.m_lineNo, self.m_colNo = argv
+        self.m_lineNo = format(int(self.m_lineNo), 'x')
+        self.m_colNo = format(int(self.m_colNo), 'x')
 
 class QueryHandlerName(HandlerBase):
     #

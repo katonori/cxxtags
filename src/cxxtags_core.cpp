@@ -14,6 +14,7 @@
 #include "IIndexDb.h"
 //#include "DbImplSqlite3.h"
 #include "DbImplLevelDb.h"
+#include <boost/filesystem/path.hpp>
 
 namespace cxxtags {
 static int gIsPartial = 0;
@@ -207,13 +208,17 @@ static inline void procCXXMethodDecl(const CXCursor& Cursor, const char* cUsr, s
         }
         int isDef = clang_isCursorDefinition(Cursor);
         // insert information about overrides to database
-        gDb->insert_overriden_value(cRefUsr, name, line, column, cUsr, isDef);
+        gDb->insert_overriden_value(cRefUsr, name, fileName, line, column, cUsr, isDef);
     }
     int isVirt = clang_CXXMethod_isVirtual(Cursor);
     clang_disposeOverriddenCursors(cursorOverridden);
     // process as a function declaration is also done. 
     procFuncDecl(Cursor, cUsr, name, fileName, line, column);
 }
+
+#ifndef PATH_MAX
+#define PATH_MAX 2048
+#endif
 
 // process c++ references.
 static inline void procRef(const CXCursor& Cursor, std::string name, std::string fileName, int line, int column)

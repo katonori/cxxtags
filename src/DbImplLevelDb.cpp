@@ -14,6 +14,22 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/timer/timer.hpp>
 
+#define TABLE_NAME_POS2USR "A"
+#define TABLE_NAME_USR2FILE "B"
+#define TABLE_NAME_ID2NAME "C"
+#define TABLE_NAME_USR2DECL "D"
+#define TABLE_NAME_USR2DEF "E"
+#define TABLE_NAME_ID2USR "F"
+#define TABLE_NAME_ID2FILE "G"
+#define TABLE_NAME_CU2ID "H"
+#define TABLE_NAME_ID2CU "I"
+#define TABLE_NAME_FID2CUID "J"
+#define TABLE_NAME_FILE2ID "K"
+#define TABLE_NAME_USR2REF "L"
+#define TABLE_NAME_USR2OVERRIDEE "M"
+#define TABLE_NAME_USR2OVERRIDER "N"
+#define TABLE_NAME_FILE_LIST "O"
+
 namespace cxxtags {
 
 using namespace std;
@@ -119,7 +135,7 @@ void DbImplLevelDb::init(const string& out_dir, const string& src_file_name, con
     string keyFile = s_compileUnit;
     int rv = 0;
     // check if already registered
-    rv = dbRead(value, dbCommon, "cu2id|" + s_compileUnit);
+    rv = dbRead(value, dbCommon, TABLE_NAME_CU2ID "|" + s_compileUnit);
     if(rv < 0) {
         // not found
         // add file
@@ -142,8 +158,8 @@ void DbImplLevelDb::init(const string& out_dir, const string& src_file_name, con
         else {
             printf("ERROR: db info\n");
         }
-        dbWrite(dbCommon, "cu2id|" + s_compileUnit, s_compileUnitId);
-        dbWrite(dbCommon, "id2cu|" + s_compileUnitId, s_compileUnit);
+        dbWrite(dbCommon, TABLE_NAME_CU2ID "|" + s_compileUnit, s_compileUnitId);
+        dbWrite(dbCommon, TABLE_NAME_ID2CU "|" + s_compileUnitId, s_compileUnit);
     }
     else if(rv == 0) {
         // alread exists
@@ -206,7 +222,7 @@ void DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, 
     }
 
     // pos -> usr
-    int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "pos2usr|%x|%x|%x", fileId,  line, col);
+    int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), TABLE_NAME_POS2USR "|%x|%x|%x", fileId,  line, col);
     int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", usrId);
     s_wb.Put(gCharBuff0, gCharBuff1);
     s_timers[TIMER_INS_REF].stop();
@@ -217,14 +233,12 @@ void DbImplLevelDb::insert_decl_value(const string& usr, const string& filename,
     s_timers[TIMER_INS_DECL].resume();
     int len0 = 0;
     int len1 = 0;
-    const char* keyPrefix = "usr2decl";
     int fileId = fileIdTbl->GetId(filename);
     int nameId = nameIdTbl->GetId(name);
     int usrId = usrIdTbl->GetId(usr);
     if(isDef) {
-        keyPrefix = "usr2def";
         // usrId -> def info
-        len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s", keyPrefix, usr.c_str()); 
+        len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), TABLE_NAME_USR2DEF "|%s", usr.c_str()); 
         len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x|%x|%x|%x",
                 nameId, fileId, line, col);
         s_wb.Put(gCharBuff0, gCharBuff1);
@@ -232,7 +246,7 @@ void DbImplLevelDb::insert_decl_value(const string& usr, const string& filename,
     }
     else {
         // usrId -> decl info
-        len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%x", keyPrefix, usrId); 
+        len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), TABLE_NAME_USR2DECL "|%x", usrId); 
         len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x|%x|%x|%x",
                 nameId, fileId, line, col);
         s_wb.Put(gCharBuff0, gCharBuff1);
@@ -243,36 +257,45 @@ void DbImplLevelDb::insert_decl_value(const string& usr, const string& filename,
     }
 
     // pos -> usr
-    len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "pos2usr|%x|%x|%x", fileId, line, col); 
+    len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), TABLE_NAME_POS2USR "|%x|%x|%x", fileId, line, col); 
     len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", usrId);
     s_wb.Put(gCharBuff0, gCharBuff1);
     s_timers[TIMER_INS_DECL].stop();
 }
 
+SsMap s_overrideeMap;
+map<string, SiMap> s_overriderMap;
 void DbImplLevelDb::insert_overriden_value(const string& usr, const string& name, const string& filename, int line, int col, const string& usrOverrider, int isDef)
 {
     s_timers[TIMER_INS_OVERRIDEN].resume();
     //printf("overriden: %s, %s, %s\n", usr.c_str(), filename.c_str(), name.c_str());
     int len0 = 0;
     int len1 = 0;
-    const char* key = "usr2overrirden";
     int fileId = fileIdTbl->GetId(filename);
     int nameId = nameIdTbl->GetId(name);
     int usrId = usrIdTbl->GetId(usr);
+    int usrIdOverrider = usrIdTbl->GetId(usrOverrider);
     // usrId -> decl info
-    len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s", key, usr.c_str()); 
-    len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x|%x|%x|%x",
-            nameId, fileId, line, col);
+    len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x|%x|%x|%x", nameId, fileId, line, col);
+    if(s_overrideeMap[usr] != "") {
+        s_overrideeMap[usr] += "," + string(gCharBuff1);
+    }
+    else {
+        s_overrideeMap[usr] = string(gCharBuff1);
+    }
+
+    len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", usrId);
     s_wb.Put(gCharBuff0, gCharBuff1);
+    s_overriderMap[usrOverrider][gCharBuff1] = 0;
 
     if(usr != "") {
         s_usr2fileMap[usr][filename] = "";
     }
-
     // pos -> usr
-    len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "pos2usr|%x|%x|%x", fileId, line, col); 
+    len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), TABLE_NAME_POS2USR "|%x|%x|%x", fileId, line, col); 
     len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", usrId);
     s_wb.Put(gCharBuff0, gCharBuff1);
+
     s_timers[TIMER_INS_OVERRIDEN].stop();
 }
 
@@ -298,7 +321,6 @@ void addFilesToFileList(leveldb::DB* db, leveldb::WriteBatch* wb, const SiMap& i
     int startId = 0;
     string valStr;
     string keyFileCount = "file_count";
-    string keyFid2Cuid = "fid2cuid";
     int rv = dbRead(valStr, db, keyFileCount);
     if(rv < 0) {
         // key not found 
@@ -317,13 +339,13 @@ void addFilesToFileList(leveldb::DB* db, leveldb::WriteBatch* wb, const SiMap& i
     int id = startId;
     BOOST_FOREACH(const SiPair& itr, inMap) {
         string fn = itr.first;
-        string key = "file_list|" + fn;
+        string key = TABLE_NAME_FILE_LIST "|" + fn;
         int rv = dbRead(valStr, db, key);
         if(rv < 0) {
             snprintf(buf, sizeof(buf), "%x", id);
             dbWrite(db, key, s_compileUnitId + "," + string(buf));
             s_file2fidMap[fn] = buf;
-            dbWrite(db, keyFid2Cuid + "|" + string(buf), s_compileUnitId);
+            dbWrite(db, TABLE_NAME_FID2CUID "|" + string(buf), s_compileUnitId);
             id++;
         }
         else {
@@ -333,7 +355,7 @@ void addFilesToFileList(leveldb::DB* db, leveldb::WriteBatch* wb, const SiMap& i
             string fid = valStr.substr(pos+1, valStr.size()-1);
             // set fid to map
             s_file2fidMap[fn] = fid;
-            dbWrite(db, keyFid2Cuid + "|" + fid, s_compileUnitId);
+            dbWrite(db, TABLE_NAME_FID2CUID "|" + fid, s_compileUnitId);
         }
     }
     snprintf(buf, sizeof(buf), "%x", id);
@@ -364,8 +386,29 @@ void DbImplLevelDb::fin(void)
     const SiMap& usrMap = usrIdTbl->GetTbl();
     clock_t clockStart = clock();
 
+    // dump
+    {
+        BOOST_FOREACH(const SsPair& itr, s_overrideeMap) {
+            s_wb.Put(TABLE_NAME_USR2OVERRIDEE "|" + itr.first, itr.second);
+        }
+        typedef pair<string, SiMap> PairType;
+        BOOST_FOREACH(const PairType& itr, s_overriderMap) {
+            const SiMap& usrMap = itr.second;
+            string val = "";
+            BOOST_FOREACH(const SiPair& itr_usr, usrMap) {
+                if(val.empty()) {
+                    val = itr_usr.first;
+                }
+                else {
+                    val += "," + itr_usr.first;
+                }
+            }
+            s_wb.Put(TABLE_NAME_USR2OVERRIDER "|" + itr.first, val);
+        }
+    }
+
     // usr
-    addIdList(&s_wb, usrMap, "id2usr");
+    addIdList(&s_wb, usrMap, TABLE_NAME_ID2USR);
 
     {
         leveldb::WriteBatch wb_common;
@@ -434,7 +477,7 @@ void DbImplLevelDb::fin(void)
                 // check if already registered
                 s_timers[2].resume();
                 string value;
-                int rv = dbRead(value, dbUsrDb, "usr2file|" + usr);
+                int rv = dbRead(value, dbUsrDb, TABLE_NAME_USR2FILE "|" + usr);
                 s_timers[2].stop();
                 s_timers[3].resume();
                 if(rv == 0) {
@@ -453,7 +496,7 @@ void DbImplLevelDb::fin(void)
                 }
                 file_list_string = file_list_string.substr(0, file_list_string.size()-1);
                 s_timers[4].stop();
-                wb_usrdb.Put("usr2file|" + usr, file_list_string);
+                wb_usrdb.Put(TABLE_NAME_USR2FILE "|" + usr, file_list_string);
                 count++;
             }
         }
@@ -481,22 +524,22 @@ void DbImplLevelDb::fin(void)
         printf("time: %d times\n", count);
     }
 
-    addIdList(&s_wb, fileMap, "id2file");
+    addIdList(&s_wb, fileMap, TABLE_NAME_ID2FILE);
     {
         // lookup map
         BOOST_FOREACH(const SiPair& itr, fileMap) {
-            int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%s", "file2id", itr.first.c_str()); 
+            int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), TABLE_NAME_FILE2ID "|%s", itr.first.c_str()); 
             int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", itr.second);
             s_wb.Put(gCharBuff0, gCharBuff1);
         }
     }
 
-    addIdList(&s_wb, nameMap, "id2name");
+    addIdList(&s_wb, nameMap, TABLE_NAME_ID2NAME);
     // dump map
     BOOST_FOREACH(const SsPair& itr, s_usr2refMap) {
         const string& usr = itr.first;
         if(usr != "") {
-            int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "usr2ref|%s|%s", usr.c_str(), s_compileUnitId.c_str()); 
+            int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), TABLE_NAME_USR2REF "|%s|%s", usr.c_str(), s_compileUnitId.c_str()); 
             s_wb.Put(gCharBuff0, itr.second);
         }
     }

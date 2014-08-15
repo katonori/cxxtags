@@ -97,7 +97,7 @@ int dbTryOpen(leveldb::DB*& db, string dir)
     return 0;
 }
 
-void DbImplLevelDb::init(const string& out_dir, const string& src_file_name, const string& excludeList, int isPartial, int isSkel, const char* curDir, int argc, const char** argv)
+int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, const string& excludeList, int isPartial, int isSkel, const char* curDir, int argc, const char** argv)
 {
     leveldb::DB* dbCommon = NULL;
     s_defaultOptions.create_if_missing = true;
@@ -116,7 +116,7 @@ void DbImplLevelDb::init(const string& out_dir, const string& src_file_name, con
     if(!boost::filesystem::exists(s_dbDir)) {
         if(!boost::filesystem::create_directory(s_dbDir)) {
             printf("ERROR: create directory: %s\n", s_dbDir.c_str());
-            return;
+            return -1;
         }
     }
 
@@ -128,7 +128,7 @@ void DbImplLevelDb::init(const string& out_dir, const string& src_file_name, con
     s_commonDbDir = out_dir + "/common";
     if (dbTryOpen(dbCommon, s_commonDbDir) < 0) {
         fprintf(stderr, "Open fail.: %s\n", s_commonDbDir.c_str());
-        return;
+        return -1;
     }
     assert(dbCommon != NULL);
     string value;
@@ -173,8 +173,9 @@ void DbImplLevelDb::init(const string& out_dir, const string& src_file_name, con
     status = leveldb::DB::Open(s_defaultOptions, db_dir.c_str(), &s_db);
     if (!status.ok()) {
         fprintf(stderr, "Open fail: %s\n", status.ToString().c_str());
-        return;
+        return -1;
     }
+    return 0;
 }
 
 int dbWrite(leveldb::DB* db, const string& key, const string& value)
@@ -201,7 +202,7 @@ int dbRead(string& value, leveldb::DB* db, const string& key)
 
 static map<string, SsMap > s_usr2fileMap;
 SsMap s_usr2refMap;
-void DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, const string& name, int line, int col)
+int DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, const string& name, int line, int col)
 {
     s_timers[TIMER_INS_REF].resume();
     
@@ -226,9 +227,10 @@ void DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, 
     int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", usrId);
     s_wb.Put(gCharBuff0, gCharBuff1);
     s_timers[TIMER_INS_REF].stop();
+    return 0;
 }
 
-void DbImplLevelDb::insert_decl_value(const string& usr, const string& filename, const string& name, int line, int col, int isDef)
+int DbImplLevelDb::insert_decl_value(const string& usr, const string& filename, const string& name, int line, int col, int isDef)
 {
     s_timers[TIMER_INS_DECL].resume();
     int len0 = 0;
@@ -261,11 +263,12 @@ void DbImplLevelDb::insert_decl_value(const string& usr, const string& filename,
     len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", usrId);
     s_wb.Put(gCharBuff0, gCharBuff1);
     s_timers[TIMER_INS_DECL].stop();
+    return 0;
 }
 
 SsMap s_overrideeMap;
 map<string, SiMap> s_overriderMap;
-void DbImplLevelDb::insert_overriden_value(const string& usr, const string& name, const string& filename, int line, int col, const string& usrOverrider, int isDef)
+int DbImplLevelDb::insert_overriden_value(const string& usr, const string& name, const string& filename, int line, int col, const string& usrOverrider, int isDef)
 {
     s_timers[TIMER_INS_OVERRIDEN].resume();
     //printf("overriden: %s, %s, %s\n", usr.c_str(), filename.c_str(), name.c_str());
@@ -296,13 +299,15 @@ void DbImplLevelDb::insert_overriden_value(const string& usr, const string& name
     s_wb.Put(gCharBuff0, gCharBuff1);
 
     s_timers[TIMER_INS_OVERRIDEN].stop();
+    return 0;
 }
 
-void DbImplLevelDb::insert_base_class_value(const string& classUsr, const string& baseClassUsr, int line, int col, int accessibility)
+int DbImplLevelDb::insert_base_class_value(const string& classUsr, const string& baseClassUsr, int line, int col, int accessibility)
 {
+    return 0;
 }
 
-void DbImplLevelDb::addIdList(leveldb::WriteBatch* db, const SiMap& inMap, const string& tableName)
+int DbImplLevelDb::addIdList(leveldb::WriteBatch* db, const SiMap& inMap, const string& tableName)
 {
     // lookup map
     BOOST_FOREACH(const SiPair& itr, inMap) {
@@ -310,11 +315,11 @@ void DbImplLevelDb::addIdList(leveldb::WriteBatch* db, const SiMap& inMap, const
         int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%s", itr.first.c_str());
         db->Put(gCharBuff0, gCharBuff1);
     }
-    return ;
+    return 0;
 }
 
 static SsMap s_file2fidMap;
-void addFilesToFileList(leveldb::DB* db, leveldb::WriteBatch* wb, const SiMap& inMap)
+int addFilesToFileList(leveldb::DB* db, leveldb::WriteBatch* wb, const SiMap& inMap)
 {
     char buf[1024];
     int startId = 0;
@@ -359,6 +364,7 @@ void addFilesToFileList(leveldb::DB* db, leveldb::WriteBatch* wb, const SiMap& i
     }
     snprintf(buf, sizeof(buf), "%x", id);
     dbWrite(db, keyFileCount, buf);
+    return 0;
 }
 
 int dbFlush(leveldb::DB* db, leveldb::WriteBatch* wb)
@@ -366,7 +372,7 @@ int dbFlush(leveldb::DB* db, leveldb::WriteBatch* wb)
     leveldb::Status status = db->Write(s_defaultWoptions, wb);
     if (!status.ok()) {
         fprintf(stderr, "Write fail.: %s\n", status.ToString().c_str());
-        return 1;
+        return -1;
     }
     return 0;
 }
@@ -378,7 +384,7 @@ int dbClose(leveldb::DB*& db)
     return 0;
 }
 
-void DbImplLevelDb::fin(void)
+int DbImplLevelDb::fin(void)
 {
     const SiMap& fileMap = fileIdTbl->GetTbl();
     const SiMap& nameMap = nameIdTbl->GetTbl();
@@ -415,7 +421,7 @@ void DbImplLevelDb::fin(void)
         int rv = dbTryOpen(db_common, s_commonDbDir);
         if(rv < 0) {
             printf("ERROR: fin: common db open: %s\n", s_commonDbDir.c_str());
-            return ;
+            return -1;
         }
         addFilesToFileList(db_common, &wb_common, fileMap);
         dbFlush(db_common, &wb_common);
@@ -431,7 +437,7 @@ void DbImplLevelDb::fin(void)
         if(!boost::filesystem::exists(curDir)) {
             if(!boost::filesystem::create_directory(curDir)) {
                 printf("ERROR: create directory: %s\n", curDir.c_str());
-                return;
+                return -1;
             }
         }
         map<string, SiMap> usrFidMap;
@@ -457,7 +463,7 @@ void DbImplLevelDb::fin(void)
         int rv = dbTryOpen(dbUsrDb, curDir);
         if(rv < 0) {
             printf("ERROR: fin: common db open: %s\n", curDir.c_str());
-            return ;
+            return -1;
         }
         s_timers[TIMER_USR_DB1].start();
 
@@ -550,6 +556,7 @@ void DbImplLevelDb::fin(void)
     delete fileIdTbl;
     delete nameIdTbl;
     delete usrIdTbl;
+    return 0;
 }
 
 };

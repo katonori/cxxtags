@@ -285,7 +285,6 @@ void DbImplLevelDb::insert_overriden_value(const string& usr, const string& name
     }
 
     len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", usrId);
-    s_wb.Put(gCharBuff0, gCharBuff1);
     s_overriderMap[usrOverrider][gCharBuff1] = 0;
 
     if(usr != "") {
@@ -293,7 +292,7 @@ void DbImplLevelDb::insert_overriden_value(const string& usr, const string& name
     }
     // pos -> usr
     len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), TABLE_NAME_POS2USR "|%x|%x|%x", fileId, line, col); 
-    len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", usrId);
+    len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", usrIdOverrider);
     s_wb.Put(gCharBuff0, gCharBuff1);
 
     s_timers[TIMER_INS_OVERRIDEN].stop();

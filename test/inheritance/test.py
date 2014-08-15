@@ -2,200 +2,1008 @@
 
 import sys
 import os
-import sqlite3
 sys.path.append("../../src/")
-import cxxtags_util as cxxtags
 sys.path.append("../util/")
-import clang.cindex # for kind types
+import commands
+import common
 
-err = 0
-ans_idx = 0
-
-def test_one(db, q):
-    global err
-    global ans_idx
-    res = list(db.execute(q).fetchall())
-    if len(res) == 0:
-        print "ERROR: no result: %d"%(len(res))
-        print "    q = ", q
-        err += 1
-    for row in res:
-        if row != ans_list[ans_idx]:
-            print "DIFFER:"
-            print "    ", row
-            print "    ", ans_list[ans_idx]
-            err += 1
-        ans_idx += 1
+CXXTAGS_QUERY = "../../bin/cxxtags_query"
 
 if len(sys.argv) != 2:
     print "usage: cmd db_file"
     exit(1)
 
 cur_dir = os.getcwd()
-
-decl_col = "name_list.name, file_list.name, decl.line, decl.col, decl.kind, decl.val, decl.is_virtual, decl.is_def, usr_list_type.name, decl.type_kind, decl.is_pointer FROM " + cxxtags.QUERY_JOINED_TABLE_DECL
-ref_col = "name_list.name, file_list.name, ref.line, ref.col, ref.kind, ref_file_list.name, ref.ref_line, ref.ref_col FROM " + cxxtags.QUERY_JOINED_TABLE_REF
-overriden_col = "name_list.name, file_list.name, overriden.line, overriden.col, overriden.kind, usr_list_overrider.name, overriden.is_def FROM " + cxxtags.QUERY_JOINED_TABLE_OVERRIDEN
+db_dir = sys.argv[1]
 
 q_list = [
-# main.cpp
-"SELECT "+decl_col+" WHERE line=3 AND col=7 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #CParent0
-"SELECT "+decl_col+" WHERE line=6 AND col=5 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #CParent0
-"SELECT "+decl_col+" WHERE line=7 AND col=5 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #~CParent0
-"SELECT "+decl_col+" WHERE line=8 AND col=18 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #response
-"SELECT "+ref_col+" WHERE line=11 AND col=6 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #CParent0
-"SELECT "+decl_col+" WHERE line=11 AND col=16 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #response
-"SELECT "+decl_col+" WHERE line=15 AND col=7 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #CParent1
-"SELECT "+decl_col+" WHERE line=18 AND col=5 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #CParent1
-"SELECT "+decl_col+" WHERE line=19 AND col=5 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #~CParent1
-"SELECT "+decl_col+" WHERE line=20 AND col=18 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #response
-"SELECT "+ref_col+" WHERE line=23 AND col=6 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #CParent1
-"SELECT "+decl_col+" WHERE line=23 AND col=16 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #response
-"SELECT "+decl_col+" WHERE line=27 AND col=7 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #CChild
-"SELECT "+ref_col+" WHERE line=28 AND col=10 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #CParent0
-"SELECT "+decl_col+" WHERE line=31 AND col=5 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #CChild
-"SELECT "+decl_col+" WHERE line=32 AND col=5 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #~CChild
-"SELECT "+decl_col+" WHERE line=33 AND col=18 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #response
-"SELECT "+ref_col+" WHERE line=36 AND col=6 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #CChild
-"SELECT "+decl_col+" WHERE line=36 AND col=14 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #response
-"SELECT "+decl_col+" WHERE line=40 AND col=7 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #CGChild
-"SELECT "+ref_col+" WHERE line=41 AND col=10 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #CChild
-"SELECT "+decl_col+" WHERE line=44 AND col=5 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #CGChild
-"SELECT "+decl_col+" WHERE line=45 AND col=5 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #~CGChild
-"SELECT "+decl_col+" WHERE line=46 AND col=18 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #response
-"SELECT "+ref_col+" WHERE line=49 AND col=6 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #CGChild
-"SELECT "+decl_col+" WHERE line=49 AND col=15 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #response
-"SELECT "+decl_col+" WHERE line=53 AND col=7 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #COther
-"SELECT "+ref_col+" WHERE line=54 AND col=10 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #CParent0
-"SELECT "+ref_col+" WHERE line=54 AND col=27 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #CParent1
-"SELECT "+decl_col+" WHERE line=57 AND col=5 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #COther
-"SELECT "+decl_col+" WHERE line=58 AND col=5 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #~COther
-"SELECT "+decl_col+" WHERE line=59 AND col=18 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #response
-"SELECT "+ref_col+" WHERE line=62 AND col=6 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #COther
-"SELECT "+decl_col+" WHERE line=62 AND col=14 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #response
-"SELECT "+decl_col+" WHERE line=66 AND col=13 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #test
-"SELECT "+ref_col+" WHERE line=66 AND col=24 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #CParent0
-"SELECT "+decl_col+" WHERE line=66 AND col=34 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #a
-"SELECT "+ref_col+" WHERE line=68 AND col=5 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #a
-"SELECT "+ref_col+" WHERE line=68 AND col=8 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #response
-"SELECT "+decl_col+" WHERE line=71 AND col=5 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #main
-"SELECT "+ref_col+" WHERE line=73 AND col=5 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #CParent0
-"SELECT "+decl_col+" WHERE line=73 AND col=14 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #parent
-"SELECT "+ref_col+" WHERE line=74 AND col=5 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #CChild
-"SELECT "+decl_col+" WHERE line=74 AND col=12 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #child
-"SELECT "+ref_col+" WHERE line=75 AND col=5 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #CGChild
-"SELECT "+decl_col+" WHERE line=75 AND col=13 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #gchild
-"SELECT "+ref_col+" WHERE line=76 AND col=5 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #COther
-"SELECT "+decl_col+" WHERE line=76 AND col=12 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #other
-"SELECT "+ref_col+" WHERE line=77 AND col=5 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #parent
-"SELECT "+ref_col+" WHERE line=77 AND col=12 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #response
-"SELECT "+ref_col+" WHERE line=78 AND col=5 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #child
-"SELECT "+ref_col+" WHERE line=78 AND col=11 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #response
-"SELECT "+ref_col+" WHERE line=79 AND col=5 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #gchild
-"SELECT "+ref_col+" WHERE line=79 AND col=12 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #response
-"SELECT "+ref_col+" WHERE line=80 AND col=5 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #other
-"SELECT "+ref_col+" WHERE line=80 AND col=11 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #response
-"SELECT "+ref_col+" WHERE line=81 AND col=5 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #test
-"SELECT "+ref_col+" WHERE line=81 AND col=11 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #parent
-"SELECT "+ref_col+" WHERE line=82 AND col=5 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #test
-"SELECT "+ref_col+" WHERE line=82 AND col=11 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #child
-"SELECT "+ref_col+" WHERE line=83 AND col=5 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #test
-"SELECT "+ref_col+" WHERE line=83 AND col=11 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #gchild
-"SELECT "+ref_col+" WHERE line=84 AND col=5 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #test
-"SELECT "+ref_col+" WHERE line=84 AND col=11 AND file_list.name=\""+cur_dir+"/inhe.cpp\"", #other
-# overriden
-"SELECT "+overriden_col+" WHERE line=33 AND col=18 AND file_list.name=\""+cur_dir+"/inhe.cpp\"",
-"SELECT "+overriden_col+" WHERE line=36 AND col=14 AND file_list.name=\""+cur_dir+"/inhe.cpp\"",
-"SELECT "+overriden_col+" WHERE line=46 AND col=18 AND file_list.name=\""+cur_dir+"/inhe.cpp\"",
-"SELECT "+overriden_col+" WHERE line=49 AND col=15 AND file_list.name=\""+cur_dir+"/inhe.cpp\"",
-"SELECT "+overriden_col+" WHERE line=59 AND col=18 AND file_list.name=\""+cur_dir+"/inhe.cpp\"",
-"SELECT "+overriden_col+" WHERE line=62 AND col=14 AND file_list.name=\""+cur_dir+"/inhe.cpp\"",
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 3 7", #CParent0
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 3 7", #CParent0
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 3 7", #CParent0
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 3 7", #CParent0
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 3 7", #CParent0
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 6 5", #CParent0
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 6 5", #CParent0
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 6 5", #CParent0
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 6 5", #CParent0
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 6 5", #CParent0
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 7 5", #~CParent0
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 7 5", #~CParent0
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 7 5", #~CParent0
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 7 5", #~CParent0
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 7 5", #~CParent0
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 8 18", #response
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 8 18", #response
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 8 18", #response
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 8 18", #response
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 8 18", #response
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 11 6", #CParent0
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 11 6", #CParent0
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 11 6", #CParent0
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 11 6", #CParent0
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 11 6", #CParent0
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 11 16", #response
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 11 16", #response
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 11 16", #response
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 11 16", #response
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 11 16", #response
+
+#"decl "+db_dir+" "+cur_dir+"/inhe.cpp 12 5", #printf
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 15 7", #CParent1
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 15 7", #CParent1
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 15 7", #CParent1
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 15 7", #CParent1
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 15 7", #CParent1
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 18 5", #CParent1
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 18 5", #CParent1
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 18 5", #CParent1
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 18 5", #CParent1
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 18 5", #CParent1
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 19 5", #~CParent1
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 19 5", #~CParent1
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 19 5", #~CParent1
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 19 5", #~CParent1
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 19 5", #~CParent1
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 20 18", #response
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 20 18", #response
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 20 18", #response
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 20 18", #response
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 20 18", #response
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 23 6", #CParent1
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 23 6", #CParent1
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 23 6", #CParent1
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 23 6", #CParent1
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 23 6", #CParent1
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 23 16", #response
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 23 16", #response
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 23 16", #response
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 23 16", #response
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 23 16", #response
+
+#"decl "+db_dir+" "+cur_dir+"/inhe.cpp 24 5", #printf
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 27 7", #CChild
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 27 7", #CChild
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 27 7", #CChild
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 27 7", #CChild
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 27 7", #CChild
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 28 10", #CParent0
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 28 10", #CParent0
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 28 10", #CParent0
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 28 10", #CParent0
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 28 10", #CParent0
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 31 5", #CChild
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 31 5", #CChild
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 31 5", #CChild
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 31 5", #CChild
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 31 5", #CChild
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 32 5", #~CChild
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 32 5", #~CChild
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 32 5", #~CChild
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 32 5", #~CChild
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 32 5", #~CChild
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 33 18", #response
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 33 18", #response
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 33 18", #response
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 33 18", #response
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 33 18", #response
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 36 6", #CChild
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 36 6", #CChild
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 36 6", #CChild
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 36 6", #CChild
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 36 6", #CChild
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 36 14", #response
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 36 14", #response
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 36 14", #response
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 36 14", #response
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 36 14", #response
+
+#"decl "+db_dir+" "+cur_dir+"/inhe.cpp 37 5", #printf
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 40 7", #CGChild
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 40 7", #CGChild
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 40 7", #CGChild
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 40 7", #CGChild
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 40 7", #CGChild
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 41 10", #CChild
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 41 10", #CChild
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 41 10", #CChild
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 41 10", #CChild
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 41 10", #CChild
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 44 5", #CGChild
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 44 5", #CGChild
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 44 5", #CGChild
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 44 5", #CGChild
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 44 5", #CGChild
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 45 5", #~CGChild
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 45 5", #~CGChild
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 45 5", #~CGChild
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 45 5", #~CGChild
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 45 5", #~CGChild
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 46 18", #response
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 46 18", #response
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 46 18", #response
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 46 18", #response
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 46 18", #response
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 49 6", #CGChild
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 49 6", #CGChild
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 49 6", #CGChild
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 49 6", #CGChild
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 49 6", #CGChild
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 49 15", #response
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 49 15", #response
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 49 15", #response
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 49 15", #response
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 49 15", #response
+
+#"decl "+db_dir+" "+cur_dir+"/inhe.cpp 50 5", #printf
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 53 7", #COther
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 53 7", #COther
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 53 7", #COther
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 53 7", #COther
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 53 7", #COther
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 54 10", #CParent0
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 54 10", #CParent0
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 54 10", #CParent0
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 54 10", #CParent0
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 54 10", #CParent0
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 54 27", #CParent1
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 54 27", #CParent1
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 54 27", #CParent1
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 54 27", #CParent1
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 54 27", #CParent1
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 57 5", #COther
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 57 5", #COther
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 57 5", #COther
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 57 5", #COther
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 57 5", #COther
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 58 5", #~COther
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 58 5", #~COther
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 58 5", #~COther
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 58 5", #~COther
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 58 5", #~COther
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 59 18", #response
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 59 18", #response
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 59 18", #response
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 59 18", #response
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 59 18", #response
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 62 6", #COther
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 62 6", #COther
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 62 6", #COther
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 62 6", #COther
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 62 6", #COther
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 62 14", #response
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 62 14", #response
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 62 14", #response
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 62 14", #response
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 62 14", #response
+
+#"decl "+db_dir+" "+cur_dir+"/inhe.cpp 63 5", #printf
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 66 13", #test
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 66 13", #test
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 66 13", #test
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 66 13", #test
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 66 13", #test
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 66 24", #CParent0
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 66 24", #CParent0
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 66 24", #CParent0
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 66 24", #CParent0
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 66 24", #CParent0
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 66 34", #a
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 66 34", #a
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 66 34", #a
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 66 34", #a
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 66 34", #a
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 68 5", #a
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 68 5", #a
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 68 5", #a
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 68 5", #a
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 68 5", #a
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 68 8", #response
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 68 8", #response
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 68 8", #response
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 68 8", #response
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 68 8", #response
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 71 5", #main
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 71 5", #main
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 71 5", #main
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 71 5", #main
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 71 5", #main
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 73 5", #CParent0
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 73 5", #CParent0
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 73 5", #CParent0
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 73 5", #CParent0
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 73 5", #CParent0
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 73 14", #parent
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 73 14", #parent
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 73 14", #parent
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 73 14", #parent
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 73 14", #parent
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 74 5", #CChild
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 74 5", #CChild
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 74 5", #CChild
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 74 5", #CChild
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 74 5", #CChild
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 74 12", #child
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 74 12", #child
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 74 12", #child
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 74 12", #child
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 74 12", #child
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 75 5", #CGChild
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 75 5", #CGChild
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 75 5", #CGChild
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 75 5", #CGChild
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 75 5", #CGChild
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 75 13", #gchild
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 75 13", #gchild
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 75 13", #gchild
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 75 13", #gchild
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 75 13", #gchild
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 76 5", #COther
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 76 5", #COther
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 76 5", #COther
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 76 5", #COther
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 76 5", #COther
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 76 12", #other
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 76 12", #other
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 76 12", #other
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 76 12", #other
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 76 12", #other
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 77 5", #parent
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 77 5", #parent
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 77 5", #parent
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 77 5", #parent
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 77 5", #parent
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 77 12", #response
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 77 12", #response
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 77 12", #response
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 77 12", #response
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 77 12", #response
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 78 5", #child
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 78 5", #child
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 78 5", #child
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 78 5", #child
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 78 5", #child
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 78 11", #response
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 78 11", #response
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 78 11", #response
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 78 11", #response
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 78 11", #response
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 79 5", #gchild
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 79 5", #gchild
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 79 5", #gchild
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 79 5", #gchild
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 79 5", #gchild
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 79 12", #response
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 79 12", #response
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 79 12", #response
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 79 12", #response
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 79 12", #response
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 80 5", #other
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 80 5", #other
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 80 5", #other
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 80 5", #other
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 80 5", #other
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 80 11", #response
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 80 11", #response
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 80 11", #response
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 80 11", #response
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 80 11", #response
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 81 5", #test
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 81 5", #test
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 81 5", #test
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 81 5", #test
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 81 5", #test
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 81 11", #parent
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 81 11", #parent
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 81 11", #parent
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 81 11", #parent
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 81 11", #parent
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 82 5", #test
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 82 5", #test
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 82 5", #test
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 82 5", #test
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 82 5", #test
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 82 11", #child
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 82 11", #child
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 82 11", #child
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 82 11", #child
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 82 11", #child
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 83 5", #test
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 83 5", #test
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 83 5", #test
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 83 5", #test
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 83 5", #test
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 83 11", #gchild
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 83 11", #gchild
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 83 11", #gchild
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 83 11", #gchild
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 83 11", #gchild
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 84 5", #test
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 84 5", #test
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 84 5", #test
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 84 5", #test
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 84 5", #test
+
+"decl "+db_dir+" "+cur_dir+"/inhe.cpp 84 11", #other
+"def "+db_dir+" "+cur_dir+"/inhe.cpp 84 11", #other
+"ref "+db_dir+" "+cur_dir+"/inhe.cpp 84 11", #other
+"override "+db_dir+" "+cur_dir+"/inhe.cpp 84 11", #other
+"overriden "+db_dir+" "+cur_dir+"/inhe.cpp 84 11", #other
 ]
 
 ans_list = [
-('CParent0',cur_dir+'/inhe.cpp',3,7,clang.cindex.CursorKind.CLASS_DECL.value,0,0,1, u'c:@C@CParent0', 105, 0),
-('CParent0',cur_dir+'/inhe.cpp',6,5,clang.cindex.CursorKind.CONSTRUCTOR.value,0,0,1, u'', 2, 0),
-('~CParent0',cur_dir+'/inhe.cpp',7,5,clang.cindex.CursorKind.DESTRUCTOR.value,0,0,1, u'', 2, 0),
-('response',cur_dir+'/inhe.cpp',8,18,clang.cindex.CursorKind.CXX_METHOD.value,0,1,0, u'', 2, 0),
-('CParent0',cur_dir+'/inhe.cpp',11,6,clang.cindex.CursorKind.TYPE_REF.value,cur_dir+'/inhe.cpp',3,7),
-('response',cur_dir+'/inhe.cpp',11,16,clang.cindex.CursorKind.CXX_METHOD.value,0,1,1, u'', 2, 0),
-('CParent1',cur_dir+'/inhe.cpp',15,7,clang.cindex.CursorKind.CLASS_DECL.value,0,0,1, u'c:@C@CParent1', 105, 0),
-('CParent1',cur_dir+'/inhe.cpp',18,5,clang.cindex.CursorKind.CONSTRUCTOR.value,0,0,1, u'', 2, 0),
-('~CParent1',cur_dir+'/inhe.cpp',19,5,clang.cindex.CursorKind.DESTRUCTOR.value,0,0,1, u'', 2, 0),
-('response',cur_dir+'/inhe.cpp',20,18,clang.cindex.CursorKind.CXX_METHOD.value,0,1,0, u'', 2, 0),
-('CParent1',cur_dir+'/inhe.cpp',23,6,clang.cindex.CursorKind.TYPE_REF.value,cur_dir+'/inhe.cpp',15,7),
-('response',cur_dir+'/inhe.cpp',23,16,clang.cindex.CursorKind.CXX_METHOD.value,0,1,1, u'', 2, 0),
-('CChild',cur_dir+'/inhe.cpp',27,7,clang.cindex.CursorKind.CLASS_DECL.value,0,0,1, u'c:@C@CChild', 105, 0),
-('CParent0',cur_dir+'/inhe.cpp',28,10,clang.cindex.CursorKind.TYPE_REF.value,cur_dir+'/inhe.cpp',3,7),
-('CChild',cur_dir+'/inhe.cpp',31,5,clang.cindex.CursorKind.CONSTRUCTOR.value,0,0,1, u'', 2, 0),
-('~CChild',cur_dir+'/inhe.cpp',32,5,clang.cindex.CursorKind.DESTRUCTOR.value,0,0,1, u'', 2, 0),
-('response',cur_dir+'/inhe.cpp',33,18,clang.cindex.CursorKind.CXX_METHOD.value,0,1,0, u'', 2, 0),
-('CChild',cur_dir+'/inhe.cpp',36,6,clang.cindex.CursorKind.TYPE_REF.value,cur_dir+'/inhe.cpp',27,7),
-('response',cur_dir+'/inhe.cpp',36,14,clang.cindex.CursorKind.CXX_METHOD.value,0,1,1, u'', 2, 0),
-('CGChild',cur_dir+'/inhe.cpp',40,7,clang.cindex.CursorKind.CLASS_DECL.value,0,0,1, u'c:@C@CGChild', 105, 0),
-('CChild',cur_dir+'/inhe.cpp',41,10,clang.cindex.CursorKind.TYPE_REF.value,cur_dir+'/inhe.cpp',27,7),
-('CGChild',cur_dir+'/inhe.cpp',44,5,clang.cindex.CursorKind.CONSTRUCTOR.value,0,0,1, u'', 2, 0),
-('~CGChild',cur_dir+'/inhe.cpp',45,5,clang.cindex.CursorKind.DESTRUCTOR.value,0,0,1, u'', 2, 0),
-('response',cur_dir+'/inhe.cpp',46,18,clang.cindex.CursorKind.CXX_METHOD.value,0,1,0, u'', 2, 0),
-('CGChild',cur_dir+'/inhe.cpp',49,6,clang.cindex.CursorKind.TYPE_REF.value,cur_dir+'/inhe.cpp',40,7),
-('response',cur_dir+'/inhe.cpp',49,15,clang.cindex.CursorKind.CXX_METHOD.value,0,1,1, u'', 2, 0),
-('COther',cur_dir+'/inhe.cpp',53,7,clang.cindex.CursorKind.CLASS_DECL.value,0,0,1, u'c:@C@COther', 105, 0),
-('CParent0',cur_dir+'/inhe.cpp',54,10,clang.cindex.CursorKind.TYPE_REF.value,cur_dir+'/inhe.cpp',3,7),
-('CParent1',cur_dir+'/inhe.cpp',54,27,clang.cindex.CursorKind.TYPE_REF.value,cur_dir+'/inhe.cpp',15,7),
-('COther',cur_dir+'/inhe.cpp',57,5,clang.cindex.CursorKind.CONSTRUCTOR.value,0,0,1, u'', 2, 0),
-('~COther',cur_dir+'/inhe.cpp',58,5,clang.cindex.CursorKind.DESTRUCTOR.value,0,0,1, u'', 2, 0),
-('response',cur_dir+'/inhe.cpp',59,18,clang.cindex.CursorKind.CXX_METHOD.value,0,1,0, u'', 2, 0),
-('COther',cur_dir+'/inhe.cpp',62,6,clang.cindex.CursorKind.TYPE_REF.value,cur_dir+'/inhe.cpp',53,7),
-('response',cur_dir+'/inhe.cpp',62,14,clang.cindex.CursorKind.CXX_METHOD.value,0,1,1, u'', 2, 0),
-('test',cur_dir+'/inhe.cpp',66,13,clang.cindex.CursorKind.FUNCTION_DECL.value,0,0,1, u'', 2, 0),
-('CParent0',cur_dir+'/inhe.cpp',66,24,clang.cindex.CursorKind.TYPE_REF.value,cur_dir+'/inhe.cpp',3,7),
-('a',cur_dir+'/inhe.cpp',66,34,clang.cindex.CursorKind.PARM_DECL.value,0,0,1, u'c:@C@CParent0', 105, 1),
-('a',cur_dir+'/inhe.cpp',68,5,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/inhe.cpp',66,34),
-('response',cur_dir+'/inhe.cpp',68,8,clang.cindex.CursorKind.MEMBER_REF_EXPR.value,cur_dir+'/inhe.cpp',11,16),
-('main',cur_dir+'/inhe.cpp',71,5,clang.cindex.CursorKind.FUNCTION_DECL.value,0,0,1, u'', 17, 0),
-('CParent0',cur_dir+'/inhe.cpp',73,5,clang.cindex.CursorKind.TYPE_REF.value,cur_dir+'/inhe.cpp',3,7),
-('parent',cur_dir+'/inhe.cpp',73,14,clang.cindex.CursorKind.VAR_DECL.value,0,0,1, u'c:@C@CParent0', 105, 0),
-('CChild',cur_dir+'/inhe.cpp',74,5,clang.cindex.CursorKind.TYPE_REF.value,cur_dir+'/inhe.cpp',27,7),
-('child',cur_dir+'/inhe.cpp',74,12,clang.cindex.CursorKind.VAR_DECL.value,0,0,1, u'c:@C@CChild', 105, 0),
-('CGChild',cur_dir+'/inhe.cpp',75,5,clang.cindex.CursorKind.TYPE_REF.value,cur_dir+'/inhe.cpp',40,7),
-('gchild',cur_dir+'/inhe.cpp',75,13,clang.cindex.CursorKind.VAR_DECL.value,0,0,1, u'c:@C@CGChild', 105, 0),
-('COther',cur_dir+'/inhe.cpp',76,5,clang.cindex.CursorKind.TYPE_REF.value,cur_dir+'/inhe.cpp',53,7),
-('other',cur_dir+'/inhe.cpp',76,12,clang.cindex.CursorKind.VAR_DECL.value,0,0,1, u'c:@C@COther', 105, 0),
-('parent',cur_dir+'/inhe.cpp',77,5,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/inhe.cpp',73,14),
-('response',cur_dir+'/inhe.cpp',77,12,clang.cindex.CursorKind.MEMBER_REF_EXPR.value,cur_dir+'/inhe.cpp',11,16),
-('child',cur_dir+'/inhe.cpp',78,5,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/inhe.cpp',74,12),
-('response',cur_dir+'/inhe.cpp',78,11,clang.cindex.CursorKind.MEMBER_REF_EXPR.value,cur_dir+'/inhe.cpp',36,14),
-('gchild',cur_dir+'/inhe.cpp',79,5,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/inhe.cpp',75,13),
-('response',cur_dir+'/inhe.cpp',79,12,clang.cindex.CursorKind.MEMBER_REF_EXPR.value,cur_dir+'/inhe.cpp',49,15),
-('other',cur_dir+'/inhe.cpp',80,5,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/inhe.cpp',76,12),
-('response',cur_dir+'/inhe.cpp',80,11,clang.cindex.CursorKind.MEMBER_REF_EXPR.value,cur_dir+'/inhe.cpp',62,14),
-('test',cur_dir+'/inhe.cpp',81,5,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/inhe.cpp',66,13),
-('parent',cur_dir+'/inhe.cpp',81,11,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/inhe.cpp',73,14),
-('test',cur_dir+'/inhe.cpp',82,5,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/inhe.cpp',66,13),
-('child',cur_dir+'/inhe.cpp',82,11,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/inhe.cpp',74,12),
-('test',cur_dir+'/inhe.cpp',83,5,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/inhe.cpp',66,13),
-('gchild',cur_dir+'/inhe.cpp',83,11,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/inhe.cpp',75,13),
-('test',cur_dir+'/inhe.cpp',84,5,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/inhe.cpp',66,13),
-('other',cur_dir+'/inhe.cpp',84,11,clang.cindex.CursorKind.DECL_REF_EXPR.value,cur_dir+'/inhe.cpp',76,12),
-# overriden
-('response',cur_dir+'/inhe.cpp',33,18,clang.cindex.CursorKind.CXX_METHOD.value,'c:@C@CChild@F@response#',0),
-('response',cur_dir+'/inhe.cpp',36,14,clang.cindex.CursorKind.CXX_METHOD.value,'c:@C@CChild@F@response#',1),
-('response',cur_dir+'/inhe.cpp',46,18,clang.cindex.CursorKind.CXX_METHOD.value,'c:@C@CGChild@F@response#',0),
-('response',cur_dir+'/inhe.cpp',49,15,clang.cindex.CursorKind.CXX_METHOD.value,'c:@C@CGChild@F@response#',1),
-('response',cur_dir+'/inhe.cpp',59,18,clang.cindex.CursorKind.CXX_METHOD.value,'c:@C@COther@F@response#',0),
-('response',cur_dir+'/inhe.cpp',59,18,clang.cindex.CursorKind.CXX_METHOD.value,'c:@C@COther@F@response#',0),
-('response',cur_dir+'/inhe.cpp',62,14,clang.cindex.CursorKind.CXX_METHOD.value,'c:@C@COther@F@response#',1),
-('response',cur_dir+'/inhe.cpp',62,14,clang.cindex.CursorKind.CXX_METHOD.value,'c:@C@COther@F@response#',1),
+# inhe.cpp
+["CParent0|"+cur_dir+"/inhe.cpp|3|7|class CParent0"],
+["CParent0|"+cur_dir+"/inhe.cpp|3|7|class CParent0"],
+[
+"CParent0|"+cur_dir+r'/inhe.cpp|11|6|void CParent0::response(void) {',
+"CParent0|"+cur_dir+r'/inhe.cpp|28|10|: public CParent0',
+"CParent0|"+cur_dir+r'/inhe.cpp|54|10|: public CParent0, public CParent1',
+"CParent0|"+cur_dir+r'/inhe.cpp|66|24|static void test(class CParent0 *a)',
+"CParent0|"+cur_dir+r'/inhe.cpp|73|5|    CParent0 parent;',
+],
+[""],
+[""],
+
+["CParent0|"+cur_dir+"/inhe.cpp|6|5|    CParent0(){}"],
+["CParent0|"+cur_dir+"/inhe.cpp|6|5|    CParent0(){}"],
+[""],
+[""],
+[""],
+
+["~CParent0|"+cur_dir+"/inhe.cpp|7|5|    ~CParent0(){}"],
+["~CParent0|"+cur_dir+"/inhe.cpp|7|5|    ~CParent0(){}"],
+[""],
+[""],
+[""],
+
+["response|"+cur_dir+"/inhe.cpp|8|18|    virtual void response(void);"],
+["response|"+cur_dir+"/inhe.cpp|11|16|void CParent0::response(void) {"],
+[
+"response|"+cur_dir+"/inhe.cpp|68|8|    a->response();",
+"response|"+cur_dir+"/inhe.cpp|77|12|    parent.response();",
+],
+[""],
+[
+"response|"+cur_dir+"/inhe.cpp|33|18|    virtual void response(void);",
+"response|"+cur_dir+"/inhe.cpp|36|14|void CChild::response(void) {",
+"response|"+cur_dir+"/inhe.cpp|59|18|    virtual void response(void);",
+"response|"+cur_dir+"/inhe.cpp|62|14|void COther::response(void) {",
+],
+
+# 11 6
+["CParent0|"+cur_dir+"/inhe.cpp|3|7|class CParent0"],
+["CParent0|"+cur_dir+"/inhe.cpp|3|7|class CParent0"],
+[
+"CParent0|"+cur_dir+r'/inhe.cpp|11|6|void CParent0::response(void) {',
+"CParent0|"+cur_dir+r'/inhe.cpp|28|10|: public CParent0',
+"CParent0|"+cur_dir+r'/inhe.cpp|54|10|: public CParent0, public CParent1',
+"CParent0|"+cur_dir+r'/inhe.cpp|66|24|static void test(class CParent0 *a)',
+"CParent0|"+cur_dir+r'/inhe.cpp|73|5|    CParent0 parent;',
+],
+[""],
+[""],
+# 11 16
+["response|"+cur_dir+"/inhe.cpp|8|18|    virtual void response(void);"],
+["response|"+cur_dir+"/inhe.cpp|11|16|void CParent0::response(void) {"],
+[
+"response|"+cur_dir+"/inhe.cpp|68|8|    a->response();",
+"response|"+cur_dir+"/inhe.cpp|77|12|    parent.response();",
+],
+[""],
+[
+"response|"+cur_dir+"/inhe.cpp|33|18|    virtual void response(void);",
+"response|"+cur_dir+"/inhe.cpp|36|14|void CChild::response(void) {",
+"response|"+cur_dir+"/inhe.cpp|59|18|    virtual void response(void);",
+"response|"+cur_dir+"/inhe.cpp|62|14|void COther::response(void) {",
+],
+# 15 7
+["CParent1|"+cur_dir+"/inhe.cpp|15|7|class CParent1"],
+["CParent1|"+cur_dir+"/inhe.cpp|15|7|class CParent1"],
+[
+"CParent1|"+cur_dir+r'/inhe.cpp|23|6|void CParent1::response(void) {',
+"CParent1|"+cur_dir+r'/inhe.cpp|54|27|: public CParent0, public CParent1',
+],
+[""],
+[""],
+# 18 5
+["CParent1|"+cur_dir+"/inhe.cpp|18|5|    CParent1(){}"],
+["CParent1|"+cur_dir+"/inhe.cpp|18|5|    CParent1(){}"],
+[""],
+[""],
+[""],
+# 19 5
+["~CParent1|"+cur_dir+"/inhe.cpp|19|5|    ~CParent1(){}"],
+["~CParent1|"+cur_dir+"/inhe.cpp|19|5|    ~CParent1(){}"],
+[""],
+[""],
+[""],
+# 20 18
+["response|"+cur_dir+"/inhe.cpp|20|18|    virtual void response(void);"],
+["response|"+cur_dir+"/inhe.cpp|23|16|void CParent1::response(void) {"],
+[""],
+[""],
+[
+"response|"+cur_dir+"/inhe.cpp|59|18|    virtual void response(void);",
+"response|"+cur_dir+"/inhe.cpp|62|14|void COther::response(void) {",
+],
+# 23 6
+["CParent1|"+cur_dir+"/inhe.cpp|15|7|class CParent1"],
+["CParent1|"+cur_dir+"/inhe.cpp|15|7|class CParent1"],
+[
+"CParent1|"+cur_dir+r'/inhe.cpp|23|6|void CParent1::response(void) {',
+"CParent1|"+cur_dir+r'/inhe.cpp|54|27|: public CParent0, public CParent1',
+],
+[""],
+[""],
+# 23 16
+["response|"+cur_dir+"/inhe.cpp|20|18|    virtual void response(void);"],
+["response|"+cur_dir+"/inhe.cpp|23|16|void CParent1::response(void) {"],
+[""],
+[""],
+[
+"response|"+cur_dir+"/inhe.cpp|59|18|    virtual void response(void);",
+"response|"+cur_dir+"/inhe.cpp|62|14|void COther::response(void) {",
+],
+# 27 7
+["CChild|"+cur_dir+"/inhe.cpp|27|7|class CChild"],
+["CChild|"+cur_dir+"/inhe.cpp|27|7|class CChild"],
+[
+"CChild|"+cur_dir+r'/inhe.cpp|36|6|void CChild::response(void) {',
+"CChild|"+cur_dir+r'/inhe.cpp|41|10|: public CChild',
+"CChild|"+cur_dir+r'/inhe.cpp|74|5|    CChild child;',
+],
+[""],
+[""],
+# 28 10
+["CParent0|"+cur_dir+"/inhe.cpp|3|7|class CParent0"],
+["CParent0|"+cur_dir+"/inhe.cpp|3|7|class CParent0"],
+[
+"CParent0|"+cur_dir+r'/inhe.cpp|11|6|void CParent0::response(void) {',
+"CParent0|"+cur_dir+r'/inhe.cpp|28|10|: public CParent0',
+"CParent0|"+cur_dir+r'/inhe.cpp|54|10|: public CParent0, public CParent1',
+"CParent0|"+cur_dir+r'/inhe.cpp|66|24|static void test(class CParent0 *a)',
+"CParent0|"+cur_dir+r'/inhe.cpp|73|5|    CParent0 parent;',
+],
+[""],
+[""],
+# 31 5
+["CChild|"+cur_dir+"/inhe.cpp|31|5|    CChild(){}"],
+["CChild|"+cur_dir+"/inhe.cpp|31|5|    CChild(){}"],
+[""],
+[""],
+[""],
+# 39 5
+["~CChild|"+cur_dir+"/inhe.cpp|32|5|    ~CChild(){}"],
+["~CChild|"+cur_dir+"/inhe.cpp|32|5|    ~CChild(){}"],
+[""],
+[""],
+[""],
+# 33 18
+["response|"+cur_dir+"/inhe.cpp|33|18|    virtual void response(void);"],
+["response|"+cur_dir+"/inhe.cpp|36|14|void CChild::response(void) {"],
+["response|"+cur_dir+"/inhe.cpp|78|11|    child.response();"],
+["response|"+cur_dir+"/inhe.cpp|8|18|    virtual void response(void);"],
+[
+"response|"+cur_dir+"/inhe.cpp|46|18|    virtual void response(void);",
+"response|"+cur_dir+"/inhe.cpp|49|15|void CGChild::response(void) {",
+],
+# 36 6
+["CChild|"+cur_dir+"/inhe.cpp|27|7|class CChild"],
+["CChild|"+cur_dir+"/inhe.cpp|27|7|class CChild"],
+[
+"CChild|"+cur_dir+r'/inhe.cpp|36|6|void CChild::response(void) {',
+"CChild|"+cur_dir+r'/inhe.cpp|41|10|: public CChild',
+"CChild|"+cur_dir+r'/inhe.cpp|74|5|    CChild child;',
+],
+[""],
+[""],
+# 36 14
+["response|"+cur_dir+"/inhe.cpp|33|18|    virtual void response(void);"],
+["response|"+cur_dir+"/inhe.cpp|36|14|void CChild::response(void) {"],
+["response|"+cur_dir+"/inhe.cpp|78|11|    child.response();"],
+["response|"+cur_dir+"/inhe.cpp|8|18|    virtual void response(void);"],
+[
+"response|"+cur_dir+"/inhe.cpp|46|18|    virtual void response(void);",
+"response|"+cur_dir+"/inhe.cpp|49|15|void CGChild::response(void) {",
+],
+# 40 7
+["CGChild|"+cur_dir+"/inhe.cpp|40|7|class CGChild"],
+["CGChild|"+cur_dir+"/inhe.cpp|40|7|class CGChild"],
+[
+"CGChild|"+cur_dir+r'/inhe.cpp|49|6|void CGChild::response(void) {',
+"CGChild|"+cur_dir+r'/inhe.cpp|75|5|    CGChild gchild;',
+],
+[""],
+[""],
+# 41 10
+["CChild|"+cur_dir+"/inhe.cpp|27|7|class CChild"],
+["CChild|"+cur_dir+"/inhe.cpp|27|7|class CChild"],
+[
+"CChild|"+cur_dir+r'/inhe.cpp|36|6|void CChild::response(void) {',
+"CChild|"+cur_dir+r'/inhe.cpp|41|10|: public CChild',
+"CChild|"+cur_dir+r'/inhe.cpp|74|5|    CChild child;',
+],
+[""],
+[""],
+# 44 5
+["CGChild|"+cur_dir+"/inhe.cpp|44|5|    CGChild(){}"],
+["CGChild|"+cur_dir+"/inhe.cpp|44|5|    CGChild(){}"],
+[""],
+[""],
+[""],
+# 45 5
+["~CGChild|"+cur_dir+"/inhe.cpp|45|5|    ~CGChild(){}"],
+["~CGChild|"+cur_dir+"/inhe.cpp|45|5|    ~CGChild(){}"],
+[""],
+[""],
+[""],
+# 46 18
+["response|"+cur_dir+"/inhe.cpp|46|18|    virtual void response(void);"],
+["response|"+cur_dir+"/inhe.cpp|49|15|void CGChild::response(void) {"],
+["response|"+cur_dir+"/inhe.cpp|79|12|    gchild.response();"],
+["response|"+cur_dir+"/inhe.cpp|33|18|    virtual void response(void);"],
+[""],
+# 49 6
+["CGChild|"+cur_dir+"/inhe.cpp|40|7|class CGChild"],
+["CGChild|"+cur_dir+"/inhe.cpp|40|7|class CGChild"],
+[
+"CGChild|"+cur_dir+r'/inhe.cpp|49|6|void CGChild::response(void) {',
+"CGChild|"+cur_dir+r'/inhe.cpp|75|5|    CGChild gchild;',
+],
+[""],
+[""],
+# 49 15
+["response|"+cur_dir+"/inhe.cpp|46|18|    virtual void response(void);"],
+["response|"+cur_dir+"/inhe.cpp|49|15|void CGChild::response(void) {"],
+["response|"+cur_dir+"/inhe.cpp|79|12|    gchild.response();"],
+["response|"+cur_dir+"/inhe.cpp|33|18|    virtual void response(void);"],
+[""],
+# 53 7
+["COther|"+cur_dir+"/inhe.cpp|53|7|class COther"],
+["COther|"+cur_dir+"/inhe.cpp|53|7|class COther"],
+[
+"COther|"+cur_dir+r'/inhe.cpp|62|6|void COther::response(void) {',
+"COther|"+cur_dir+r'/inhe.cpp|76|5|    COther other;',
+],
+[""],
+[""],
+# 54 10
+["CParent0|"+cur_dir+"/inhe.cpp|3|7|class CParent0"],
+["CParent0|"+cur_dir+"/inhe.cpp|3|7|class CParent0"],
+[
+"CParent0|"+cur_dir+r'/inhe.cpp|11|6|void CParent0::response(void) {',
+"CParent0|"+cur_dir+r'/inhe.cpp|28|10|: public CParent0',
+"CParent0|"+cur_dir+r'/inhe.cpp|54|10|: public CParent0, public CParent1',
+"CParent0|"+cur_dir+r'/inhe.cpp|66|24|static void test(class CParent0 *a)',
+"CParent0|"+cur_dir+r'/inhe.cpp|73|5|    CParent0 parent;',
+],
+[""],
+[""],
+# 54 27
+["CParent1|"+cur_dir+"/inhe.cpp|15|7|class CParent1"],
+["CParent1|"+cur_dir+"/inhe.cpp|15|7|class CParent1"],
+[
+"CParent1|"+cur_dir+r'/inhe.cpp|23|6|void CParent1::response(void) {',
+"CParent1|"+cur_dir+r'/inhe.cpp|54|27|: public CParent0, public CParent1',
+],
+[""],
+[""],
+# 57 5
+["COther|"+cur_dir+"/inhe.cpp|57|5|    COther(){}"],
+["COther|"+cur_dir+"/inhe.cpp|57|5|    COther(){}"],
+[""],
+[""],
+[""],
+# 58 5
+["~COther|"+cur_dir+"/inhe.cpp|58|5|    ~COther(){}"],
+["~COther|"+cur_dir+"/inhe.cpp|58|5|    ~COther(){}"],
+[""],
+[""],
+[""],
+# 59 18
+["response|"+cur_dir+"/inhe.cpp|59|18|    virtual void response(void);"],
+["response|"+cur_dir+"/inhe.cpp|62|14|void COther::response(void) {"],
+["response|"+cur_dir+"/inhe.cpp|80|11|    other.response();"],
+[
+"response|"+cur_dir+"/inhe.cpp|8|18|    virtual void response(void);",
+"response|"+cur_dir+"/inhe.cpp|20|18|    virtual void response(void);",
+],
+[""],
+# 62 6
+["COther|"+cur_dir+"/inhe.cpp|53|7|class COther"],
+["COther|"+cur_dir+"/inhe.cpp|53|7|class COther"],
+[
+"COther|"+cur_dir+r'/inhe.cpp|62|6|void COther::response(void) {',
+"COther|"+cur_dir+r'/inhe.cpp|76|5|    COther other;',
+],
+[""],
+[""],
+# 62 14
+["response|"+cur_dir+"/inhe.cpp|59|18|    virtual void response(void);"],
+["response|"+cur_dir+"/inhe.cpp|62|14|void COther::response(void) {"],
+["response|"+cur_dir+"/inhe.cpp|80|11|    other.response();"],
+[
+"response|"+cur_dir+"/inhe.cpp|8|18|    virtual void response(void);",
+"response|"+cur_dir+"/inhe.cpp|20|18|    virtual void response(void);",
+],
+[""],
+# 66 13
+["test|"+cur_dir+"/inhe.cpp|66|13|static void test(class CParent0 *a)"],
+["test|"+cur_dir+"/inhe.cpp|66|13|static void test(class CParent0 *a)"],
+[
+"test|"+cur_dir+"/inhe.cpp|81|5|    test(&parent);",
+"test|"+cur_dir+"/inhe.cpp|82|5|    test(&child);",
+"test|"+cur_dir+"/inhe.cpp|83|5|    test(&gchild);",
+"test|"+cur_dir+"/inhe.cpp|84|5|    test(&other);",
+],
+[""],
+[""],
+# 66 24
+["CParent0|"+cur_dir+"/inhe.cpp|3|7|class CParent0"],
+["CParent0|"+cur_dir+"/inhe.cpp|3|7|class CParent0"],
+[
+"CParent0|"+cur_dir+r'/inhe.cpp|11|6|void CParent0::response(void) {',
+"CParent0|"+cur_dir+r'/inhe.cpp|28|10|: public CParent0',
+"CParent0|"+cur_dir+r'/inhe.cpp|54|10|: public CParent0, public CParent1',
+"CParent0|"+cur_dir+r'/inhe.cpp|66|24|static void test(class CParent0 *a)',
+"CParent0|"+cur_dir+r'/inhe.cpp|73|5|    CParent0 parent;',
+],
+[""],
+[""],
+# 66 34
+["a|"+cur_dir+"/inhe.cpp|66|34|static void test(class CParent0 *a)"],
+["a|"+cur_dir+"/inhe.cpp|66|34|static void test(class CParent0 *a)"],
+["a|"+cur_dir+r'/inhe.cpp|68|5|    a->response();'],
+[""],
+[""],
+# 68 5
+["a|"+cur_dir+"/inhe.cpp|66|34|static void test(class CParent0 *a)"],
+["a|"+cur_dir+"/inhe.cpp|66|34|static void test(class CParent0 *a)"],
+["a|"+cur_dir+r'/inhe.cpp|68|5|    a->response();'],
+[""],
+[""],
+# 68 8
+["response|"+cur_dir+"/inhe.cpp|8|18|    virtual void response(void);"],
+["response|"+cur_dir+"/inhe.cpp|11|16|void CParent0::response(void) {"],
+[
+"response|"+cur_dir+"/inhe.cpp|68|8|    a->response();",
+"response|"+cur_dir+"/inhe.cpp|77|12|    parent.response();",
+],
+[""],
+[
+"response|"+cur_dir+"/inhe.cpp|33|18|    virtual void response(void);",
+"response|"+cur_dir+"/inhe.cpp|36|14|void CChild::response(void) {",
+"response|"+cur_dir+"/inhe.cpp|59|18|    virtual void response(void);",
+"response|"+cur_dir+"/inhe.cpp|62|14|void COther::response(void) {",
+],
+# 71 5
+["main|"+cur_dir+"/inhe.cpp|71|5|int main()"],
+["main|"+cur_dir+"/inhe.cpp|71|5|int main()"],
+[""],
+[""],
+[""],
+# 73 5
+["CParent0|"+cur_dir+"/inhe.cpp|3|7|class CParent0"],
+["CParent0|"+cur_dir+"/inhe.cpp|3|7|class CParent0"],
+[
+"CParent0|"+cur_dir+r'/inhe.cpp|11|6|void CParent0::response(void) {',
+"CParent0|"+cur_dir+r'/inhe.cpp|28|10|: public CParent0',
+"CParent0|"+cur_dir+r'/inhe.cpp|54|10|: public CParent0, public CParent1',
+"CParent0|"+cur_dir+r'/inhe.cpp|66|24|static void test(class CParent0 *a)',
+"CParent0|"+cur_dir+r'/inhe.cpp|73|5|    CParent0 parent;',
+],
+[""],
+[""],
+# 73 14
+["parent|"+cur_dir+"/inhe.cpp|73|14|    CParent0 parent;"],
+["parent|"+cur_dir+"/inhe.cpp|73|14|    CParent0 parent;"],
+[
+"parent|"+cur_dir+"/inhe.cpp|77|5|    parent.response();",
+"parent|"+cur_dir+"/inhe.cpp|81|11|    test(&parent);",
+],
+[""],
+[""],
+# 74 5
+["CChild|"+cur_dir+"/inhe.cpp|27|7|class CChild"],
+["CChild|"+cur_dir+"/inhe.cpp|27|7|class CChild"],
+[
+"CChild|"+cur_dir+r'/inhe.cpp|36|6|void CChild::response(void) {',
+"CChild|"+cur_dir+r'/inhe.cpp|41|10|: public CChild',
+"CChild|"+cur_dir+r'/inhe.cpp|74|5|    CChild child;',
+],
+[""],
+[""],
+# 74 12
+["child|"+cur_dir+"/inhe.cpp|74|12|    CChild child;"],
+["child|"+cur_dir+"/inhe.cpp|74|12|    CChild child;"],
+[
+"child|"+cur_dir+"/inhe.cpp|78|5|    child.response();",
+"child|"+cur_dir+"/inhe.cpp|82|11|    test(&child);",
+],
+[""],
+[""],
+# 75 5
+["CGChild|"+cur_dir+"/inhe.cpp|40|7|class CGChild"],
+["CGChild|"+cur_dir+"/inhe.cpp|40|7|class CGChild"],
+[
+"CGChild|"+cur_dir+r'/inhe.cpp|49|6|void CGChild::response(void) {',
+"CGChild|"+cur_dir+r'/inhe.cpp|75|5|    CGChild gchild;',
+],
+[""],
+[""],
+# 74 12
+["gchild|"+cur_dir+"/inhe.cpp|75|13|    CGChild gchild;"],
+["gchild|"+cur_dir+"/inhe.cpp|75|13|    CGChild gchild;"],
+[
+"gchild|"+cur_dir+"/inhe.cpp|79|5|    gchild.response();",
+"gchild|"+cur_dir+"/inhe.cpp|83|11|    test(&gchild);",
+],
+[""],
+[""],
+# 76 5
+["COther|"+cur_dir+"/inhe.cpp|53|7|class COther"],
+["COther|"+cur_dir+"/inhe.cpp|53|7|class COther"],
+[
+"COther|"+cur_dir+r'/inhe.cpp|62|6|void COther::response(void) {',
+"COther|"+cur_dir+r'/inhe.cpp|76|5|    COther other;',
+],
+[""],
+[""],
+# 76 12
+["other|"+cur_dir+"/inhe.cpp|76|12|    COther other;"],
+["other|"+cur_dir+"/inhe.cpp|76|12|    COther other;"],
+[
+"other|"+cur_dir+"/inhe.cpp|80|5|    other.response();",
+"other|"+cur_dir+"/inhe.cpp|84|11|    test(&other);",
+],
+[""],
+[""],
+# 77 5
+["parent|"+cur_dir+"/inhe.cpp|73|14|    CParent0 parent;"],
+["parent|"+cur_dir+"/inhe.cpp|73|14|    CParent0 parent;"],
+[
+"parent|"+cur_dir+"/inhe.cpp|77|5|    parent.response();",
+"parent|"+cur_dir+"/inhe.cpp|81|11|    test(&parent);",
+],
+[""],
+[""],
+# 77 12
+["response|"+cur_dir+"/inhe.cpp|8|18|    virtual void response(void);"],
+["response|"+cur_dir+"/inhe.cpp|11|16|void CParent0::response(void) {"],
+[
+"response|"+cur_dir+"/inhe.cpp|68|8|    a->response();",
+"response|"+cur_dir+"/inhe.cpp|77|12|    parent.response();",
+],
+[""],
+[
+"response|"+cur_dir+"/inhe.cpp|33|18|    virtual void response(void);",
+"response|"+cur_dir+"/inhe.cpp|36|14|void CChild::response(void) {",
+"response|"+cur_dir+"/inhe.cpp|59|18|    virtual void response(void);",
+"response|"+cur_dir+"/inhe.cpp|62|14|void COther::response(void) {",
+],
+# 78 5
+["child|"+cur_dir+"/inhe.cpp|74|12|    CChild child;"],
+["child|"+cur_dir+"/inhe.cpp|74|12|    CChild child;"],
+[
+"child|"+cur_dir+"/inhe.cpp|78|5|    child.response();",
+"child|"+cur_dir+"/inhe.cpp|82|11|    test(&child);",
+],
+[""],
+[""],
+# 78 11
+["response|"+cur_dir+"/inhe.cpp|33|18|    virtual void response(void);"],
+["response|"+cur_dir+"/inhe.cpp|36|14|void CChild::response(void) {"],
+["response|"+cur_dir+"/inhe.cpp|78|11|    child.response();"],
+["response|"+cur_dir+"/inhe.cpp|8|18|    virtual void response(void);"],
+[
+"response|"+cur_dir+"/inhe.cpp|46|18|    virtual void response(void);",
+"response|"+cur_dir+"/inhe.cpp|49|15|void CGChild::response(void) {",
+],
+# 79 5
+["gchild|"+cur_dir+"/inhe.cpp|75|13|    CGChild gchild;"],
+["gchild|"+cur_dir+"/inhe.cpp|75|13|    CGChild gchild;"],
+[
+"gchild|"+cur_dir+"/inhe.cpp|79|5|    gchild.response();",
+"gchild|"+cur_dir+"/inhe.cpp|83|11|    test(&gchild);",
+],
+[""],
+[""],
+# 79 12
+["response|"+cur_dir+"/inhe.cpp|46|18|    virtual void response(void);"],
+["response|"+cur_dir+"/inhe.cpp|49|15|void CGChild::response(void) {"],
+["response|"+cur_dir+"/inhe.cpp|79|12|    gchild.response();"],
+["response|"+cur_dir+"/inhe.cpp|33|18|    virtual void response(void);"],
+[""],
+# 80 5
+["other|"+cur_dir+"/inhe.cpp|76|12|    COther other;"],
+["other|"+cur_dir+"/inhe.cpp|76|12|    COther other;"],
+[
+"other|"+cur_dir+"/inhe.cpp|80|5|    other.response();",
+"other|"+cur_dir+"/inhe.cpp|84|11|    test(&other);",
+],
+[""],
+[""],
+# 80 11
+["response|"+cur_dir+"/inhe.cpp|59|18|    virtual void response(void);"],
+["response|"+cur_dir+"/inhe.cpp|62|14|void COther::response(void) {"],
+["response|"+cur_dir+"/inhe.cpp|80|11|    other.response();"],
+[
+"response|"+cur_dir+"/inhe.cpp|8|18|    virtual void response(void);",
+"response|"+cur_dir+"/inhe.cpp|20|18|    virtual void response(void);",
+],
+[""],
+# 81 5
+["test|"+cur_dir+"/inhe.cpp|66|13|static void test(class CParent0 *a)"],
+["test|"+cur_dir+"/inhe.cpp|66|13|static void test(class CParent0 *a)"],
+[
+"test|"+cur_dir+"/inhe.cpp|81|5|    test(&parent);",
+"test|"+cur_dir+"/inhe.cpp|82|5|    test(&child);",
+"test|"+cur_dir+"/inhe.cpp|83|5|    test(&gchild);",
+"test|"+cur_dir+"/inhe.cpp|84|5|    test(&other);",
+],
+[""],
+[""],
+# 81 11
+["parent|"+cur_dir+"/inhe.cpp|73|14|    CParent0 parent;"],
+["parent|"+cur_dir+"/inhe.cpp|73|14|    CParent0 parent;"],
+[
+"parent|"+cur_dir+"/inhe.cpp|77|5|    parent.response();",
+"parent|"+cur_dir+"/inhe.cpp|81|11|    test(&parent);",
+],
+[""],
+[""],
+# 82 5
+["test|"+cur_dir+"/inhe.cpp|66|13|static void test(class CParent0 *a)"],
+["test|"+cur_dir+"/inhe.cpp|66|13|static void test(class CParent0 *a)"],
+[
+"test|"+cur_dir+"/inhe.cpp|81|5|    test(&parent);",
+"test|"+cur_dir+"/inhe.cpp|82|5|    test(&child);",
+"test|"+cur_dir+"/inhe.cpp|83|5|    test(&gchild);",
+"test|"+cur_dir+"/inhe.cpp|84|5|    test(&other);",
+],
+[""],
+[""],
+# 82 11
+["child|"+cur_dir+"/inhe.cpp|74|12|    CChild child;"],
+["child|"+cur_dir+"/inhe.cpp|74|12|    CChild child;"],
+[
+"child|"+cur_dir+"/inhe.cpp|78|5|    child.response();",
+"child|"+cur_dir+"/inhe.cpp|82|11|    test(&child);",
+],
+[""],
+[""],
+# 83 5
+["test|"+cur_dir+"/inhe.cpp|66|13|static void test(class CParent0 *a)"],
+["test|"+cur_dir+"/inhe.cpp|66|13|static void test(class CParent0 *a)"],
+[
+"test|"+cur_dir+"/inhe.cpp|81|5|    test(&parent);",
+"test|"+cur_dir+"/inhe.cpp|82|5|    test(&child);",
+"test|"+cur_dir+"/inhe.cpp|83|5|    test(&gchild);",
+"test|"+cur_dir+"/inhe.cpp|84|5|    test(&other);",
+],
+[""],
+[""],
+# 83 11
+["gchild|"+cur_dir+"/inhe.cpp|75|13|    CGChild gchild;"],
+["gchild|"+cur_dir+"/inhe.cpp|75|13|    CGChild gchild;"],
+[
+"gchild|"+cur_dir+"/inhe.cpp|79|5|    gchild.response();",
+"gchild|"+cur_dir+"/inhe.cpp|83|11|    test(&gchild);",
+],
+[""],
+[""],
+# 84 5
+["test|"+cur_dir+"/inhe.cpp|66|13|static void test(class CParent0 *a)"],
+["test|"+cur_dir+"/inhe.cpp|66|13|static void test(class CParent0 *a)"],
+[
+"test|"+cur_dir+"/inhe.cpp|81|5|    test(&parent);",
+"test|"+cur_dir+"/inhe.cpp|82|5|    test(&child);",
+"test|"+cur_dir+"/inhe.cpp|83|5|    test(&gchild);",
+"test|"+cur_dir+"/inhe.cpp|84|5|    test(&other);",
+],
+[""],
+[""],
+# 84 11
+["other|"+cur_dir+"/inhe.cpp|76|12|    COther other;"],
+["other|"+cur_dir+"/inhe.cpp|76|12|    COther other;"],
+[
+"other|"+cur_dir+"/inhe.cpp|80|5|    other.response();",
+"other|"+cur_dir+"/inhe.cpp|84|11|    test(&other);",
+],
+[""],
+[""],
 ]
 
-db_dir = sys.argv[1]
-fn = cur_dir + "/" + "inhe.cpp"
-db = cxxtags.get_db_by_file_name(db_dir, fn)
-
+err = 0
+i = 0
 for q in q_list:
-    test_one(db, q)
+    err += common.test_one(q, ans_list[i])
+    i+=1
 if err == 0:
     print "OK"
 else:
     print "ERR: %d"%(err)
+
 exit(err)

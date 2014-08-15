@@ -3,12 +3,9 @@ include ../util/common.mk
 
 MERGER_OUT = db
 .PHONY: clean check
-.SUFFIXES: .db .cpp
 
-DB_FILES = inhe.db
-
-$(MERGER_OUT): $(DB_FILES)
-	$(CXXTAGS_DB_MANAGER) add $@ $^
+$(MERGER_OUT):
+	$(CXXTAGS) db inhe.cpp
 test: check $(MERGER_OUT)
 	./test.py $(MERGER_OUT)
 html: $(MERGER_OUT)
@@ -16,5 +13,5 @@ html: $(MERGER_OUT)
 prog: inhe.cpp
 	g++ inhe.cpp -o prog
 clean:
-	rm -rf html $(MERGER_OUT) $(DB_FILES)
+	rm -rf html $(MERGER_OUT)
 include ../util/common_rule.mk

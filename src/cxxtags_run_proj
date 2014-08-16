@@ -2,18 +2,18 @@
 
 import json, sys, re, commands
 
-if len(sys.argv) != 2:
-    print "usage: cmd file"
+if len(sys.argv) != 3:
+    print "usage: cmd db_name proj_file"
     sys.exit(1)
 
-file = sys.argv[1]
+dbname = sys.argv[1]
+filename = sys.argv[2]
 
-with open(file) as f:
+with open(filename) as f:
     data = json.load(f)
 
 for i in data:
     argList = re.split("\s+", i["command"])
-    cmd = "cxxtags db " + " ".join(argList[1:])
-    print cmd
+    cmd = "cxxtags " + dbname + " " + " ".join(argList[1:])
     (rv, out) = commands.getstatusoutput(cmd)
     print out

@@ -5,7 +5,6 @@ import getopt
 import datetime
 
 CXXTAGS = "cxxtags"
-CXXTAGS_DB_MANAGER = "cxxtags_db_manager"
 #CXXTAGS_OPT = "-E -p"
 CXXTAGS_OPT = ""
 
@@ -30,6 +29,7 @@ output = None
 i = 0
 argv_orig = sys.argv[1:]
 argv = sys.argv[1:]
+"""
 while 1:
     if i >= len(argv):
         break
@@ -40,13 +40,7 @@ while 1:
         i += 2
     else:
         i += 1
-if output == None:
-    #print "could not determine output file: " + " ".join(argv)
-    # generate output filename
-    dt = str(datetime.datetime.now())
-    dt = dt.replace(" ", "_")
-    output = dt.replace(":", "_") + "." + str(os.getpid()) + ".db"
-    #print "use random name: "  + output
+"""
 if not "-MM" in argv:
     args_tmp = [CXXTAGS, CXXTAGS_OPT, exclude, db_dst, " ".join(argv)]
     # run cxxtags

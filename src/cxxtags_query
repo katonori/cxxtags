@@ -1,8 +1,8 @@
 #!/usr/bin/python
 def usage():
-    print 'usage: cxxtags_query decl/def/ref/type database_dir file_name line_no column_no'
-    print '     : cxxtags_query              name database_dir item_name [-f file_name] [-l line_no] [-c column_no]'
-    print '     : cxxtags_query              dump database_dir table_name'
+    print 'usage: cxxtags_query decl/def/ref database_dir file_name line_no column_no'
+    print '     : cxxtags_query         name database_dir item_name [-f file_name] [-l line_no] [-c column_no]'
+    print '     : cxxtags_query         dump database_dir table_name'
 
 import sys
 import plyvel
@@ -729,11 +729,13 @@ def main():
         handler.parseArg(argv[2:])
         handler.DoQuery()
         handler.CloseDb()
+        """
     elif queryType == 'type': # get type info
         handler = QueryHandlerType(dbDir)
         handler.parseArg(argv[2:])
         handler.DoQuery()
         handler.CloseDb()
+        """
     else:
         print "ERROR: query type must be ref, decl, def, override, overriden, name, dump or type"
         sys.exit(1)

@@ -1,10 +1,6 @@
 #ifndef _IINDEX_DB_H_
 #define _IINDEX_DB_H_
 #include <string>
-#include <map>
-#include <stdint.h>
-#include <sstream>
-#include <sqlite3.h>
 
 namespace cxxtags {
 class IIndexDb {

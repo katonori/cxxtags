@@ -6,7 +6,7 @@ set(BOOST_HOME "" CACHE PATH "")
 set(CMAKE_CXX_FLAGS "-g -O2" CACHE STRING "")
 set(CMAKE_EXE_LINKER_FLAGS "" CACHE STRING "")
 
-include_directories(${LLVM_HOME}/include ${LEVELDB_HOME}/include)
+include_directories(${LLVM_HOME}/include ${LEVELDB_HOME}/include ${BOOST_HOME}/include)
 link_directories(${LLVM_HOME}/lib ${LEVELDB_HOME}/lib ${BOOST_HOME}/lib)
 
 add_executable(cxxtags_core cxxtags_core.cpp DbImplLevelDb.cpp)

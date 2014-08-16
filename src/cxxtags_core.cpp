@@ -210,7 +210,7 @@ static inline void procCXXMethodDecl(const CXCursor& Cursor, const char* cUsr, s
         // insert information about overrides to database
         check_rv(gDb->insert_overriden_value(cRefUsr, name, fileName, line, column, cUsr, isDef));
     }
-    int isVirt = clang_CXXMethod_isVirtual(Cursor);
+    //int isVirt = clang_CXXMethod_isVirtual(Cursor);
     clang_disposeOverriddenCursors(cursorOverridden);
     // process as a function declaration is also done. 
     procFuncDecl(Cursor, cUsr, name, fileName, line, column);
@@ -251,7 +251,6 @@ static inline void procRef(const CXCursor& Cursor, std::string name, std::string
         CXFile ref_file;
         CXSourceLocation ref_loc = clang_getCursorLocation(refCur);
         clang_getSpellingLocation(ref_loc, &ref_file, &ref_line, &ref_column, 0);
-        int refFid = 0;
         if(ref_file) {
             CXString cxRefFileName = clang_getFileName(ref_file);
             cRefFileName = clang_getCString(cxRefFileName);

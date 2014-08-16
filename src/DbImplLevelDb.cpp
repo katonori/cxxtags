@@ -57,16 +57,39 @@ static IdTbl *fileIdTbl;
 static IdTbl *nameIdTbl;
 static IdTbl *usrIdTbl;
 static const int k_timerNum = 128;
-clock_t s_timeArray[k_timerNum];
 boost::timer::cpu_timer* s_timers;
 
 enum {
     TIMER_INS_REF = 64,
+    TIMER_INS_REF_1,
+    TIMER_INS_REF_2,
     TIMER_INS_DECL,
     TIMER_INS_OVERRIDEN,
     TIMER_USR_DB0,
     TIMER_USR_DB1,
 };
+
+//#define TIMER
+static inline void timerStart(int idx)
+{
+#ifdef TIMER
+    s_timers[idx].start();
+#endif
+}
+
+static inline void timerResume(int idx)
+{
+#ifdef TIMER
+    s_timers[idx].resume();
+#endif
+}
+
+static inline void timerStop(int idx)
+{
+#ifdef TIMER
+    s_timers[idx].stop();
+#endif
+}
 
 int dbWrite(leveldb::DB* db, const string& key, const string& value);
 int dbRead(string& value, leveldb::DB* db, const string& key);
@@ -165,7 +188,7 @@ int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, cons
     dbClose(dbCommon);
 
     // open database for this compile unit
-    assert(s_compileUnitId != "");
+    assert(!s_compileUnitId.empty());
     string db_dir = out_dir + "/" + s_compileUnitId;
     status = leveldb::DB::Open(s_defaultOptions, db_dir.c_str(), &s_db);
     if (!status.ok()) {
@@ -197,39 +220,43 @@ int dbRead(string& value, leveldb::DB* db, const string& key)
     return 0;
 }
 
-static map<string, SsMap > s_usr2fileMap;
+static map<string, SiMap > s_usr2fileMap;
 SsMap s_usr2refMap;
 int DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, const string& name, int line, int col)
 {
-    s_timers[TIMER_INS_REF].resume();
-    
+    timerResume(TIMER_INS_REF);
+
+    //s_timers[TIMER_INS_REF_1].resume();
     int fileId = fileIdTbl->GetId(filename);
     int nameId = nameIdTbl->GetId(name);
     int usrId = usrIdTbl->GetId(usr);
-    int len = snprintf(gCharBuff0, sizeof(gCharBuff0), "%x|%x|%x|%x", nameId, fileId, line, col);
+    snprintf(gCharBuff0, sizeof(gCharBuff0), "%x|%x|%x|%x", nameId, fileId, line, col);
     SsMap::iterator itr = s_usr2refMap.find(usr);
     if(itr == s_usr2refMap.end()){ 
         s_usr2refMap[usr] = string(gCharBuff0);
     }
     else {
-        s_usr2refMap[usr] = itr->second + "," + gCharBuff0;
+        itr->second.append(string(",") + gCharBuff0);
     }
 
-    if(usr != "") {
-        s_usr2fileMap[usr][filename] = "";
+    if(!usr.empty()) {
+        s_usr2fileMap[usr][filename] = 0;
     }
+    //s_timers[TIMER_INS_REF_1].stop();
 
     // pos -> usr
-    int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), TABLE_NAME_POS2USR "|%x|%x|%x", fileId,  line, col);
-    int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", usrId);
+    timerResume(TIMER_INS_REF_2);
+    snprintf(gCharBuff0, sizeof(gCharBuff0), TABLE_NAME_POS2USR "|%x|%x|%x", fileId,  line, col);
+    snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", usrId);
     s_wb.Put(gCharBuff0, gCharBuff1);
-    s_timers[TIMER_INS_REF].stop();
+    timerStop(TIMER_INS_REF_2);
+    timerStop(TIMER_INS_REF);
     return 0;
 }
 
 int DbImplLevelDb::insert_decl_value(const string& usr, const string& filename, const string& name, int line, int col, int isDef)
 {
-    s_timers[TIMER_INS_DECL].resume();
+    timerResume(TIMER_INS_DECL);
     int len0 = 0;
     int len1 = 0;
     int fileId = fileIdTbl->GetId(filename);
@@ -251,15 +278,15 @@ int DbImplLevelDb::insert_decl_value(const string& usr, const string& filename, 
         s_wb.Put(gCharBuff0, gCharBuff1);
     }
 
-    if(usr != "") {
-        s_usr2fileMap[usr][filename] = "";
+    if(!usr.empty()) {
+        s_usr2fileMap[usr][filename] = 0;
     }
 
     // pos -> usr
     len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), TABLE_NAME_POS2USR "|%x|%x|%x", fileId, line, col); 
     len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", usrId);
     s_wb.Put(gCharBuff0, gCharBuff1);
-    s_timers[TIMER_INS_DECL].stop();
+    timerStop(TIMER_INS_DECL);
     return 0;
 }
 
@@ -267,7 +294,7 @@ SsMap s_overrideeMap;
 map<string, SiMap> s_overriderMap;
 int DbImplLevelDb::insert_overriden_value(const string& usr, const string& name, const string& filename, int line, int col, const string& usrOverrider, int isDef)
 {
-    s_timers[TIMER_INS_OVERRIDEN].resume();
+    timerResume(TIMER_INS_OVERRIDEN);
     //printf("overriden: %s, %s, %s\n", usr.c_str(), filename.c_str(), name.c_str());
     int len0 = 0;
     int len1 = 0;
@@ -277,8 +304,8 @@ int DbImplLevelDb::insert_overriden_value(const string& usr, const string& name,
     int usrIdOverrider = usrIdTbl->GetId(usrOverrider);
     // usrId -> decl info
     len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x|%x|%x|%x", nameId, fileId, line, col);
-    if(s_overrideeMap[usr] != "") {
-        s_overrideeMap[usr] += "," + string(gCharBuff1);
+    if(!s_overrideeMap[usr].empty()) {
+        s_overrideeMap[usr].append(string(",") + string(gCharBuff1));
     }
     else {
         s_overrideeMap[usr] = string(gCharBuff1);
@@ -287,15 +314,15 @@ int DbImplLevelDb::insert_overriden_value(const string& usr, const string& name,
     len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", usrId);
     s_overriderMap[usrOverrider][gCharBuff1] = 0;
 
-    if(usr != "") {
-        s_usr2fileMap[usr][filename] = "";
+    if(!usr.empty()) {
+        s_usr2fileMap[usr][filename] = 0;
     }
     // pos -> usr
     len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), TABLE_NAME_POS2USR "|%x|%x|%x", fileId, line, col); 
     len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", usrIdOverrider);
     s_wb.Put(gCharBuff0, gCharBuff1);
 
-    s_timers[TIMER_INS_OVERRIDEN].stop();
+    timerStop(TIMER_INS_OVERRIDEN);
     return 0;
 }
 
@@ -308,8 +335,8 @@ int DbImplLevelDb::addIdList(leveldb::WriteBatch* db, const SiMap& inMap, const 
 {
     // lookup map
     BOOST_FOREACH(const SiPair& itr, inMap) {
-        int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%x", tableName.c_str(), itr.second); 
-        int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%s", itr.first.c_str());
+        snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%x", tableName.c_str(), itr.second); 
+        snprintf(gCharBuff1, sizeof(gCharBuff1), "%s", itr.first.c_str());
         db->Put(gCharBuff0, gCharBuff1);
     }
     return 0;
@@ -386,7 +413,6 @@ int DbImplLevelDb::fin(void)
     const SiMap& fileMap = fileIdTbl->GetTbl();
     const SiMap& nameMap = nameIdTbl->GetTbl();
     const SiMap& usrMap = usrIdTbl->GetTbl();
-    clock_t clockStart = clock();
 
     // dump
     {
@@ -402,7 +428,7 @@ int DbImplLevelDb::fin(void)
                     val = itr_usr.first;
                 }
                 else {
-                    val += "," + itr_usr.first;
+                    val.append(string(",") + itr_usr.first);
                 }
             }
             s_wb.Put(TABLE_NAME_USR2OVERRIDER "|" + itr.first, val);
@@ -440,9 +466,9 @@ int DbImplLevelDb::fin(void)
         map<string, SiMap> usrFidMap;
         BOOST_FOREACH(const SiPair& itr, usrMap) {
             const string& usr = itr.first;
-            if(usr != "") {
+            if(!usr.empty()) {
                 SiMap& fidMap = usrFidMap[usr];
-                BOOST_FOREACH(const SsPair& itr_file_list, s_usr2fileMap[usr]) {
+                BOOST_FOREACH(const SiPair& itr_file_list, s_usr2fileMap[usr]) {
                     fidMap[s_file2fidMap[itr_file_list.first]] = 0;
                 }
             }
@@ -452,9 +478,9 @@ int DbImplLevelDb::fin(void)
         int cuId = strtol(s_compileUnitId.c_str(), &errp, 16);
         assert(*errp == '\0');
         snprintf(gCharBuff0, sizeof(gCharBuff0), "%x", (cuId % k_usrDbDirNum)); 
-        curDir = curDir + "/" + string(gCharBuff0);
+        curDir.append(string("/") + string(gCharBuff0));
 
-        s_timers[TIMER_USR_DB0].start();
+        timerStart(TIMER_USR_DB0);
         //////
         // open db
         int rv = dbTryOpen(dbUsrDb, curDir);
@@ -462,7 +488,7 @@ int DbImplLevelDb::fin(void)
             printf("ERROR: fin: common db open: %s\n", curDir.c_str());
             return -1;
         }
-        s_timers[TIMER_USR_DB1].start();
+        timerStart(TIMER_USR_DB1);
 
         // lookup map
         int count = 0;
@@ -473,15 +499,15 @@ int DbImplLevelDb::fin(void)
 #if 0
             if(usr != "") {
 #else
-            if(usr != "" && (pos_global == 0 || pos_macro == 0)) {
+            if(!usr.empty() && (pos_global == 0 || pos_macro == 0)) {
 #endif
                 SiMap& file_list_map = usrFidMap[usr];
                 // check if already registered
-                s_timers[2].resume();
+                timerResume(2);
                 string value;
                 int rv = dbRead(value, dbUsrDb, TABLE_NAME_USR2FILE "|" + usr);
-                s_timers[2].stop();
-                s_timers[3].resume();
+                timerStop(2);
+                timerResume(3);
                 if(rv == 0) {
                     const string delim = ",";
                     list<string> old_list;
@@ -490,30 +516,29 @@ int DbImplLevelDb::fin(void)
                         file_list_map[s] = 0;
                     }
                 }
-                s_timers[3].stop();
-                s_timers[4].resume();
+                timerStop(3);
+                timerResume(4);
                 string file_list_string = "";
                 BOOST_FOREACH(const SiPair& itr_str, file_list_map) {
-                    file_list_string += itr_str.first+",";
+                    file_list_string.append(itr_str.first+",");
                 }
                 file_list_string = file_list_string.substr(0, file_list_string.size()-1);
-                s_timers[4].stop();
+                timerStop(4);
                 wb_usrdb.Put(TABLE_NAME_USR2FILE "|" + usr, file_list_string);
                 count++;
             }
         }
-        s_timers[5].start();
+        timerStart(5);
         dbFlush(dbUsrDb, &wb_usrdb);
-        s_timers[5].stop();
-        s_timers[6].start();
+        timerStop(5);
+        timerStart(6);
         dbClose(dbUsrDb);
-        s_timers[6].stop();
-        s_timers[TIMER_USR_DB1].stop();
-        s_timers[TIMER_USR_DB0].stop();
+        timerStop(6);
+        timerStop(TIMER_USR_DB1);
+        timerStop(TIMER_USR_DB0);
         // close db
         //////
-        s_timeArray[7] = clock();
-        clock_t timeEnd = clock();
+#ifdef TIMER
         printf("time: TIMER_USR_DB0: %s", s_timers[TIMER_USR_DB0].format().c_str());
         printf("time: TIMER_USR_DB1: %s", s_timers[TIMER_USR_DB1].format().c_str());
         printf("time: 2: %s", s_timers[2].format().c_str());
@@ -522,15 +547,18 @@ int DbImplLevelDb::fin(void)
         printf("time: 5: %s", s_timers[5].format().c_str());
         printf("time: 6: %s", s_timers[5].format().c_str());
         printf("time: TIMER_INS_REF: %s", s_timers[TIMER_INS_REF].format().c_str());
+        //printf("time: TIMER_INS_REF_1: %s", s_timers[TIMER_INS_REF_1].format().c_str());
+        printf("time: TIMER_INS_REF_2: %s", s_timers[TIMER_INS_REF_2].format().c_str());
         printf("time: TIMER_INS_DECL: %s", s_timers[TIMER_INS_DECL].format().c_str());
         printf("time: %d times\n", count);
+#endif
     }
 
     addIdList(&s_wb, fileMap, TABLE_NAME_ID2FILE);
     // lookup map
     BOOST_FOREACH(const SiPair& itr, fileMap) {
-        int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), TABLE_NAME_FILE2ID "|%s", itr.first.c_str()); 
-        int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", itr.second);
+        snprintf(gCharBuff0, sizeof(gCharBuff0), TABLE_NAME_FILE2ID "|%s", itr.first.c_str()); 
+        snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", itr.second);
         s_wb.Put(gCharBuff0, gCharBuff1);
     }
 
@@ -538,16 +566,14 @@ int DbImplLevelDb::fin(void)
     // dump map
     BOOST_FOREACH(const SsPair& itr, s_usr2refMap) {
         const string& usr = itr.first;
-        if(usr != "") {
-            int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), TABLE_NAME_USR2REF "|%s|%s", usr.c_str(), s_compileUnitId.c_str()); 
+        if(!usr.empty()) {
+            snprintf(gCharBuff0, sizeof(gCharBuff0), TABLE_NAME_USR2REF "|%s|%s", usr.c_str(), s_compileUnitId.c_str()); 
             s_wb.Put(gCharBuff0, itr.second);
         }
     }
     dbFlush(s_db, &s_wb);
     dbClose(s_db);
 
-    clock_t clockEnd = clock();
-    printf("time: fin: %f sec\n", (clockEnd-clockStart)/(double)CLOCKS_PER_SEC);
     delete fileIdTbl;
     delete nameIdTbl;
     delete usrIdTbl;

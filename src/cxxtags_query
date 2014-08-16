@@ -88,6 +88,10 @@ class HandlerBase:
         if self.mDb == None:
             print("ERROR: db open")
             return None
+        self.InitUsrDb()
+        return self.mDb
+
+    def InitUsrDb(self):
         dbList = os.listdir(self.mDbDir + "/usr_db")
         for dir in dbList:
             if re.match("^[0-9]+$", dir):
@@ -96,8 +100,9 @@ class HandlerBase:
                     print("ERROR: db open: " + str(dir))
                     return None
                 self.mUsrDbList.append(db)
+        self.mUsrDbList = list(set(self.mUsrDbList))
         DEBUG_PRINT("usrDbList: " + str(self.mUsrDbList))
-        return self.mDb
+        return self.mUsrDbList
 
     def Cu2Id(self, cuName):
         return self.mFileListDb.get(TABLE_NAME_CU2ID + "|" + cuName)
@@ -106,7 +111,7 @@ class HandlerBase:
         return self.mFileListDb.get(TABLE_NAME_ID2CU + "|" + cuId)
 
     def OpenDbId(self, cuId):
-        cmd = self.mDbDir + cuId
+        cmd = self.mDbDir + str(cuId)
         DEBUG_PRINT("OpenDbId: " + cmd)
         db = plyvel.DB(cmd)
         if db == None:
@@ -192,6 +197,18 @@ def file2id(db, filename):
 def id2usr(db, id):
     result = db.get(TABLE_NAME_ID2USR + "|%s"%(str(id)))
     return result
+def GetResultString(db, nameId, fileId):
+    name = id2name(db, nameId)
+    if name == None:
+        print("ERRRO: name lookup failed: " + str(nameId) + ": " + cuId)
+        return None
+    DEBUG_PRINT("name: " + str(nameId) + "," + str(name))
+    fn = id2file(db, fileId)
+    if fn == None:
+        print("ERRRO: file name lookup failed: " + str(fileId) + ": " + cuId)
+        return None
+    DEBUG_PRINT("filename: " + str(fileId) + "," + str(fn))
+    return name, fn
 
 class QueryHandlerDecl(HandlerBase):
     #
@@ -218,15 +235,9 @@ class QueryHandlerDecl(HandlerBase):
         if decl:
             declList = decl.split("|")
             nameId, fileId, line, col = tuple(declList)
-            fileName = id2file(self.mDb, fileId)
-            if fileName == None:
-                print "ERROR: id2file: " + str(fileId) + "," + str(self.m_cuId)
-                return None
-            name = id2name(self.mDb, nameId)
-            if fileName == None:
-                print "ERROR: id2name: " + str(nameid) + "," + str(self.m_cuId)
-                return None
-            return name, fileName, line, col
+            name, fileName = GetResultString(self.mDb, nameId, fileId)
+            if fileName != None and name != None:
+                return name, fileName, line, col
         return None
 
     def parseArg(self, argv):
@@ -288,15 +299,9 @@ class QueryHandlerDef(HandlerBase):
             if resDef:
                 defList = resDef.split("|")
                 nameId, fileId, line, col = tuple(defList)
-                name = id2name(db, nameId)
-                if name == None:
-                    print("ERRRO: name lookup failed: " + str(fileId))
-                    return None
-                fileName = id2file(db, fileId)
-                if fileName == None:
-                    print("ERRRO: file name lookup failed: " + str(fileId))
-                    return None
-                result.append((name, fileName, line, col))
+                name, fileName = GetResultString(db, nameId, fileId)
+                if fileName != None and name != None:
+                    result.append((name, fileName, line, col))
             if db != self.mDb:
                 db.close()
         return result
@@ -357,17 +362,10 @@ class QueryHandlerRef(HandlerBase):
             if rv:
                 rvList = rv.split(",")
                 for rv in rvList:
-                    nameId, fileId, line, col = \
-                            rv.split("|")
-                    name = id2name(db, nameId)
-                    if name == None:
-                        print("ERRRO: name lookup failed: " + str(nameId) + ": " + cuId)
-                        return None
-                    fn = id2file(db, fileId)
-                    if fn == None:
-                        print("ERRRO: file name lookup failed: " + str(fileId) + ": " + cuId)
-                        return None
-                    resultList.append((name, fn, line, col))
+                    nameId, fileId, line, col = rv.split("|")
+                    name, fn = GetResultString(db, nameId, fileId)
+                    if fn != None and name != None:
+                        resultList.append((name, fn, line, col))
             if db != self.mDb:
                 db.close()
             for i in set(resultList):
@@ -410,15 +408,9 @@ class QueryHandlerOverride(HandlerBase):
                 usrId = rv
                 decl = self.mDb.get(TABLE_NAME_USR2DECL + "|%s"%(usrId))
                 nameId, fileId, line, col = decl.split("|")
-                name = id2name(self.mDb, nameId)
-                if name == None:
-                    print("ERRRO: name lookup failed: " + str(nameId) + ": " + cuId)
-                    return None
-                fn = id2file(self.mDb, fileId)
-                if fn == None:
-                    print("ERRRO: file name lookup failed: " + str(fileId) + ": " + cuId)
-                    return None
-                resultList.append((name, fn, line, col))
+                name, fn = GetResultString(self.mDb, nameId, fileId)
+                if fn != None and name != None:
+                    resultList.append((name, fn, line, col))
         for i in resultList:
             resultName, resultFileName, resultLine, resultCol = i
             self.PrintResult(resultName, resultFileName, resultLine, resultCol)
@@ -465,24 +457,14 @@ class QueryHandlerOverrideN(HandlerBase):
                 rvList = rv.split(",")
                 for rv in rvList:
                     nameId, fileId, line, col = rv.split("|")
-                    name = id2name(db, nameId)
-                    if name == None:
-                        print("ERRRO: name lookup failed: " + str(nameId) + ": " + cuId)
-                        return None
-                    fn = id2file(db, fileId)
-                    DEBUG_PRINT("name: " + str(nameId) + "," + str(name))
-                    DEBUG_PRINT("filename: " + str(fileId) + "," + str(fn))
-                    if fn == None:
-                        print("ERRRO: file name lookup failed: " + str(fileId) + ": " + cuId)
-                        return None
-                    resultList.append((name, fn, line, col))
+                    name, fn = GetResultString(db, nameId, fileId)
+                    if name != None and fn != None:
+                        resultList.append((name, fn, line, col))
             if db != self.mDb:
                 db.close()
         for i in set(resultList):
-            resultName, resultFileName, resultLine, resultCol = i
-            DEBUG_PRINT("n: " + str(resultName))
-            DEBUG_PRINT("fn: " + str(resultFileName))
-            self.PrintResult(resultName, resultFileName, resultLine, resultCol)
+            name, fn, line, col = i
+            self.PrintResult(name, fn, line, col)
 
     def parseArg(self, argv):
         if len(argv) != 3:
@@ -498,55 +480,56 @@ class QueryHandlerName(HandlerBase):
     #
     mName = 0
     def DoQuery(self):
-        global gDebugMode
         resultList = []
-        dbList = cxxtags_util.get_db_files_by_src_file_name(self.mDbDir, self.m_srcFileName)
-        if dbList == []:
-            dbList = self.GetAllDbFiles()
-        for fn in dbList:
-            db = cxxtags_util.db_connect(fn)
-            cur = db.cursor()
-            #cur.execute('SELECT file_list.name, name_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE name_list.name LIKE ?;', ('%'+name+'%',))
-            #cur.execute('SELECT name_list.name, name_list.id FROM name_list WHERE name_list.name LIKE ?;', ('%'+name+'%',))
-            if gPartialCompare == 1:
-                cur.execute('SELECT name_list.name, name_list.id FROM name_list WHERE name_list.name LIKE ?;', ('%'+self.mName+'%',))
-            else:
-                cur.execute('SELECT name_list.name, name_list.id FROM name_list WHERE name_list.name=?;', (self.mName,))
-            result = cur.fetchall()
-            for idRow in result:
-                resultName, resultId = idRow
-                if -1 != resultName.find(self.mName): # exclude case mismatching
-                    if gDebugMode != 0:
-                        cur.execute('SELECT file_list.name, decl.line, decl.col, usr_list.name FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE decl.name_id=?;', (resultId, ))
-                    else:
-                        cur.execute('SELECT file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_FILELIST_DECL + ' WHERE decl.name_id=?;', (resultId, ))
-                    rows = cur.fetchall()
-                    for i in rows:
-                        resultFileName, resultLineNo, resultColNo = i
-                        self.PrintResult(resultName, resultFileName, resultLineNo, resultColNo)
-                    resultList += rows
-            db.close()
+        # get compileunit
+        if None == self.InitUsrDb():
+            print "ERROR: DB oopen"
+            return None
+        for usrDb in self.mUsrDbList:
+            for l in usrDb:
+                cre = re.compile(TABLE_NAME_USR2FILE + r'\\|.*' + self.mName)
+                if cre.search(l[0]):
+                    (tbl, usr) = l[0].split("|")
+                    cuIdList = self.GetCuidListFromUsr(usr)
+                    for cuId in cuIdList:
+                        db = self.OpenDbId(cuId)
+                        q = TABLE_NAME_USR2DEF + "|" + usr
+                        val = db.get(q)
+                        if val != None:
+                            nameId, fileId, line, col = val.split("|")
+                            name, fn = GetResultString(db, nameId, fileId)
+                            if name != None and fn != None:
+                                resultList.append((name, fn, line, col))
+                        q = TABLE_NAME_USR2REF + "|" + usr
+                        val = db.get(q)
+                        if val != None:
+                            nameId, fileId, line, col = val.split("|")
+                            name, fn = GetResultString(db, nameId, fileId)
+                            if name != None and fn != None:
+                                resultList.append((name, fn, line, col))
+                        db.close()
+        resultList = list(set(resultList))
+        for i in set(resultList):
+            name, fn, line, col = i
+            self.PrintResult(name, fn, line, col)
 
     def parseArg(self, argv):
-        global gDebugMode
         global gPartialCompare
         try:
             optlist, args = getopt.gnu_getopt(argv, 'f:dp', ['debug', 'partial'])
         except getopt.GetoptError, e:
             print "ERROR: getopt: ", e.args[0]
             sys.exit(1)
-        if len(args) != 2:
+        if len(args) != 1:
             usage()
             sys.exit(1)
-        name = args[1]
+        name = args[0]
         fileName = ""
         lineNo = -1
         colNo = -1
         for opt, val in optlist:
             if opt == "-f":
                 fileName = val
-            elif opt in ("-d", "--debug"):
-                gDebugMode = 1
             elif opt in ("-p", "--partial"):
                 gPartialCompare = 1
         self.mName = name

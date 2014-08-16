@@ -859,7 +859,7 @@ a_list = [
 ],
 # 13 12
 ["check2|"+cur_dir+"/subdir/ns0.h|15|12|        C1 check2();"],
-["check2|/Users/norito/devel/cxxtags/test/ns/ns0.cpp|13|12|    C1 C1::check2()"],
+["check2|"+cur_dir+"/ns0.cpp|13|12|    C1 C1::check2()"],
 [
 ""
 ],

@@ -63,8 +63,8 @@ class HandlerBase:
     def Filename2CompileUnit(self, fn):
         DEBUG_PRINT("fn: " + fn)
         q = TABLE_NAME_FILE_LIST + "|" + fn
-        cuId, fileId = self.mFileListDb.get(q).split(",")
         DEBUG_PRINT("q: " + str(q))
+        cuId, fileId = self.mFileListDb.get(q).split(",")
         DEBUG_PRINT("cuId: " + str(cuId))
         cuName = self.Id2Cu(cuId)
         return cuName, cuId

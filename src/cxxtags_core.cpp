@@ -22,7 +22,9 @@ static int gIsSkelton = 0; // only USRs and file names are recorded.
 static std::string gLastClassUsr = "";
 cxxtags::IIndexDb* gDb;
 
-#define CHECK_RV(a) assert(a == 0)
+static inline void check_rv(int a) {
+    assert(a == 0);
+}
 
 /** \brief Return the default parsing options. */
 static inline unsigned getDefaultParsingOptions() {
@@ -174,7 +176,7 @@ static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::strin
         }
     }
     // insert to database
-    CHECK_RV(gDb->insert_decl_value(cUsr, fileName, name, line, column, isDef));
+    check_rv(gDb->insert_decl_value(cUsr, fileName, name, line, column, isDef));
 }
 
 // process declarations
@@ -186,7 +188,7 @@ static inline void procFuncDecl(const CXCursor& Cursor, const char* cUsr, std::s
     }
     int isDef = clang_isCursorDefinition(Cursor);
     // insert to database
-    CHECK_RV(gDb->insert_decl_value(cUsr, fileName, name, line, column, isDef));
+    check_rv(gDb->insert_decl_value(cUsr, fileName, name, line, column, isDef));
 }
 
 // process c++ method declarations
@@ -206,7 +208,7 @@ static inline void procCXXMethodDecl(const CXCursor& Cursor, const char* cUsr, s
         }
         int isDef = clang_isCursorDefinition(Cursor);
         // insert information about overrides to database
-        CHECK_RV(gDb->insert_overriden_value(cRefUsr, name, fileName, line, column, cUsr, isDef));
+        check_rv(gDb->insert_overriden_value(cRefUsr, name, fileName, line, column, cUsr, isDef));
     }
     int isVirt = clang_CXXMethod_isVirtual(Cursor);
     clang_disposeOverriddenCursors(cursorOverridden);
@@ -266,7 +268,7 @@ static inline void procRef(const CXCursor& Cursor, std::string name, std::string
             }
         }
         // insert to database.
-        CHECK_RV(gDb->insert_ref_value(cUsr, fileName, name, line, column));
+        check_rv(gDb->insert_ref_value(cUsr, fileName, name, line, column));
         clang_disposeString(cxRefUSR);
     }
 }
@@ -287,7 +289,7 @@ static inline void procCXXBaseClassInfo(const CXCursor& Cursor, std::string name
         return;
     }
     // insert to database
-    CHECK_RV(gDb->insert_base_class_value(gLastClassUsr, cBaseUsr, line, column, accessibility));
+    check_rv(gDb->insert_base_class_value(gLastClassUsr, cBaseUsr, line, column, accessibility));
     clang_disposeString(cxBaseUsr);
 }
 
@@ -513,9 +515,8 @@ static int perform_test_load_source(int argc, const char **argv,
   setCursorTypeAvailable(CXCursor_OverloadedDeclRef);
   setCursorTypeAvailable(CXCursor_CXXBaseSpecifier);
 
-  //gDb = reinterpret_cast<cxxtags::DbImplSqlite3*>(new cxxtags::DbImplSqlite3());
   gDb = reinterpret_cast<cxxtags::DbImplLevelDb*>(new cxxtags::DbImplLevelDb());
-  CHECK_RV(gDb->init(out_dir, in_file_name, gExcludeListStr, gIsPartial, gIsSkelton, cur_dir, argc-1, argv+1));
+  check_rv(gDb->init(out_dir, in_file_name, gExcludeListStr, gIsPartial, gIsSkelton, cur_dir, argc-1, argv+1));
 
   Idx = clang_createIndex(/* excludeDeclsFromPCH */0,
                           /* displayDiagnosics=*/0);
@@ -537,7 +538,7 @@ FUNC_END:
   if(Idx) {
     clang_disposeIndex(Idx);
   }
-  CHECK_RV(gDb->fin());
+  check_rv(gDb->fin());
   return result;
 }
 

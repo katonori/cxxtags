@@ -39,6 +39,7 @@ How to build
 
 * Build the project using cmake
     * run cmake specifying LLVM\_HOME, LEVELDB\_HOME and BOOST\_HOME and run build
+
                 $ mkdir -p build && cd build
                 $ cmake -DLLVM_HOME=/pkg/llvm-3.2/ -DLEVELDB_HOME=/pkg/leveldb-1.15.0/ -DBOOST_HOME=/opt/local/ ../
                 $ make

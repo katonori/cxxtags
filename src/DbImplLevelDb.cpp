@@ -114,10 +114,7 @@ int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, cons
     }
 
     if(!boost::filesystem::exists(s_dbDir)) {
-        if(!boost::filesystem::create_directory(s_dbDir)) {
-            printf("ERROR: create directory: %s\n", s_dbDir.c_str());
-            return -1;
-        }
+        boost::filesystem::create_directory(s_dbDir);
     }
 
     //
@@ -530,13 +527,11 @@ int DbImplLevelDb::fin(void)
     }
 
     addIdList(&s_wb, fileMap, TABLE_NAME_ID2FILE);
-    {
-        // lookup map
-        BOOST_FOREACH(const SiPair& itr, fileMap) {
-            int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), TABLE_NAME_FILE2ID "|%s", itr.first.c_str()); 
-            int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", itr.second);
-            s_wb.Put(gCharBuff0, gCharBuff1);
-        }
+    // lookup map
+    BOOST_FOREACH(const SiPair& itr, fileMap) {
+        int len0 = snprintf(gCharBuff0, sizeof(gCharBuff0), TABLE_NAME_FILE2ID "|%s", itr.first.c_str()); 
+        int len1 = snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", itr.second);
+        s_wb.Put(gCharBuff0, gCharBuff1);
     }
 
     addIdList(&s_wb, nameMap, TABLE_NAME_ID2NAME);

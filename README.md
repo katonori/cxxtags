@@ -48,6 +48,8 @@ How to build
 * Install
     * copy the contents of ${CXXTAGS\_REPOSITORY\_ROOT}/bin directory to your installation path
 
+* See [README.cygwin.md](README.cygwin.md "") for more information for cygwin.
+
 How to use
 ------------------------
 

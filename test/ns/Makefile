@@ -11,7 +11,7 @@ $(MERGER_OUT):
 	$(CXXTAGS) -I./subdir db ns0.cpp
 	$(CXXTAGS) -I. -I./subdir db subdir/ns1.cpp
 	$(CXXTAGS) -I./subdir db main.cpp
-test: check $(MERGER_OUT)
+test: check clean $(MERGER_OUT)
 	./test.py $(MERGER_OUT)
 	#$(CXXTAGS_DB_MANAGER) rebuild $(MERGER_OUT) ns0.h
 	#./test.py $(MERGER_OUT)

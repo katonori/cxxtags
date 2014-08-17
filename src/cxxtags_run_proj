@@ -1,19 +1,17 @@
 #!/usr/bin/env python
 
-import json, sys, re, commands, os
+import json, sys, re, commands, os, getopt
 from xml.etree.ElementTree import *
+from subprocess import Popen, PIPE
 
 CXXTAGS = "cxxtags"
 
 class ProjParserBase():
     m_dbname = ""
     m_filename = ""
-    def __init__(self):
-        if len(sys.argv) != 3:
-            print "usage: cmd db_name proj_file"
-            sys.exit(1)
-        self.m_dbname = os.path.abspath(sys.argv[1])
-        self.m_filename = sys.argv[2]
+    def __init__(self, dbname, filename):
+        self.m_dbname = dbname
+        self.m_filename = filename
     def GetDbDir(self):
         return self.m_dbname
 
@@ -154,22 +152,66 @@ class VSParser(ProjParserBase):
                 resultList.append((self.m_curProjDir, defs, incs, s))
         return resultList
 
+class CmdRunner():
+    m_numProc = 1
+    m_projType = ""
+    m_dbName = ""
+    m_fileName = ""
+    def __init__(self):
+        self.ParseArgs()
+
+    def usage():
+        print("usage: cmd [-j N] [-t cmake|vs] database_dir file_name")
+
+    def ParseArgs(self):
+        try:
+            opts, args = getopt.getopt(sys.argv[1:], "j:t:", [])
+        except getopt.GetoptError, err:
+            print str(err) # will print something like "option -a not recognized"
+            self.usage()
+            sys.exit(1)
+        output = None
+        verbose = False
+        for o, a in opts:
+            if o in ("-j"):
+                self.m_numProc = int(a)
+            elif o in ("-t"):
+                self.m_projType = a
+            else:
+                assert False, "unhandled option"
+
+        if len(args) != 2:
+            self.usage()
+            sys.exit(1)
+        self.m_dbName = os.path.abspath(args[0])
+        self.m_fileName = args[1]
+
+    def Run(self):
+        # determin project type
+        parser = None
+        if self.m_projType == "" or self.m_projType == "cmake":
+            parser = CmakeJsonParser(self.m_dbName, self.m_fileName)
+        elif self.m_projType == "vs":
+            parser = VSParser(self.m_dbName, self.m_fileName)
+        else:
+            print("ERROR: wrong project type \"" + self.m_projType + "\" was specified")
+            sys.exit(1)
+
+        result = parser.Run()
+        cmdList = []
+        for r in result:
+            dirname, defs, incs, filename = r
+            cmd = "cd \"" + dirname + "\" && " + CXXTAGS + " \"" + parser.GetDbDir() + "\" \"" + filename + "\" " + defs + " " + incs
+            print cmd
+            cmd = cmd.replace('"', '\\"')
+            cmdList.append(cmd)
+
+        p = Popen(["xargs", "-L1", "-P"+str(self.m_numProc), "-I$", "-t", "bash", "-c", "$"], stdin=PIPE)
+        p.stdin.write("\n".join(cmdList))
+        p.stdin.close()
+        p.wait()
+
 """
 " start
 """
-parser = CmakeJsonParser()
-#parser = VSParser()
-result = parser.Run()
-for r in result:
-    #print r
-    dirname, defs, incs, filename = r
-    cmd = "cd \"" + dirname + "\" && " + CXXTAGS + " \"" + parser.GetDbDir() + "\" \"" + filename + "\" " + defs + " " + incs
-    print cmd
-    try:
-        (rv, out) = commands.getstatusoutput(cmd)
-    except Exception as e:
-        print "ERROR: while execution failed: " + e
-    finally:
-        if rv != 0:
-            print "ERROR: while execution failed: rv == " + str(rv)
-    print out
+CmdRunner().Run()

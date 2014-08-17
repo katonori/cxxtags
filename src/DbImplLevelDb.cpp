@@ -102,7 +102,7 @@ int dbTryOpen(leveldb::DB*& db, string dir)
     leveldb::Status st;
     while(1) {
         st= leveldb::DB::Open(s_defaultOptions, dir, &db);
-        if(st.ok()) {
+        if(st.ok() || !st.IsIOError()) {
             break;
         }
         clock_t now = clock();

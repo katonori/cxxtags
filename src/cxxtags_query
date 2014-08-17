@@ -30,10 +30,30 @@ TABLE_NAME_FILE_LIST = "O"
 
 OUTPUT_DELIMITER = '|'
 SCRIPT_DIR = os.path.dirname(__file__)
+USE_BASE64 = 1
+#USE_BASE64 = 0
 
 gDebugMode = 0
 gVerboseMode = 0
 gPartialCompare = 0
+
+
+ENCODING_TABLE = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
+                  'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+                  'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
+                  'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',
+                  'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+                  'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+                  'w', 'x', 'y', 'z', '0', '1', '2', '3',
+                  '4', '5', '6', '7', '8', '9', '+', '/']
+DECODING_TABLE = {'A':0, 'B':1, 'C':2, 'D':3, 'E':4, 'F':5, 'G':6, 'H':7,
+                  'I':8, 'J':9, 'K':10, 'L':11, 'M':12, 'N':13, 'O':14, 'P':15,
+                  'Q':16, 'R':17, 'S':18, 'T':19, 'U':20, 'V':21, 'W':22, 'X':23,
+                  'Y':24, 'Z':25, 'a':26, 'b':27, 'c':28, 'd':29, 'e':30, 'f':31,
+                  'g':32, 'h':33, 'i':34, 'j':35, 'k':36, 'l':37, 'm':38, 'n':39,
+                  'o':40, 'p':41, 'q':42, 'r':43, 's':44, 't':45, 'u':46, 'v':47,
+                  'w':48, 'x':49, 'y':50, 'z':51, '0':52, '1':53, '2':54, '3':55,
+                  '4':56, '5':57, '6':58, '7':59, '8':60, '9':61, '+':62, '/':63}
 
 def DEBUG_PRINT(str):
     global gVerboseMode
@@ -63,8 +83,8 @@ class HandlerBase:
     def Filename2CompileUnit(self, fn):
         DEBUG_PRINT("fn: " + fn)
         q = TABLE_NAME_FILE_LIST + "|" + fn
-        cuId, fileId = self.mFileListDb.get(q).split(",")
         DEBUG_PRINT("q: " + str(q))
+        cuId, fileId = self.mFileListDb.get(q).split(",")
         DEBUG_PRINT("cuId: " + str(cuId))
         cuName = self.Id2Cu(cuId)
         return cuName, cuId
@@ -143,6 +163,26 @@ class HandlerBase:
             self.mAllDbFileList = cxxtags_util.get_db_file_list(self.mDbDir)
         return self.mAllDbFileList
 
+    def EncVal(self, val):
+        str = ""
+        val = int(val, 16)
+        str = ENCODING_TABLE[val & 0x3f]
+        val >>= 6;
+        while val != 0:
+            str += ENCODING_TABLE[val & 0x3f]
+            val >>= 6;
+        return str;
+
+    def DecVal(self, valStr):
+        result = 0
+        base = 1
+        for c in valStr:
+            val = DECODING_TABLE[c]
+            result += val*base
+            base <<= 6
+        result = hex(result).replace("0x", "")
+        return result
+
     #
     # get USR from location information.
     #
@@ -151,6 +191,7 @@ class HandlerBase:
             print "ERROR: specify file name"
             sys.exit(1)
         fid = file2id(self.mDb, fileName)
+        DEBUG_PRINT("fid: " + str(fid) + "," + fileName)
         q = TABLE_NAME_POS2USR + "|%s|%s|%s"%(fid, lineNo, colNo)
         DEBUG_PRINT("q: " + q)
         usr = self.mDb.get(q)
@@ -181,6 +222,9 @@ class HandlerBase:
             db.close()
 
     def PrintResult(self, name, fileName, line, col):
+        if USE_BASE64 != 0:
+            line = self.DecVal(line)
+            col = self.DecVal(col)
         lineInt = int(line, 16)
         colInt = int(col, 16)
         print str(name) + OUTPUT_DELIMITER + str(fileName) + OUTPUT_DELIMITER + str(lineInt) + OUTPUT_DELIMITER + str(colInt) + OUTPUT_DELIMITER + str(cxxtags_util.get_line_from_file(fileName, lineInt))
@@ -233,8 +277,7 @@ class QueryHandlerDecl(HandlerBase):
         decl = self.mDb.get(TABLE_NAME_USR2DECL + "|%s"%(usrId))
         DEBUG_PRINT("decl: " + str(decl))
         if decl:
-            declList = decl.split("|")
-            nameId, fileId, line, col = tuple(declList)
+            nameId, fileId, line, col = decl.split("|")
             name, fileName = GetResultString(self.mDb, nameId, fileId)
             if fileName != None and name != None:
                 return name, fileName, line, col
@@ -247,6 +290,9 @@ class QueryHandlerDecl(HandlerBase):
         self.m_srcFileName, self.m_lineNo, self.m_colNo = argv
         self.m_lineNo = format(int(self.m_lineNo), 'x')
         self.m_colNo = format(int(self.m_colNo), 'x')
+        if USE_BASE64 != 0:
+            self.m_lineNo = self.EncVal(self.m_lineNo)
+            self.m_colNo = self.EncVal(self.m_colNo)
         self.m_srcFileName = os.path.abspath(self.m_srcFileName)
         DEBUG_PRINT("src: " + self.m_srcFileName)
 
@@ -284,6 +330,7 @@ class QueryHandlerDef(HandlerBase):
             #print "ERROR: usr2file: " + usr
             #return None
             cuIdList.append(self.m_cuId)
+        DEBUG_PRINT("cuIdList: " + str(cuIdList))
 
         result = []
         for cuId in cuIdList:
@@ -313,6 +360,9 @@ class QueryHandlerDef(HandlerBase):
         self.m_srcFileName, self.m_lineNo, self.m_colNo = argv
         self.m_lineNo = format(int(self.m_lineNo), 'x')
         self.m_colNo = format(int(self.m_colNo), 'x')
+        if USE_BASE64 != 0:
+            self.m_lineNo = self.EncVal(self.m_lineNo)
+            self.m_colNo = self.EncVal(self.m_colNo)
         self.m_srcFileName = os.path.abspath(self.m_srcFileName)
 
 class QueryHandlerRef(HandlerBase):
@@ -379,6 +429,9 @@ class QueryHandlerRef(HandlerBase):
         self.m_srcFileName, self.m_lineNo, self.m_colNo = argv
         self.m_lineNo = format(int(self.m_lineNo), 'x')
         self.m_colNo = format(int(self.m_colNo), 'x')
+        if USE_BASE64 != 0:
+            self.m_lineNo = self.EncVal(self.m_lineNo)
+            self.m_colNo = self.EncVal(self.m_colNo)
 
 class QueryHandlerOverride(HandlerBase):
     #
@@ -422,6 +475,9 @@ class QueryHandlerOverride(HandlerBase):
         self.m_srcFileName, self.m_lineNo, self.m_colNo = argv
         self.m_lineNo = format(int(self.m_lineNo), 'x')
         self.m_colNo = format(int(self.m_colNo), 'x')
+        if USE_BASE64 != 0:
+            self.m_lineNo = self.EncVal(self.m_lineNo)
+            self.m_colNo = self.EncVal(self.m_colNo)
 
 class QueryHandlerOverrideN(HandlerBase):
     #
@@ -473,6 +529,9 @@ class QueryHandlerOverrideN(HandlerBase):
         self.m_srcFileName, self.m_lineNo, self.m_colNo = argv
         self.m_lineNo = format(int(self.m_lineNo), 'x')
         self.m_colNo = format(int(self.m_colNo), 'x')
+        if USE_BASE64 != 0:
+            self.m_lineNo = self.EncVal(self.m_lineNo)
+            self.m_colNo = self.EncVal(self.m_colNo)
 
 class QueryHandlerName(HandlerBase):
     #
@@ -536,6 +595,9 @@ class QueryHandlerName(HandlerBase):
         self.m_srcFileName = fileName
         self.m_lineNo = lineNo
         self.m_colNo = colNo
+        if USE_BASE64 != 0:
+            self.m_lineNo = self.EncVal(self.m_lineNo)
+            self.m_colNo = self.EncVal(self.m_colNo)
 
 class QueryHandlerTable(HandlerBase):
     #

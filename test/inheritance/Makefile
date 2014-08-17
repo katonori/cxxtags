@@ -6,7 +6,7 @@ MERGER_OUT = db
 
 $(MERGER_OUT):
 	$(CXXTAGS) db inhe.cpp
-test: check $(MERGER_OUT)
+test: check clean $(MERGER_OUT)
 	./test.py $(MERGER_OUT)
 html: $(MERGER_OUT)
 	$(DUMPER) $(MERGER_OUT)

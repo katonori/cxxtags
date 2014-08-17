@@ -1,19 +1,217 @@
 #!/usr/bin/env python
 
-import json, sys, re, commands
+import json, sys, re, commands, os, getopt
+from xml.etree.ElementTree import *
+from subprocess import Popen, PIPE
 
-if len(sys.argv) != 3:
-    print "usage: cmd db_name proj_file"
-    sys.exit(1)
+CXXTAGS = "cxxtags"
 
-dbname = sys.argv[1]
-filename = sys.argv[2]
+class ProjParserBase():
+    m_dbname = ""
+    m_filename = ""
+    def __init__(self, dbname, filename):
+        self.m_dbname = dbname
+        self.m_filename = filename
+    def GetDbDir(self):
+        return self.m_dbname
 
-with open(filename) as f:
-    data = json.load(f)
+class CmakeJsonParser(ProjParserBase):
+    def Run(self):
+        with open(self.m_filename) as f:
+            data = json.load(f)
 
-for i in data:
-    argList = re.split("\s+", i["command"])
-    cmd = "cxxtags " + dbname + " " + " ".join(argList[1:])
-    (rv, out) = commands.getstatusoutput(cmd)
-    print out
+        resultList = []
+        for i in data:
+            dirname = i["directory"]
+            filename = i["file"]
+            args = i["command"]
+            # remove the command
+            args = re.sub("^\S+", "", args)
+            # remove output name
+            args = re.sub("-o\s*\S+", "", args)
+            # remove source name
+            args = re.sub(filename, "", args)
+            resultList.append((dirname, "", args, filename))
+        return resultList
+
+class VSParser(ProjParserBase):
+    m_elemPrefix = ""
+    m_projConfigList = []
+    m_itemDefinitionGroup = {}
+    m_includePath = {}
+    m_souceFiles = []
+    m_isCygwin = os.sep != '\\'
+    m_solDir = ""
+    m_curProjDir = ""
+
+    def convPath(self, path):
+        if self.m_isCygwin:
+            path = path.replace('\\', '/')
+            m = re.match("^([a-zA-Z]):/", path)
+            if m:
+                drive = m.group(1)
+                path = path.replace(drive + ":/", "/cygdrive/" + drive + "/")
+        return os.path.abspath(path)
+
+    def procNode(self, elem):
+        tag = elem.tag
+        if tag == (self.m_elemPrefix+"ProjectConfiguration"):
+            name = self.m_elemPrefix+"Configuration"
+            config =  elem.find(name).text
+            name = self.m_elemPrefix+"Platform"
+            platform =  elem.find(name).text
+            self.m_projConfigList.append(config + "|" + platform)
+        elif tag == (self.m_elemPrefix+"ItemDefinitionGroup"):
+            """
+            " build options
+            """
+            m = re.search("=='(.+)'", elem.get("Condition"))
+            if m:
+                cond = m.group(1)
+                # definitions
+                defElem = elem.find("*"+self.m_elemPrefix+"PreprocessorDefinitions")
+                if defElem != None:
+                    self.m_itemDefinitionGroup[cond] = defElem.text
+                # include paths
+                defElem = elem.find("*"+self.m_elemPrefix+"AdditionalIncludeDirectories")
+                if defElem != None:
+                    pathList = defElem.text.split(";")
+                    #print pathList
+                    i = 0
+                    while i < len(pathList):
+                        #
+                        # replace delimiter
+                        #
+                        pathList[i] = self.convPath(pathList[i])
+                        i += 1
+                    #print pathList
+                    self.m_includePath[cond] = ";".join(pathList)
+            else:
+                print "ERROR: invalid condition"
+        elif tag == (self.m_elemPrefix+"ItemGroup"):
+            """
+            " source files
+            """
+            key = "./"+self.m_elemPrefix+"ClCompile"
+            defElemList = elem.findall(key)
+            for e in defElemList:
+                self.m_souceFiles.append(self.convPath(self.m_curProjDir + os.sep + e.get("Include")))
+
+    def Run(self):
+        slnFile = self.m_filename
+        self.m_solDir = os.path.dirname(os.path.abspath(slnFile))
+        #print self.m_solDir
+
+        projList = []
+        #Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "test0", "test0\test0.vcxproj", "{698FC758-5285-46CE-A4ED-7655649BC95E}"
+        with open(slnFile) as f:
+            for l in f.readlines():
+                m = re.search('Project\(".+"\)\s*=\s*"([^"]+)"\s*,\s*"([^"]+)"', l)
+                if m:
+                    projList.append(m.group(2))
+        if projList == []:
+            print "ERROR: not project found"
+            sys.exit(1)
+
+        resultList = []
+        # proc projects
+        for prj in projList:
+            print prj
+            abspath = self.convPath(self.m_solDir + os.sep + prj)
+            self.m_curProjDir = os.path.dirname(abspath)
+            print self.m_curProjDir
+            print abspath
+            tree = parse(abspath)
+            elem = tree.getroot()
+            m = re.search("({.+}).+", elem.tag)
+            if m:
+                self.m_elemPrefix = m.group(1)
+            for e in elem.getiterator():
+                self.procNode(e)
+
+            # dump
+            #print "projDir: " + self.m_curProjDir
+            # dump result
+            config = self.m_itemDefinitionGroup.keys()[0]
+            #print "config: " + config
+            # defs
+            #print "defs: " + self.m_itemDefinitionGroup[config]
+            defs = ""
+            for d in self.m_itemDefinitionGroup[config].split(";"):
+                if False == d.startswith("%"):
+                    defs += " -D" + d
+            #print "defs: " + defs
+            # includes
+            incs = ""
+            for i in self.m_includePath[config].split(";"):
+                if False == i.startswith("%"):
+                    incs += " -I" + i
+            #print "incs: " + incs
+            # dump result
+            for s in self.m_souceFiles:
+                resultList.append((self.m_curProjDir, defs, incs, s))
+        return resultList
+
+class CmdRunner():
+    m_numProc = 1
+    m_projType = ""
+    m_dbName = ""
+    m_fileName = ""
+    def __init__(self):
+        self.ParseArgs()
+
+    def usage():
+        print("usage: cmd [-j N] [-t cmake|vs] database_dir file_name")
+
+    def ParseArgs(self):
+        try:
+            opts, args = getopt.getopt(sys.argv[1:], "j:t:", [])
+        except getopt.GetoptError, err:
+            print str(err) # will print something like "option -a not recognized"
+            self.usage()
+            sys.exit(1)
+        output = None
+        verbose = False
+        for o, a in opts:
+            if o in ("-j"):
+                self.m_numProc = int(a)
+            elif o in ("-t"):
+                self.m_projType = a
+            else:
+                assert False, "unhandled option"
+
+        if len(args) != 2:
+            self.usage()
+            sys.exit(1)
+        self.m_dbName = os.path.abspath(args[0])
+        self.m_fileName = args[1]
+
+    def Run(self):
+        # determin project type
+        parser = None
+        if self.m_projType == "" or self.m_projType == "cmake":
+            parser = CmakeJsonParser(self.m_dbName, self.m_fileName)
+        elif self.m_projType == "vs":
+            parser = VSParser(self.m_dbName, self.m_fileName)
+        else:
+            print("ERROR: wrong project type \"" + self.m_projType + "\" was specified")
+            sys.exit(1)
+
+        result = parser.Run()
+        cmdList = []
+        for r in result:
+            dirname, defs, incs, filename = r
+            cmd = "cd \"" + dirname + "\" && " + CXXTAGS + " \"" + parser.GetDbDir() + "\" \"" + filename + "\" " + defs + " " + incs
+            print cmd
+            cmd = cmd.replace('"', '\\"')
+            cmdList.append(cmd)
+
+        p = Popen(["xargs", "-L1", "-P"+str(self.m_numProc), "-I$", "-t", "bash", "-c", "$"], stdin=PIPE)
+        p.stdin.write("\n".join(cmdList))
+        p.stdin.close()
+        p.wait()
+
+"""
+" start
+"""
+CmdRunner().Run()

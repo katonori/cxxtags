@@ -3,7 +3,7 @@ project(cxxtags)
 set(LLVM_HOME "" CACHE PATH "")
 set(LEVELDB_HOME "" CACHE PATH "")
 set(BOOST_HOME "" CACHE PATH "")
-set(CMAKE_CXX_FLAGS "-g -O2" CACHE STRING "")
+set(CMAKE_CXX_FLAGS "-g -O2 -Wall" CACHE STRING "")
 set(CMAKE_EXE_LINKER_FLAGS "" CACHE STRING "")
 
 include_directories(${LLVM_HOME}/include ${LEVELDB_HOME}/include ${BOOST_HOME}/include)

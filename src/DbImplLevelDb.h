@@ -31,7 +31,7 @@ public:
     }
     std::map<std::string, int > mMap;
     int mCurId;
-    int GetId(std::string str)
+    int GetId(const std::string& str)
     {
         // lookup map
         std::map<std::string, int >::iterator mapItr = mMap.find(str);

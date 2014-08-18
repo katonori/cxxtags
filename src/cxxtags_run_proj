@@ -160,7 +160,7 @@ class CmdRunner():
     def __init__(self):
         self.ParseArgs()
 
-    def usage():
+    def usage(self):
         print("usage: cmd [-j N] [-t cmake|vs] database_dir file_name")
 
     def ParseArgs(self):

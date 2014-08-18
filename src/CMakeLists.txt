@@ -18,6 +18,7 @@ install(FILES
     ${PROJECT_SOURCE_DIR}/cxxtags_db_manager
     ${PROJECT_SOURCE_DIR}/cxxtags_query
     ${PROJECT_SOURCE_DIR}/cxxtags_util.py
+    ${PROJECT_SOURCE_DIR}/cxxtags_run_proj
     ${PROJECT_SOURCE_DIR}/g++.py
     ${PROJECT_SOURCE_DIR}/gcc.py
     DESTINATION ${PROJECT_SOURCE_DIR}/../bin

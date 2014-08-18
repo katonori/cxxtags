@@ -157,6 +157,7 @@ class CmdRunner():
     m_projType = ""
     m_dbName = ""
     m_fileName = ""
+    m_options = ""
     def __init__(self):
         self.ParseArgs()
 
@@ -165,7 +166,7 @@ class CmdRunner():
 
     def ParseArgs(self):
         try:
-            opts, args = getopt.getopt(sys.argv[1:], "j:t:", [])
+            opts, args = getopt.getopt(sys.argv[1:], "j:t:e:", [])
         except getopt.GetoptError, err:
             print str(err) # will print something like "option -a not recognized"
             self.usage()
@@ -177,6 +178,8 @@ class CmdRunner():
                 self.m_numProc = int(a)
             elif o in ("-t"):
                 self.m_projType = a
+            elif o in ("-e"):
+                self.m_options += " -e " + a
             else:
                 assert False, "unhandled option"
 
@@ -201,8 +204,8 @@ class CmdRunner():
         cmdList = []
         for r in result:
             dirname, defs, incs, filename = r
-            cmd = "(" + "cd \"" + dirname + "\" && " + CXXTAGS + " \"" + parser.GetDbDir() + "\" \"" + filename + "\" " + defs + " " + incs +")"
-            print cmd
+            cmd = "(" + "cd \"" + dirname + "\" && " + CXXTAGS + " " + self.m_options + " \"" + parser.GetDbDir() + "\" \"" + filename + "\" " + defs + " " + incs +")"
+            #print cmd
             cmd = cmd.replace('"', '\\"')
             cmdList.append(cmd)
 

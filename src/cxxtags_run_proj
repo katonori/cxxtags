@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 
-import json, sys, re, commands, os, getopt
+import json, sys, re, commands, os, getopt, time
 from xml.etree.ElementTree import *
 from subprocess import Popen, PIPE
+from multiprocessing import Process,Queue
 
 CXXTAGS = "cxxtags"
 
@@ -158,6 +159,7 @@ class CmdRunner():
     m_dbName = ""
     m_fileName = ""
     m_options = ""
+    m_buildOptions = ""
     def __init__(self):
         self.ParseArgs()
 
@@ -189,6 +191,10 @@ class CmdRunner():
         self.m_dbName = os.path.abspath(args[0])
         self.m_fileName = args[1]
 
+    def RunOne(self, q, cmd):
+        (rv, out) = commands.getstatusoutput(cmd)
+        q.put(out)
+
     def Run(self):
         # determin project type
         parser = None
@@ -204,15 +210,31 @@ class CmdRunner():
         cmdList = []
         for r in result:
             dirname, defs, incs, filename = r
-            cmd = "(" + "cd \"" + dirname + "\" && " + CXXTAGS + " " + self.m_options + " \"" + parser.GetDbDir() + "\" \"" + filename + "\" " + defs + " " + incs +")"
+            cmd = "cd \"" + dirname + "\" && " + CXXTAGS + " " + self.m_options + " \"" + parser.GetDbDir() + "\" \"" + filename + "\" " + defs + " " + incs + self.m_buildOptions
             #print cmd
-            cmd = cmd.replace('"', '\\"')
+            #cmd = cmd.replace('"', '\\"')
             cmdList.append(cmd)
 
-        p = Popen(["xargs", "-L1", "-P"+str(self.m_numProc), "-I$", "-t", "bash", "-c", "$"], stdin=PIPE)
-        p.stdin.write("\n".join(cmdList))
-        p.stdin.close()
-        p.wait()
+        process_list = [None]*self.m_numProc
+        q = Queue()
+        i = 0
+        while True:
+            if len(cmdList) == 0 and process_list == [None]*self.m_numProc:
+                break
+            if process_list[i] == None:
+                if len(cmdList) != 0:
+                    cmd = cmdList.pop(0)
+                    process_list[i] = Process(target=self.RunOne, args=(q, cmd))
+                    process_list[i].start()
+                    #print "start: " + cmd
+            elif False == process_list[i].is_alive():
+                process_list[i].join()
+                process_list[i] = None
+                print q.get()
+            i += 1
+            if i >= self.m_numProc:
+                i = 0
+            time.sleep(0.001)
 
 """
 " start

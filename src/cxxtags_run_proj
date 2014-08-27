@@ -16,6 +16,22 @@ class ProjParserBase():
     def GetDbDir(self):
         return self.m_dbname
 
+class MKParser(ProjParserBase):
+    def Run(self):
+        with open(self.m_filename) as f:
+            dirname = ""
+            resultList = []
+            for l in f.readlines():
+                l = l.replace("\n", "")
+                m = re.search("Entering directory `(.+)'$", l)
+                if m:
+                    dirname = m.group(1)
+                else:
+                    l = re.sub("^\S+", "", l)
+                    print l
+                    resultList.append((dirname, "", l, ""))
+        return resultList
+
 class CmakeJsonParser(ProjParserBase):
     def Run(self):
         with open(self.m_filename) as f:
@@ -192,6 +208,7 @@ class CmdRunner():
         self.m_fileName = args[1]
 
     def RunOne(self, q, cmd):
+        print cmd
         (rv, out) = commands.getstatusoutput(cmd)
         q.put(out)
 
@@ -202,6 +219,8 @@ class CmdRunner():
             parser = CmakeJsonParser(self.m_dbName, self.m_fileName)
         elif self.m_projType == "vs":
             parser = VSParser(self.m_dbName, self.m_fileName)
+        elif self.m_projType == "make":
+            parser = MKParser(self.m_dbName, self.m_fileName)
         else:
             print("ERROR: wrong project type \"" + self.m_projType + "\" was specified")
             sys.exit(1)

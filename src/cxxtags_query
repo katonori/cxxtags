@@ -69,7 +69,7 @@ class Db:
     m_instance = None
     def __init__(self, dirname):
         if USE_PLYVEL:
-            self.m_instance = plyvel.DB(dirname)
+            self.m_instance = plyvel.DB(dirname, bloom_filter_bits=10, lru_cache_size=(128<<20))
         else:
             self.m_instance = leveldb.LevelDB(dirname, block_cache_size=(128<<20))
     def get(self, key):

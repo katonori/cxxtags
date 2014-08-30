@@ -28,9 +28,8 @@ How to setup cxxtags on cygwin
                 cd leveldb-1.15.0
                 # edit some files
                 make
-                mkdir -p /pkg/leveldb/lib/
-                cp libleveldb* /pkg/leveldb/lib
-                cp -a include /pkg/leveldb/
+                cp libleveldb* /usr/local/lib
+                cp -a include /usr/local/
 
 
 * py-leveldb
@@ -58,6 +57,6 @@ How to setup cxxtags on cygwin
         git clone https://github.com/katonori/cxxtags.git
         cd cxxtags/src/
         mkdir build && cd build
-        cmake -DLLVM_HOME=/usr/ -DLEVELDB_HOME=/pkg/leveldb/ -DBOOST_HOME=/usr/ ../
+        cmake -DLLVM_HOME=/usr/ -DLEVELDB_HOME=/usr/local/ -DBOOST_HOME=/usr/ ../
         make install
 

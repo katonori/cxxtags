@@ -63,7 +63,7 @@ If you want to generate tags of cmake project, You can generate tags by steps be
   which contains the list of built files and their build options and working directory.
 * Generate database of the project to directory "\_db" by cxxtags\_run\_proj
 
-        $ cxxtags_run_proj \_db compile_commands.json
+        $ cxxtags_run_proj _db compile_commands.json
 
 Or use wrapper scripts of compilers.
 g++.py and gcc.py included in this package are wrapper script of **cxxtags** and compilers.

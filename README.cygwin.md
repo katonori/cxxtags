@@ -33,9 +33,18 @@ How to setup cxxtags on cygwin
                 cp -a include /pkg/leveldb/
 
 
-* Plyvel
-    * Refer this site.
-        * https://plyvel.readthedocs.org/en/latest/installation.html#build-and-install-plyvel
+* py-leveldb
+    * install leveldb and snappy(https://code.google.com/p/snappy/)
+    * build and install py-leveldb
+
+            # get source code from SVN
+            $ svn checkout http://py-leveldb.googlecode.com/svn/trunk/ py-leveldb-read-only
+            $ cd py-leveldb-read-only
+            # build the Python extensions
+            # you need to change environment variables according to where you install leveldb and snappy to.
+            $ env LDFLAGS="-L/usr/local/lib" CFLAGS="-I/usr/local/include" CXXFLAGS="-I/usr/local/include" python setup.py build
+            # (optional) install it
+            $ sudo python setup.py install
 
 * boost
     * Most easiest way to install boost is to use cygwin package.

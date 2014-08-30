@@ -22,9 +22,9 @@ Requirement
     * http://llvm.org/
 * leveldb library and C/C++ headers.
     * https://code.google.com/p/leveldb/
-* Plyvel 
-    * A python interface of leveldb 
-    * https://plyvel.readthedocs.org/en/latest/
+* py-leveldb
+    * Thread-safe Python bindings for LevelDB. 
+    * https://code.google.com/p/py-leveldb/
 
 **cxxtags** is developped and tested on Mac OS X 10.9.3, python-2.7.5 and clang(LLVM)-3.2.
 But it is expected to be able to run on other Unix-like systems inluding cygwin.
@@ -56,24 +56,27 @@ How to use
 ### Build the database
 
 **cxxtags** needs compile options such as "-I" "-D" to retrieve correct informations.
-This is difficult in some cases. An easy way to recorde such information is to use wrapper scripts of compilers.
-g++.py and gcc.py included in this package are wrapper script of **cxxtags** and compilers. This generate tag database
-and run compilers. You can use this script like below
 
-
-                $ env CXXTAGS_DB_DST=`pwd`/db g++.py -O a.cpp
-                
-or
-
-                $ env CXXTAGS_DB_DST=`pwd`/db make CXX=g++.py
-
-If you want to generate tags of cmake project, the problem becomes easier. You can generate tags by steps below.
+If you want to generate tags of cmake project, You can generate tags by steps below.
 
 * Run cmake with `-DCMAKE_EXPORT_COMPILE_COMMANDS=1` option and build as usual. This generate a file "compile\_commands.json"
   which contains the list of built files and their build options and working directory.
-* Generate database of the project to directory "db" by cxxtags\_run\_proj
+* Generate database of the project to directory "\_db" by cxxtags\_run\_proj
 
-        $ cxxtags_run_proj db compile_commands.json
+        $ cxxtags_run_proj \_db compile_commands.json
+
+Or use wrapper scripts of compilers.
+g++.py and gcc.py included in this package are wrapper script of **cxxtags** and compilers.
+This generate tag database
+and run compilers. You can use this script like below
+
+
+                $ env CXXTAGS_DB_DST=`pwd`/_db g++.py -O a.cpp
+                
+or
+
+                $ env CXXTAGS_DB_DST=`pwd`/_db make CXX=g++.py
+
 
 ### Run query to the database
 
@@ -81,7 +84,7 @@ To retrieve information from the database use *cxxtags_query*.
 For example, if you want to know where an item refered at line #8 and column #12 in file b.c is declared.
 invoke this command
 
-                $ cxxtags_query def db b.c 8 12
+                $ cxxtags_query def _db b.c 8 12
 
 If b.c is like this
 

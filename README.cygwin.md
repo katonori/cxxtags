@@ -5,7 +5,7 @@ How to setup cxxtags on cygwin
 
 * libclang
 * leveldb
-* Plyvel
+* py-leveldb
 * boost
 
 ### How to setup libraries

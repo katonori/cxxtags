@@ -4,8 +4,16 @@ def usage():
     print '     : cxxtags_query         name database_dir item_name [-f file_name] [-l line_no] [-c column_no]'
     print '     : cxxtags_query         dump database_dir table_name'
 
+OUTPUT_DELIMITER = '|'
+USE_BASE64 = 1
+USE_USR2FILE_TABLE2 = True
+USE_PLYVEL = False
+
 import sys
-import plyvel
+if USE_PLYVEL:
+    import plyvel
+else:
+    import leveldb
 import cxxtags_util
 import getopt
 import re
@@ -27,16 +35,13 @@ TABLE_NAME_USR2REF = "L"
 TABLE_NAME_USR2OVERRIDEE = "M"
 TABLE_NAME_USR2OVERRIDER = "N"
 TABLE_NAME_FILE_LIST = "O"
-
-OUTPUT_DELIMITER = '|'
-SCRIPT_DIR = os.path.dirname(__file__)
-USE_BASE64 = 1
-#USE_BASE64 = 0
+TABLE_NAME_USR2FILE2 = "P"
 
 gDebugMode = 0
 gVerboseMode = 0
 gPartialCompare = 0
 
+SCRIPT_DIR = os.path.dirname(__file__)
 
 ENCODING_TABLE = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
                   'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
@@ -60,6 +65,27 @@ def DEBUG_PRINT(str):
     if gVerboseMode != 0:
         print str
 
+class Db:
+    m_instance = None
+    def __init__(self, dirname):
+        if USE_PLYVEL:
+            self.m_instance = plyvel.DB(dirname)
+        else:
+            self.m_instance = leveldb.LevelDB(dirname, block_cache_size=(128<<20))
+    def get(self, key):
+        try:
+            if USE_PLYVEL:
+                return self.m_instance.get(key)
+            else:
+                return self.m_instance.Get(key)
+        except KeyError as e:
+            return None
+    def close(self):
+        if USE_PLYVEL:
+            return self.m_instance.close()
+        else:
+            del self.m_instance
+
 class HandlerBase:
     #
     # Base class of *Handler classes
@@ -74,11 +100,15 @@ class HandlerBase:
     m_cuName = ""
     m_cuId = 0
     m_colNo = 0
+    m_fileCount = 0
 
     def __init__(self, dbDir):
         self.mUsrDbList = []
         self.mDbDir = dbDir + "/"
-        self.mFileListDb = plyvel.DB(dbDir + "/common")
+        self.mFileListDb = Db(dbDir + "/common")
+        count = self.mFileListDb.get("file_count")
+        assert count != None
+        self.m_fileCount = count
 
     def Filename2CompileUnit(self, fn):
         DEBUG_PRINT("fn: " + fn)
@@ -90,8 +120,8 @@ class HandlerBase:
         return cuName, cuId
 
     def GlobalFileId2CompileUnit(self, id):
-        DEBUG_PRINT("global fid: " + id)
-        q = TABLE_NAME_FID2CUID + "|" + id
+        DEBUG_PRINT("global fid: " + str(id))
+        q = TABLE_NAME_FID2CUID + "|" + str(id)
         cuId = self.mFileListDb.get(q)
         DEBUG_PRINT("q: " + str(q))
         DEBUG_PRINT("cuId: " + str(cuId))
@@ -115,7 +145,7 @@ class HandlerBase:
         dbList = os.listdir(self.mDbDir + "/usr_db")
         for dir in dbList:
             if re.match("^[0-9]+$", dir):
-                db = plyvel.DB(self.mDbDir + "/usr_db/" + dir)
+                db = Db(self.mDbDir + "/usr_db/" + dir)
                 if db == None:
                     print("ERROR: db open: " + str(dir))
                     return None
@@ -133,10 +163,13 @@ class HandlerBase:
     def OpenDbId(self, cuId):
         cmd = self.mDbDir + str(cuId)
         DEBUG_PRINT("OpenDbId: " + cmd)
-        db = plyvel.DB(cmd)
+        timeS = time.time()
+        db = Db(cmd)
         if db == None:
             print("ERROR:1: db_dir: "  + cuId)
             return None
+        timeE = time.time()
+        DEBUG_PRINT("OpenDbId: " + str((timeE-timeS)*1000.0) + " ms")
         return db
 
     def OpenDbName(self, cuName):
@@ -145,14 +178,14 @@ class HandlerBase:
             print("ERROR:0: db_dir: "  + cuName)
             return None
         DEBUG_PRINT("OpenDbName: " + self.mDbDir + dirNo + ", " + cuName)
-        db = plyvel.DB(self.mDbDir + dirNo)
+        db = Db(self.mDbDir + dirNo)
         if db == None:
             print("ERROR:1: db_dir: "  + cuName)
             return None
         return db
 
     def OpenRefDb(self, cuName):
-        db = plyvel.DB(self.mDbDir + "common")
+        db = Db(self.mDbDir + "common")
         if db == None:
             print("ERROR:1: db_dir: "  + cuName)
             return None
@@ -203,12 +236,22 @@ class HandlerBase:
 
     def GetCuidListFromUsr(self, usr):
         cuIdList = []
-        for db in self.mUsrDbList:
-            res = db.get(TABLE_NAME_USR2FILE + "|" + usr)
-            if res:
-                for fid in res.split(","):
-                    name, cuid = self.GlobalFileId2CompileUnit(fid)
-                    cuIdList.append(cuid)
+        if USE_USR2FILE_TABLE2:
+            for db in self.mUsrDbList:
+                i = 0
+                while i < int(self.m_fileCount, 16) + 1:
+                    res = db.get(TABLE_NAME_USR2FILE2 + "|" + usr + "|" + format(i, 'x'))
+                    if res:
+                        name, cuid = self.GlobalFileId2CompileUnit(format(i, 'x'))
+                        cuIdList.append(cuid)
+                    i += 1
+        else:
+            for db in self.mUsrDbList:
+                res = db.get(TABLE_NAME_USR2FILE + "|" + usr)
+                if res:
+                    for fid in res.split(","):
+                        name, cuid = self.GlobalFileId2CompileUnit(fid)
+                        cuIdList.append(cuid)
         if cuIdList == []:
             cuIdList.append(self.m_cuId)
         return list(set(cuIdList))
@@ -318,18 +361,12 @@ class QueryHandlerDef(HandlerBase):
     def GetDef(self, usr):
         cuIdList = []
         if self.m_isOnlyMainCompileUnit == False:
-            for db in self.mUsrDbList:
-                res = db.get(TABLE_NAME_USR2FILE + "|" + usr)
-                if res:
-                    DEBUG_PRINT("usr2file: " +  res)
-                    for fid in res.split(","):
-                        name, cuid = self.GlobalFileId2CompileUnit(fid)
-                        DEBUG_PRINT("cu: " + name + "," + str(cuid))
-                        cuIdList.append(cuid)
-        if cuIdList == []:
+            cuIdList = self.GetCuidListFromUsr(usr)
+        else:
             #print "ERROR: usr2file: " + usr
             #return None
             cuIdList.append(self.m_cuId)
+            cuIdList = list(set(cuIdList))
         DEBUG_PRINT("cuIdList: " + str(cuIdList))
 
         result = []
@@ -383,17 +420,10 @@ class QueryHandlerRef(HandlerBase):
             self.GetAllRefs(usr)
 
     def GetAllRefs(self, usr):
-        cuIdList = []
-        for db in self.mUsrDbList:
-            res = db.get(TABLE_NAME_USR2FILE + "|" + usr)
-            if res:
-                for fid in res.split(","):
-                    name, cuid = self.GlobalFileId2CompileUnit(fid)
-                    cuIdList.append(cuid)
-        if cuIdList == []:
-            cuIdList.append(self.m_cuId)
-            #print "ERROR: usr2file: " + usr
-            #return None
+        startTime = time.time()
+        cuIdList = self.GetCuidListFromUsr(usr)
+        endTime = time.time()
+        DEBUG_PRINT("get all CUs: TIME: %s ms"%(str((endTime-startTime)*1000.0)))
 
         prevTime = 0
         for cuId in cuIdList:
@@ -405,10 +435,12 @@ class QueryHandlerRef(HandlerBase):
             else:
                 db = self.OpenDbId(cuId)
             count = 0
-            DEBUG_PRINT("time: open: " + str((time.time()-prevTime)*1000) + " ms")
+            DEBUG_PRINT("time: open: " + cuId + ": " + str((time.time()-prevTime)*1000) + " ms")
+            timeDb0 = time.time()
             q = TABLE_NAME_USR2REF + "|" + str(usr) + "|" + str(cuId)
             rv = db.get(q)
-            DEBUG_PRINT("usr2ref: " + str(rv))
+            timeDb1 = time.time()
+            DEBUG_PRINT("usr2ref: " + str(rv) + ": " + str(timeDb1-timeDb0) + " sec")
             if rv:
                 rvList = rv.split(",")
                 for rv in rvList:

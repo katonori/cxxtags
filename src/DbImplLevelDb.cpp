@@ -1,6 +1,8 @@
 #include "DbImplLevelDb.h"
 #include <leveldb/db.h>
-#include "leveldb/write_batch.h"
+#include <leveldb/write_batch.h>
+#include <leveldb/cache.h>
+#include <leveldb/filter_policy.h>
 #include <vector>
 #include <map>
 #include <time.h>
@@ -12,7 +14,6 @@
 #include <boost/filesystem/operations.hpp>
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string.hpp>
-#include <boost/timer/timer.hpp>
 
 #define TABLE_NAME_POS2USR "A"
 #define TABLE_NAME_USR2FILE "B"
@@ -29,9 +30,15 @@
 #define TABLE_NAME_USR2OVERRIDEE "M"
 #define TABLE_NAME_USR2OVERRIDER "N"
 #define TABLE_NAME_FILE_LIST "O"
+#define TABLE_NAME_USR2FILE2 "P"
 
 #define USE_BASE64
-//#define TIMER
+#define USE_USR2FILE_TABLE2
+#define TIMER
+
+#ifdef TIMER
+#include <boost/timer/timer.hpp>
+#endif
 
 namespace cxxtags {
 
@@ -52,15 +59,18 @@ static char gCharBuff1[2048];
 leveldb::ReadOptions s_defaultRoptions;
 leveldb::WriteOptions s_defaultWoptions;
 leveldb::Options s_defaultOptions;
+string s_curDbDir;
 
-const int k_usrDbDirNum = 4; 
+const int k_usrDbDirNum = 4;
 
 static string s_compileUnitId;
 static IdTbl *fileIdTbl;
 static IdTbl *nameIdTbl;
 static IdTbl *usrIdTbl;
 static const int k_timerNum = 128;
+#ifdef TIMER
 boost::timer::cpu_timer* s_timers;
+#endif
 
 enum {
     TIMER_INS_REF = 64,
@@ -70,6 +80,9 @@ enum {
     TIMER_INS_OVERRIDEN,
     TIMER_USR_DB0,
     TIMER_USR_DB1,
+    TIMER_USR_DB2,
+    TIMER_USR_DB3,
+    TIMER_DB_CACHE,
 };
 
 static inline void timerStart(int idx)
@@ -103,7 +116,9 @@ static int dbTryOpen(leveldb::DB*& db, string dir)
     clock_t start = clock();
     leveldb::Status st;
     while(1) {
+        timerStart(TIMER_USR_DB3);
         st= leveldb::DB::Open(s_defaultOptions, dir, &db);
+        timerStop(TIMER_USR_DB3);
         if(st.ok() || !st.IsIOError()) {
             break;
         }
@@ -126,6 +141,10 @@ int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, cons
 {
     leveldb::DB* dbCommon = NULL;
     s_defaultOptions.create_if_missing = true;
+    //s_defaultOptions.compression = leveldb::kNoCompression;
+    s_defaultOptions.compression = leveldb::kSnappyCompression;
+    s_defaultOptions.block_cache = leveldb::NewLRUCache(128 * 1024 * 1024); 
+    s_defaultOptions.filter_policy = leveldb::NewBloomFilterPolicy(10);
 
     s_dbDir = out_dir;
     s_compileUnit = src_file_name;
@@ -133,10 +152,12 @@ int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, cons
     nameIdTbl = new IdTbl();
     usrIdTbl = new IdTbl();
 
+#ifdef TIMER
     s_timers = new boost::timer::cpu_timer[k_timerNum];
     for(int i = 0; i < k_timerNum; i++) {
         s_timers[i].stop();
     }
+#endif
 
     if(!boost::filesystem::exists(s_dbDir)) {
         boost::filesystem::create_directory(s_dbDir);
@@ -191,8 +212,8 @@ int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, cons
 
     // open database for this compile unit
     assert(!s_compileUnitId.empty());
-    string db_dir = out_dir + "/" + s_compileUnitId;
-    status = leveldb::DB::Open(s_defaultOptions, db_dir.c_str(), &s_db);
+    s_curDbDir = out_dir + "/" + s_compileUnitId;
+    status = leveldb::DB::Open(s_defaultOptions, s_curDbDir.c_str(), &s_db);
     if (!status.ok()) {
         fprintf(stderr, "Open fail: %s\n", status.ToString().c_str());
         return -1;
@@ -598,6 +619,7 @@ int DbImplLevelDb::fin(void)
         curDir.append(string("/") + string(gCharBuff0));
 
         timerStart(TIMER_USR_DB0);
+        timerStart(TIMER_USR_DB2);
         //////
         // open db
         int rv = dbTryOpen(dbUsrDb, curDir);
@@ -605,6 +627,7 @@ int DbImplLevelDb::fin(void)
             printf("ERROR: fin: common db open: %s\n", curDir.c_str());
             return -1;
         }
+        timerStop(TIMER_USR_DB2);
         timerStart(TIMER_USR_DB1);
 
         // lookup map
@@ -619,6 +642,11 @@ int DbImplLevelDb::fin(void)
             if(!usr.empty() && (isGlobal || isMacro)) {
 #endif
                 SiMap& file_list_map = usrFidMap[usr];
+#ifdef USE_USR2FILE_TABLE2
+                BOOST_FOREACH(const SiPair& itr_str, file_list_map) {
+                    wb_usrdb.Put(TABLE_NAME_USR2FILE2 "|" + usr + "|" + itr_str.first, "1");
+                }
+#else
                 // check if already registered
                 timerResume(2);
                 string value;
@@ -642,6 +670,8 @@ int DbImplLevelDb::fin(void)
                 file_list_string = file_list_string.substr(0, file_list_string.size()-1);
                 timerStop(4);
                 wb_usrdb.Put(TABLE_NAME_USR2FILE "|" + usr, file_list_string);
+#endif
+
                 count++;
             }
         }
@@ -654,6 +684,8 @@ int DbImplLevelDb::fin(void)
 #ifdef TIMER
         printf("time: TIMER_USR_DB0: %s", s_timers[TIMER_USR_DB0].format().c_str());
         printf("time: TIMER_USR_DB1: %s", s_timers[TIMER_USR_DB1].format().c_str());
+        printf("time: TIMER_USR_DB2: %s", s_timers[TIMER_USR_DB2].format().c_str());
+        printf("time: TIMER_USR_DB3: %s", s_timers[TIMER_USR_DB3].format().c_str());
         printf("time: 2: %s", s_timers[2].format().c_str());
         printf("time: 3: %s", s_timers[3].format().c_str());
         printf("time: 4: %s", s_timers[4].format().c_str());
@@ -694,7 +726,22 @@ int DbImplLevelDb::fin(void)
     }
     dbFlush(s_db, &s_wb);
     dbClose(s_db);
+#if 1
+    // make cache?
+    // this speeds up the first access to a database.
+    {
+        timerStart(TIMER_DB_CACHE);
+        leveldb::Status st = leveldb::DB::Open(s_defaultOptions, s_curDbDir, &s_db);
+        assert(st.ok());
+        dbClose(s_db);
+        timerStop(TIMER_DB_CACHE);
+#ifdef TIMER
+        printf("time: TIMER_DB_CACHE: %s", s_timers[TIMER_DB_CACHE].format().c_str());
+#endif
+    }
+#endif
 
+    delete s_defaultOptions.block_cache;
     delete fileIdTbl;
     delete nameIdTbl;
     delete usrIdTbl;

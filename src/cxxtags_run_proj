@@ -3,7 +3,8 @@
 import json, sys, re, commands, os, getopt, time
 from xml.etree.ElementTree import *
 from subprocess import Popen, PIPE
-from multiprocessing import Process,Queue
+import multiprocessing
+import logging
 
 CXXTAGS = "cxxtags"
 
@@ -180,11 +181,11 @@ class CmdRunner():
         self.ParseArgs()
 
     def usage(self):
-        print("usage: cmd [-j N] [-t cmake|vs] database_dir file_name")
+        print("usage: cmd [-vJ] [-j N] [-t cmake|vs] database_dir file_name")
 
     def ParseArgs(self):
         try:
-            opts, args = getopt.getopt(sys.argv[1:], "j:t:e:", [])
+            opts, args = getopt.getopt(sys.argv[1:], "j:Jt:e:v", [])
         except getopt.GetoptError, err:
             print str(err) # will print something like "option -a not recognized"
             self.usage()
@@ -194,12 +195,17 @@ class CmdRunner():
         for o, a in opts:
             if o in ("-j"):
                 self.m_numProc = int(a)
+            elif o in ("-J"):
+                self.m_numProc = multiprocessing.cpu_count()
             elif o in ("-t"):
                 self.m_projType = a
             elif o in ("-e"):
                 self.m_options += " -e " + a
+            elif o in ("-v"):
+                logging.basicConfig(format='%(levelname)s: %(lineno)s: %(message)s', level=logging.INFO)
             else:
                 assert False, "unhandled option"
+        logging.info("NumProc: " + str(self.m_numProc))
 
         if len(args) != 2:
             self.usage()
@@ -235,7 +241,7 @@ class CmdRunner():
             cmdList.append(cmd)
 
         process_list = [None]*self.m_numProc
-        q = Queue()
+        q = multiprocessing.Queue()
         i = 0
         while True:
             if len(cmdList) == 0 and process_list == [None]*self.m_numProc:
@@ -243,7 +249,7 @@ class CmdRunner():
             if process_list[i] == None:
                 if len(cmdList) != 0:
                     cmd = cmdList.pop(0)
-                    process_list[i] = Process(target=self.RunOne, args=(q, cmd))
+                    process_list[i] = multiprocessing.Process(target=self.RunOne, args=(q, cmd))
                     process_list[i].start()
                     #print "start: " + cmd
             elif False == process_list[i].is_alive():

@@ -31,10 +31,11 @@
 #define TABLE_NAME_USR2OVERRIDER "N"
 #define TABLE_NAME_FILE_LIST "O"
 #define TABLE_NAME_USR2FILE2 "P"
+#define TABLE_NAME_BUILD_INFO "Q"
 
 #define USE_BASE64
 #define USE_USR2FILE_TABLE2
-#define TIMER
+//#define TIMER
 
 #ifdef TIMER
 #include <boost/timer/timer.hpp>
@@ -113,7 +114,8 @@ static inline int dbTryOpen(leveldb::DB*& db, string dir);
 
 static int dbTryOpen(leveldb::DB*& db, string dir)
 {
-    clock_t start = clock();
+    time_t start;
+    time(&start);
     leveldb::Status st;
     while(1) {
         timerStart(TIMER_USR_DB3);
@@ -122,8 +124,9 @@ static int dbTryOpen(leveldb::DB*& db, string dir)
         if(st.ok() || !st.IsIOError()) {
             break;
         }
-        clock_t now = clock();
-        if((now - start)/(double)CLOCKS_PER_SEC > 10.0) {
+        time_t now;
+        time(&now);
+        if(now - start > 10) {
             // timeout
             break;
         }
@@ -145,6 +148,12 @@ int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, cons
     s_defaultOptions.compression = leveldb::kSnappyCompression;
     s_defaultOptions.block_cache = leveldb::NewLRUCache(128 * 1024 * 1024); 
     s_defaultOptions.filter_policy = leveldb::NewBloomFilterPolicy(10);
+
+    // build options
+    string buildOpt = string(curDir) + "|" + excludeList + "|";
+    for(int i = 0; i < argc; i++) {
+        buildOpt += " " + string(argv[i]);
+    }
 
     s_dbDir = out_dir;
     s_compileUnit = src_file_name;
@@ -218,6 +227,7 @@ int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, cons
         fprintf(stderr, "Open fail: %s\n", status.ToString().c_str());
         return -1;
     }
+    dbWrite(s_db, TABLE_NAME_BUILD_INFO, buildOpt);
     return 0;
 }
 
@@ -227,7 +237,8 @@ static inline int dbWrite(leveldb::DB* db, const string& key, const string& valu
     // TODO: add error handling
     if (!st.ok()) {
         fprintf(stderr, "Write fail.: %s\n", st.ToString().c_str());
-        return -1;
+        assert(0);
+        //return -1;
     }
     return 0;
 }

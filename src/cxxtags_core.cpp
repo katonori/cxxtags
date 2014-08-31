@@ -1,9 +1,9 @@
 #include "clang-c/Index.h"
-
+#include "IIndexDb.h"
+#include "DbImplLevelDb.h"
 #include <string>
 #include <vector>
 #include <map>
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,8 +11,6 @@
 #include <time.h>
 #include <unistd.h>
 #include <getopt.h>
-#include "IIndexDb.h"
-#include "DbImplLevelDb.h"
 #include <boost/filesystem/path.hpp>
 
 namespace cxxtags {
@@ -514,7 +512,7 @@ static int perform_test_load_source(int argc, const char **argv,
   setCursorTypeAvailable(CXCursor_OverloadedDeclRef);
   setCursorTypeAvailable(CXCursor_CXXBaseSpecifier);
 
-  gDb = reinterpret_cast<cxxtags::DbImplLevelDb*>(new cxxtags::DbImplLevelDb());
+  gDb = new cxxtags::DbImplLevelDb();
   check_rv(gDb->init(out_dir, in_file_name, gExcludeListStr, gIsPartial, gIsSkelton, cur_dir, argc-1, argv+1));
 
   Idx = clang_createIndex(/* excludeDeclsFromPCH */0,

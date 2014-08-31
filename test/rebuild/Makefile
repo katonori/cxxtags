@@ -5,16 +5,14 @@ MERGER_OUT = db
 .PHONY: clean check
 .SUFFIXES: .db .cpp
 
-DB_FILES = inhe.db
-
-$(DB_FILES):
-	env CXXTAGS_DB_DST=`pwd`/$(MERGER_OUT) g++.py inhe.cpp -o $@
 $(MERGER_OUT): $(DB_FILES)
-	$(CXXTAGS_DB_MANAGER) rebuild $(MERGER_OUT)
-test: check $(MERGER_OUT)
-	./test.py $(MERGER_OUT)
-	$(CXXTAGS_DB_MANAGER) rebuild $(MERGER_OUT)
-	./test.py $(MERGER_OUT)
+	cp main.0.cpp main.cpp
+	$(CXXTAGS) db main.cpp
+test: check clean $(MERGER_OUT)
+	./test.0.py $(MERGER_OUT)
+	cp main.1.cpp main.cpp
+	$(CXXTAGS_QUERY) rebuild $(MERGER_OUT) main.cpp
+	./test.1.py $(MERGER_OUT)
 html: $(MERGER_OUT)
 	$(DUMPER) $(MERGER_OUT)
 prog: inhe.cpp

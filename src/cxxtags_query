@@ -19,6 +19,7 @@ import getopt
 import re
 import os
 import time
+import commands
 
 TABLE_NAME_POS2USR = "A"
 TABLE_NAME_USR2FILE = "B"
@@ -36,6 +37,7 @@ TABLE_NAME_USR2OVERRIDEE = "M"
 TABLE_NAME_USR2OVERRIDER = "N"
 TABLE_NAME_FILE_LIST = "O"
 TABLE_NAME_USR2FILE2 = "P"
+TABLE_NAME_BUILD_INFO = "Q"
 
 gDebugMode = 0
 gVerboseMode = 0
@@ -93,6 +95,7 @@ class HandlerBase:
 
     mAllDbFileList = None
     mDbDir = ""
+    mCuDbDir = ""
     mDb = None
     mFileListDb = None
     mUsrDbName = None
@@ -178,7 +181,8 @@ class HandlerBase:
             print("ERROR:0: db_dir: "  + cuName)
             return None
         DEBUG_PRINT("OpenDbName: " + self.mDbDir + dirNo + ", " + cuName)
-        db = Db(self.mDbDir + dirNo)
+        self.mCuDbDir = self.mDbDir + dirNo
+        db = Db(self.mCuDbDir)
         if db == None:
             print("ERROR:1: db_dir: "  + cuName)
             return None
@@ -259,10 +263,13 @@ class HandlerBase:
     def CloseDb(self):
         if self.mDb:
             self.mDb.close()
+            self.mDb = None
         if self.mFileListDb:
             self.mFileListDb.close()
+            self.mFileListDb = None
         for db in self.mUsrDbList:
             db.close()
+        self.mUsrDbList = []
 
     def PrintResult(self, name, fileName, line, col):
         if USE_BASE64 != 0:
@@ -668,6 +675,29 @@ class QueryHandlerTable(HandlerBase):
             sys.exit(1)
         self.mTableName = argv[0]
 
+class QueryHandlerRebuild(HandlerBase):
+    def DoQuery(self):
+        if None == self.InitDb(self.m_srcFileName):
+            print("ERROR: InitDb() failed")
+            return None
+        rv = self.mDb.get(TABLE_NAME_BUILD_INFO)
+        assert rv != None
+        workDir, excludes, opt = rv.split("|")
+        if excludes != "":
+            excludes = " -e " + excludes
+        cmd = "cxxtags " + excludes + " " + self.mDbDir + " " + self.m_srcFileName + " " + opt
+        self.CloseDb()
+        (rv, out) = commands.getstatusoutput(cmd)
+        print out
+        return 
+
+    def parseArg(self, argv):
+        print argv
+        if len(argv) != 1:
+            usage()
+            sys.exit(1)
+        self.m_srcFileName = os.path.abspath(argv[0])
+
 class QueryHandlerType(HandlerBase):
     #
     # Handle Rquest for infomation about type
@@ -820,6 +850,11 @@ def main():
         handler.CloseDb()
     elif queryType == 'dump': # dump the contents of a table
         handler = QueryHandlerTable(dbDir)
+        handler.parseArg(argv[2:])
+        handler.DoQuery()
+        handler.CloseDb()
+    elif queryType == 'rebuild': # 
+        handler = QueryHandlerRebuild(dbDir)
         handler.parseArg(argv[2:])
         handler.DoQuery()
         handler.CloseDb()

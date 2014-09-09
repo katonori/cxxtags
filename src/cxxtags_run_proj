@@ -46,9 +46,9 @@ class CmakeJsonParser(ProjParserBase):
             # remove the command
             args = re.sub("^\S+", "", args)
             # remove output name
-            args = re.sub("-o\s*\S+", "", args)
+            args = re.sub("\s-o\s*\S+", " ", args)
             # remove source name
-            args = re.sub(filename, "", args)
+            args = args.replace(filename, "")
             resultList.append((dirname, "", args, filename))
         return resultList
 

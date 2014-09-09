@@ -177,7 +177,15 @@ class CmdRunner():
     m_fileName = ""
     m_options = ""
     m_buildOptions = ""
+    m_count = 0
     def __init__(self):
+        self.m_numProc = 1
+        self.m_projType = ""
+        self.m_dbName = ""
+        self.m_fileName = ""
+        self.m_options = ""
+        self.m_buildOptions = ""
+        self.m_count = 0
         self.ParseArgs()
 
     def usage(self):
@@ -214,7 +222,6 @@ class CmdRunner():
         self.m_fileName = args[1]
 
     def RunOne(self, q, cmd):
-        print cmd
         (rv, out) = commands.getstatusoutput(cmd)
         q.put(out)
 
@@ -249,8 +256,10 @@ class CmdRunner():
             if process_list[i] == None:
                 if len(cmdList) != 0:
                     cmd = cmdList.pop(0)
+                    print "#" + str(self.m_count) + ":" + cmd
                     process_list[i] = multiprocessing.Process(target=self.RunOne, args=(q, cmd))
                     process_list[i].start()
+                    self.m_count += 1
                     #print "start: " + cmd
             elif False == process_list[i].is_alive():
                 process_list[i].join()

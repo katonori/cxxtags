@@ -6,7 +6,7 @@ def usage():
 
 OUTPUT_DELIMITER = '|'
 USE_BASE64 = 1
-USE_USR2FILE_TABLE2 = True
+USE_USR2FILE_TABLE2 = False
 USE_PLYVEL = False
 
 import sys
@@ -21,23 +21,27 @@ import os
 import time
 import commands
 
-TABLE_NAME_POS2USR = "A"
-TABLE_NAME_USR2FILE = "B"
+TABLE_NAME_POS2USR_ID = "A"
+TABLE_NAME_USR2GLOBAL_FILE_ID = "B"
 TABLE_NAME_ID2NAME = "C"
-TABLE_NAME_USR2DECL = "D"
+TABLE_NAME_USR_ID2DECL = "D"
 TABLE_NAME_USR2DEF = "E"
 TABLE_NAME_ID2USR = "F"
-TABLE_NAME_ID2FILE = "G"
-TABLE_NAME_CU2ID = "H"
+TABLE_NAME_GLOBAL_FILE_ID2FILE = "G"
+TABLE_NAME_CU_NAME2ID = "H"
 TABLE_NAME_ID2CU = "I"
-TABLE_NAME_FID2CUID = "J"
-TABLE_NAME_FILE2ID = "K"
+#TABLE_NAME_FID2CUID = "J"
+TABLE_NAME_FILE2LOCAL_ID = "K"
 TABLE_NAME_USR2REF = "L"
 TABLE_NAME_USR2OVERRIDEE = "M"
 TABLE_NAME_USR2OVERRIDER = "N"
 TABLE_NAME_FILE_LIST = "O"
-TABLE_NAME_USR2FILE2 = "P"
+TABLE_NAME_USR2GLOBAL_FILE_ID2 = "P"
 TABLE_NAME_BUILD_INFO = "Q"
+TABLE_NAME_USR2ID = "R"
+TABLE_NAME_CUFILES = "S"
+
+DB_NUM = 32
 
 gDebugMode = 0
 gVerboseMode = 0
@@ -96,53 +100,43 @@ class HandlerBase:
     mAllDbFileList = None
     mDbDir = ""
     mCuDbDir = ""
-    mDb = None
+    #mDb = None
     mFileListDb = None
     mUsrDbName = None
     m_srcFileName = ""
     m_cuName = ""
-    m_cuId = 0
+    m_dbId = 0
     m_colNo = 0
     m_fileCount = 0
+    m_dbList = [None]*DB_NUM
 
     def __init__(self, dbDir):
         self.mUsrDbList = []
         self.mDbDir = dbDir + "/"
         self.mFileListDb = Db(dbDir + "/common")
+        self.mAllDbFileList = None
+        self.mCuDbDir = ""
+        self.mUsrDbName = None
+        self.m_srcFileName = ""
+        self.m_cuName = ""
+        self.m_dbId = 0
+        self.m_colNo = 0
+        self.m_dbList = [None]*DB_NUM
         count = self.mFileListDb.get("file_count")
         assert count != None
         self.m_fileCount = count
 
-    def Filename2CompileUnit(self, fn):
-        DEBUG_PRINT("fn: " + fn)
-        q = TABLE_NAME_FILE_LIST + "|" + fn
-        DEBUG_PRINT("q: " + str(q))
-        cuId, fileId = self.mFileListDb.get(q).split(",")
-        DEBUG_PRINT("cuId: " + str(cuId))
-        cuName = self.Id2Cu(cuId)
-        return cuName, cuId
-
-    def GlobalFileId2CompileUnit(self, id):
-        DEBUG_PRINT("global fid: " + str(id))
-        q = TABLE_NAME_FID2CUID + "|" + str(id)
-        cuId = self.mFileListDb.get(q)
-        DEBUG_PRINT("q: " + str(q))
-        DEBUG_PRINT("cuId: " + str(cuId))
-        cuName = self.Id2Cu(cuId)
-        return cuName, cuId
-
-    def InitDb(self, srcFileName):
-        (self.m_cuName, self.m_cuId) = self.Filename2CompileUnit(srcFileName)
-        if self.m_cuName == None:
-            print("ERROR: could not determin compile unit name: " + srcFileName)
-            return None
-        DEBUG_PRINT("CU: " + self.m_cuName)
-        self.mDb = self.OpenDbName(self.m_cuName)
-        if self.mDb == None:
-            print("ERROR: db open")
-            return None
-        self.InitUsrDb()
-        return self.mDb
+    def InitDbByFilename(self, filename):
+        q = TABLE_NAME_FILE_LIST + "|" + filename
+        rv = self.mFileListDb.get(q)
+        assert rv != None
+        cuId, dbId = rv.split(",")
+        self.m_dbId = dbId
+        DEBUG_PRINT("InitDbByFilename: " + dbId)
+        dbDirNo = self.GetDbDirNo()
+        db = self.OpenDbById(dbId)
+        self.m_dbList[dbDirNo] = db
+        return db
 
     def InitUsrDb(self):
         dbList = os.listdir(self.mDbDir + "/usr_db")
@@ -158,42 +152,44 @@ class HandlerBase:
         return self.mUsrDbList
 
     def Cu2Id(self, cuName):
-        return self.mFileListDb.get(TABLE_NAME_CU2ID + "|" + cuName)
+        return self.mFileListDb.get(TABLE_NAME_CU_NAME2ID + "|" + cuName)
 
     def Id2Cu(self, cuId):
         return self.mFileListDb.get(TABLE_NAME_ID2CU + "|" + cuId)
 
-    def OpenDbId(self, cuId):
-        cmd = self.mDbDir + str(cuId)
-        DEBUG_PRINT("OpenDbId: " + cmd)
+    def GetDbDirNo(self):
+        return int(self.m_dbId, 16)%DB_NUM
+
+    def GetMainDb(self):
+        return self.m_dbList[int(self.m_dbId, 16)%DB_NUM]
+
+    def OpenDbById(self, cuId):
+        DEBUG_PRINT("OpenDbById: cuId: " + str(cuId))
+        cmd = self.mDbDir + format(int(cuId, 16)%DB_NUM, 'x')
+        DEBUG_PRINT("OpenDbById: " + cmd)
         timeS = time.time()
         db = Db(cmd)
         if db == None:
             print("ERROR:1: db_dir: "  + cuId)
             return None
         timeE = time.time()
-        DEBUG_PRINT("OpenDbId: " + str((timeE-timeS)*1000.0) + " ms")
+        DEBUG_PRINT("OpenDbById: " + str((timeE-timeS)*1000.0) + " ms")
         return db
 
-    def OpenDbName(self, cuName):
-        dirNo = self.mFileListDb.get(TABLE_NAME_CU2ID + "|" + cuName)
-        if dirNo == None:
-            print("ERROR:0: db_dir: "  + cuName)
-            return None
-        DEBUG_PRINT("OpenDbName: " + self.mDbDir + dirNo + ", " + cuName)
-        self.mCuDbDir = self.mDbDir + dirNo
-        db = Db(self.mCuDbDir)
-        if db == None:
-            print("ERROR:1: db_dir: "  + cuName)
-            return None
-        return db
-
-    def OpenRefDb(self, cuName):
-        db = Db(self.mDbDir + "common")
-        if db == None:
-            print("ERROR:1: db_dir: "  + cuName)
-            return None
-        return db
+    def OpenAllDb(self):
+        i = 0
+        while i < DB_NUM:
+            cmd = self.mDbDir + format(i, 'x')
+            timeS = time.time()
+            db = Db(cmd)
+            if db == None:
+                print("ERROR:1: db_dir: "  + i)
+                return None
+            timeE = time.time()
+            DEBUG_PRINT("OpenAllDb: " + str((timeE-timeS)*1000.0) + " ms")
+            self.m_dbList[i] = db
+            i += 1
+        return None
 
     def GetAllDbFiles(self):
         if self.mAllDbFileList == None:
@@ -227,49 +223,51 @@ class HandlerBase:
         if fileName == "":
             print "ERROR: specify file name"
             sys.exit(1)
-        fid = file2id(self.mDb, fileName)
+        mainDb = self.GetMainDb()
+        fid = file2id(mainDb, self.m_dbId, fileName)
         DEBUG_PRINT("fid: " + str(fid) + "," + fileName)
-        q = TABLE_NAME_POS2USR + "|%s|%s|%s"%(fid, lineNo, colNo)
+        q = self.m_dbId + TABLE_NAME_POS2USR_ID + "|%s|%s|%s"%(fid, lineNo, colNo)
         DEBUG_PRINT("q: " + q)
-        usr = self.mDb.get(q)
+        usr = mainDb.get(q)
         DEBUG_PRINT("usrId: " + str(usr))
         if usr == None:
             DEBUG_PRINT("pos2usr failed: " + q)
             return None
         return usr
 
-    def GetCuidListFromUsr(self, usr):
-        cuIdList = []
+    def GetDbIdListByUsr(self, usr):
+        dbIdList = []
         if USE_USR2FILE_TABLE2:
+            DEBUG_PRINT("usrDbList: " + str(self.mUsrDbList))
             for db in self.mUsrDbList:
                 i = 0
                 while i < int(self.m_fileCount, 16) + 1:
-                    res = db.get(TABLE_NAME_USR2FILE2 + "|" + usr + "|" + format(i, 'x'))
+                    q = TABLE_NAME_USR2GLOBAL_FILE_ID2 + "|" + usr + "|" + format(i, 'x')
+                    res = db.get(q)
                     if res:
-                        name, cuid = self.GlobalFileId2CompileUnit(format(i, 'x'))
-                        cuIdList.append(cuid)
+                        dbIdList.append(format(i, 'x'))
                     i += 1
         else:
             for db in self.mUsrDbList:
-                res = db.get(TABLE_NAME_USR2FILE + "|" + usr)
+                res = db.get(TABLE_NAME_USR2GLOBAL_FILE_ID + "|" + usr)
                 if res:
                     for fid in res.split(","):
-                        name, cuid = self.GlobalFileId2CompileUnit(fid)
-                        cuIdList.append(cuid)
-        if cuIdList == []:
-            cuIdList.append(self.m_cuId)
-        return list(set(cuIdList))
+                        dbIdList.append(fid)
+        if dbIdList == []:
+            dbIdList.append(self.m_dbId)
+        return list(set(dbIdList))
 
     def CloseDb(self):
-        if self.mDb:
-            self.mDb.close()
-            self.mDb = None
         if self.mFileListDb:
             self.mFileListDb.close()
             self.mFileListDb = None
         for db in self.mUsrDbList:
             db.close()
         self.mUsrDbList = []
+        for db in self.m_dbList:
+            if db:
+                db.close()
+        self.m_dbList = [None]*DB_NUM
 
     def PrintResult(self, name, fileName, line, col):
         if USE_BASE64 != 0:
@@ -279,27 +277,30 @@ class HandlerBase:
         colInt = int(col, 16)
         print str(name) + OUTPUT_DELIMITER + str(fileName) + OUTPUT_DELIMITER + str(lineInt) + OUTPUT_DELIMITER + str(colInt) + OUTPUT_DELIMITER + str(cxxtags_util.get_line_from_file(fileName, lineInt))
 
-def id2name(db, id):
-    result = db.get(TABLE_NAME_ID2NAME + "|%s"%(str(id)))
+def id2usr(db, dbId, id):
+    result = db.get(dbId + TABLE_NAME_ID2USR + "|%s"%(str(id)))
     return result
-def id2file(db, id):
-    result = db.get(TABLE_NAME_ID2FILE + "|%s"%(str(id)))
+def usr2id(db, dbId, usr):
+    result = db.get(dbId + TABLE_NAME_USR2ID + "|%s"%(str(usr)))
     return result
-def file2id(db, filename):
-    result = db.get(TABLE_NAME_FILE2ID + "|%s"%(filename))
+def id2name(db, dbId, id):
+    result = db.get(dbId + TABLE_NAME_ID2NAME + "|%s"%(str(id)))
     return result
-def id2usr(db, id):
-    result = db.get(TABLE_NAME_ID2USR + "|%s"%(str(id)))
+def id2file(db, dbId, id):
+    result = db.get(dbId + TABLE_NAME_GLOBAL_FILE_ID2FILE + "|%s"%(str(id)))
     return result
-def GetResultString(db, nameId, fileId):
-    name = id2name(db, nameId)
+def file2id(db, dbId, filename):
+    result = db.get(dbId + TABLE_NAME_FILE2LOCAL_ID + "|%s"%(filename))
+    return result
+def GetResultString(db, dbId, nameId, fileId):
+    name = id2name(db, dbId, nameId)
     if name == None:
-        print("ERRRO: name lookup failed: " + str(nameId) + ": " + cuId)
+        print("ERRRO: name lookup failed: " + str(nameId) + ": " + dbId)
         return None
     DEBUG_PRINT("name: " + str(nameId) + "," + str(name))
-    fn = id2file(db, fileId)
+    fn = id2file(db, dbId, fileId)
     if fn == None:
-        print("ERRRO: file name lookup failed: " + str(fileId) + ": " + cuId)
+        print("ERRRO: file name lookup failed: " + str(fileId) + ": " + dbId)
         return None
     DEBUG_PRINT("filename: " + str(fileId) + "," + str(fn))
     return name, fn
@@ -309,9 +310,8 @@ class QueryHandlerDecl(HandlerBase):
     # Handle Rquest for infomation about declarations
     #
     def DoQuery(self):
-        if None == self.InitDb(self.m_srcFileName):
-            print("ERROR: InitDb() failed")
-            return None
+        self.InitUsrDb()
+        assert self.InitDbByFilename(self.m_srcFileName) != None
         usrId = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         DEBUG_PRINT("usrId: " + str(usrId))
         if usrId:
@@ -324,14 +324,35 @@ class QueryHandlerDecl(HandlerBase):
         return False
 
     def QueryDeclInfo(self, usrId):
-        decl = self.mDb.get(TABLE_NAME_USR2DECL + "|%s"%(usrId))
-        DEBUG_PRINT("decl: " + str(decl))
-        if decl:
-            nameId, fileId, line, col = decl.split("|")
-            name, fileName = GetResultString(self.mDb, nameId, fileId)
-            if fileName != None and name != None:
-                return name, fileName, line, col
+        mainDb = self.GetMainDb()
+        usr = id2usr(mainDb, self.m_dbId, usrId)
+        rv = mainDb.get(self.m_dbId + TABLE_NAME_CUFILES)
+        assert rv != None
+        dbIdList = rv.split(",")[1:]
+        DEBUG_PRINT("dbIdList: " + str(dbIdList))
+        result = []
+        DEBUG_PRINT("usr: " + usr)
+        for dbId in dbIdList:
+            idx = int(dbId, 16)%DB_NUM
+            db = self.m_dbList[idx]
+            if db == None:
+                db = self.OpenDbById(dbId)
+                self.m_dbList[idx] = db
+            usrId = usr2id(db, dbId, usr)
+            if usrId == None:
+                continue
+            DEBUG_PRINT("usrId: " + usrId)
+            q = dbId + TABLE_NAME_USR_ID2DECL + "|%s"%(usrId)
+            DEBUG_PRINT("q: " + q)
+            decl = db.get(q)
+            DEBUG_PRINT("decl: " + str(decl))
+            if decl:
+                nameId, fileId, line, col = decl.split("|")
+                name, fileName = GetResultString(db, dbId, nameId, fileId)
+                if fileName != None and name != None:
+                    return name, fileName, line, col
         return None
+
 
     def parseArg(self, argv):
         if len(argv) != 3:
@@ -351,13 +372,13 @@ class QueryHandlerDef(HandlerBase):
     # Handle Rquest for infomation about definition
     #
     m_isOnlyMainCompileUnit = False
+    m_mainDb = None
     def DoQuery(self, isOnlyMainCompileUnit):
         self.m_isOnlyMainCompileUnit = isOnlyMainCompileUnit
-        if None == self.InitDb(self.m_srcFileName):
-            print "ERROR: Db open"
-            return None
+        self.InitUsrDb()
+        assert self.InitDbByFilename(self.m_srcFileName) != None
         usrId = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
-        usr = id2usr(self.mDb, usrId)
+        usr = id2usr(self.GetMainDb(), self.m_dbId, usrId)
         DEBUG_PRINT("usr: " + str(usr))
         if usr:
             result = self.GetDef(usr)
@@ -366,35 +387,33 @@ class QueryHandlerDef(HandlerBase):
                 self.PrintResult(name, fileName, line, col)
 
     def GetDef(self, usr):
-        cuIdList = []
+        dbIdList = []
         if self.m_isOnlyMainCompileUnit == False:
-            cuIdList = self.GetCuidListFromUsr(usr)
+            dbIdList = self.GetDbIdListByUsr(usr)
         else:
-            #print "ERROR: usr2file: " + usr
-            #return None
-            cuIdList.append(self.m_cuId)
-            cuIdList = list(set(cuIdList))
-        DEBUG_PRINT("cuIdList: " + str(cuIdList))
-
+            rv = self.GetMainDb().get(self.m_dbId + TABLE_NAME_CUFILES)
+            assert rv != None
+            dbIdList = rv.split(",")[1:]
+        DEBUG_PRINT("dbIdList: " + str(dbIdList))
+        DEBUG_PRINT("m_dbList: " + str(self.m_dbList))
         result = []
-        for cuId in cuIdList:
-            if cuId == self.m_cuId:
-                db = self.mDb
-            else:
-                db = self.OpenDbId(cuId)
-            q = TABLE_NAME_USR2DEF + "|%s"%(usr)
+        for dbId in dbIdList:
+            idx = int(dbId, 16)%DB_NUM
+            db = self.m_dbList[idx]
+            if db == None:
+                db = self.OpenDbById(dbId)
+                self.m_dbList[idx] = db
+            #q = self.m_dbId + TABLE_NAME_USR2DEF + "|%s"%(usr)
+            q = dbId + TABLE_NAME_USR2DEF + "|%s"%(usr)
             DEBUG_PRINT("q: " + q)
-            DEBUG_PRINT("db: " + str(db))
             resDef = db.get(q)
             DEBUG_PRINT("def: " + str(resDef))
             if resDef:
                 defList = resDef.split("|")
                 nameId, fileId, line, col = tuple(defList)
-                name, fileName = GetResultString(db, nameId, fileId)
+                name, fileName = GetResultString(db, dbId, nameId, fileId)
                 if fileName != None and name != None:
                     result.append((name, fileName, line, col))
-            if db != self.mDb:
-                db.close()
         return result
 
     def parseArg(self, argv):
@@ -415,12 +434,11 @@ class QueryHandlerRef(HandlerBase):
     #
     def DoQuery(self):
         startTime = time.time()
-        # get compileunit
-        if None == self.InitDb(self.m_srcFileName):
-            print "ERROR: DB oopen"
-            return None
+        self.InitUsrDb()
+        assert self.InitDbByFilename(self.m_srcFileName) != None
         usrId = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
-        usr = id2usr(self.mDb, usrId)
+        mainDb = self.GetMainDb()
+        usr = id2usr(mainDb, self.m_dbId, usrId)
         endTime = time.time()
         DEBUG_PRINT("usr: " + str(usr) + ": " + str((endTime-startTime)*1000) + " ms")
         if usr:
@@ -428,23 +446,25 @@ class QueryHandlerRef(HandlerBase):
 
     def GetAllRefs(self, usr):
         startTime = time.time()
-        cuIdList = self.GetCuidListFromUsr(usr)
+        dbIdList = self.GetDbIdListByUsr(usr)
         endTime = time.time()
         DEBUG_PRINT("get all CUs: TIME: %s ms"%(str((endTime-startTime)*1000.0)))
-
         prevTime = 0
-        for cuId in cuIdList:
+        DEBUG_PRINT("cu list: " + str(dbIdList))
+        for dbId in dbIdList:
             DEBUG_PRINT("ref interval: " + str((time.time()-prevTime)*1000))
             prevTime = time.time()
             resultList = []
-            if cuId == self.m_cuId:
-                db = self.mDb
-            else:
-                db = self.OpenDbId(cuId)
+            idx = int(dbId, 16)%DB_NUM
+            db = self.m_dbList[idx]
+            if db == None:
+                db = self.OpenDbById(dbId)
+                self.m_dbList[idx] = db
             count = 0
-            DEBUG_PRINT("time: open: " + cuId + ": " + str((time.time()-prevTime)*1000) + " ms")
+            DEBUG_PRINT("time: open: " + dbId + ": " + str((time.time()-prevTime)*1000) + " ms")
             timeDb0 = time.time()
-            q = TABLE_NAME_USR2REF + "|" + str(usr) + "|" + str(cuId)
+            #q = TABLE_NAME_USR2REF + "|" + str(usr) + "|" + str(dbId)
+            q = dbId + TABLE_NAME_USR2REF + "|" + str(usr)
             rv = db.get(q)
             timeDb1 = time.time()
             DEBUG_PRINT("usr2ref: " + str(rv) + ": " + str(timeDb1-timeDb0) + " sec")
@@ -452,11 +472,9 @@ class QueryHandlerRef(HandlerBase):
                 rvList = rv.split(",")
                 for rv in rvList:
                     nameId, fileId, line, col = rv.split("|")
-                    name, fn = GetResultString(db, nameId, fileId)
+                    name, fn = GetResultString(db, dbId, nameId, fileId)
                     if fn != None and name != None:
                         resultList.append((name, fn, line, col))
-            if db != self.mDb:
-                db.close()
             for i in set(resultList):
                 resultName, resultFileName, resultLine, resultCol = i
                 self.PrintResult(resultName, resultFileName, resultLine, resultCol)
@@ -483,7 +501,7 @@ class QueryHandlerOverride(HandlerBase):
             print "ERROR: DB oopen"
             return None
         usrId = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
-        usr = id2usr(self.mDb, usrId)
+        usr = id2usr(self.mDb, self.m_dbId, usrId)
         DEBUG_PRINT("usr: " + str(usr))
         if usr:
             self.GetAllOverrides(usr)
@@ -498,7 +516,7 @@ class QueryHandlerOverride(HandlerBase):
             rvList = rv.split(",")
             for rv in rvList:
                 usrId = rv
-                decl = self.mDb.get(TABLE_NAME_USR2DECL + "|%s"%(usrId))
+                decl = self.mDb.get(TABLE_NAME_USR_ID2DECL + "|%s"%(usrId))
                 nameId, fileId, line, col = decl.split("|")
                 name, fn = GetResultString(self.mDb, nameId, fileId)
                 if fn != None and name != None:
@@ -529,20 +547,20 @@ class QueryHandlerOverrideN(HandlerBase):
             print "ERROR: DB oopen"
             return None
         usrId = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
-        usr = id2usr(self.mDb, usrId)
+        usr = id2usr(self.mDb, self.m_dbId, usrId)
         DEBUG_PRINT("usr: " + str(usr))
         if usr:
             self.GetAllOverriders(usr)
 
     def GetAllOverriders(self, usr):
-        cuIdList = self.GetCuidListFromUsr(usr)
-        DEBUG_PRINT("cuIdList: " + str(cuIdList))
+        dbIdList = self.GetDbIdListByUsr(usr)
+        DEBUG_PRINT("dbIdList: " + str(dbIdList))
         resultList = []
-        for cuId in cuIdList:
-            if cuId == self.m_cuId:
+        for dbId in dbIdList:
+            if dbId == self.m_dbId:
                 db = self.mDb
             else:
-                db = self.OpenDbId(cuId)
+                db = self.OpenDbById(dbId)
             count = 0
             q = TABLE_NAME_USR2OVERRIDEE + "|" + str(usr)
             DEBUG_PRINT("q: " + q)
@@ -585,12 +603,12 @@ class QueryHandlerName(HandlerBase):
             return None
         for usrDb in self.mUsrDbList:
             for l in usrDb:
-                cre = re.compile(TABLE_NAME_USR2FILE + r'\\|.*' + self.mName)
+                cre = re.compile(TABLE_NAME_USR2GLOBAL_FILE_ID + r'\\|.*' + self.mName)
                 if cre.search(l[0]):
                     (tbl, usr) = l[0].split("|")
-                    cuIdList = self.GetCuidListFromUsr(usr)
-                    for cuId in cuIdList:
-                        db = self.OpenDbId(cuId)
+                    dbIdList = self.GetDbIdListByUsr(usr)
+                    for dbId in dbIdList:
+                        db = self.OpenDbById(dbId)
                         q = TABLE_NAME_USR2DEF + "|" + usr
                         val = db.get(q)
                         if val != None:
@@ -821,8 +839,9 @@ def main():
         DEBUG_PRINT("decl start")
         handler = QueryHandlerDecl(dbDir)
         handler.parseArg(argv[2:])
-        if False == handler.DoQuery():
-            handler.CloseDb()
+        rv = handler.DoQuery()
+        handler.CloseDb()
+        if False == rv:
             DEBUG_PRINT("def start")
             handler = QueryHandlerDef(dbDir)
             handler.parseArg(argv[2:])

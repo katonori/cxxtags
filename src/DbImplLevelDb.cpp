@@ -15,27 +15,30 @@
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string.hpp>
 
-#define TABLE_NAME_POS2USR "A"
-#define TABLE_NAME_USR2FILE "B"
+#define TABLE_NAME_POS2USR_ID "A"
+#define TABLE_NAME_USR2GLOBAL_FILE_ID "B"
 #define TABLE_NAME_ID2NAME "C"
-#define TABLE_NAME_USR2DECL "D"
+#define TABLE_NAME_USR_ID2DECL "D"
 #define TABLE_NAME_USR2DEF "E"
 #define TABLE_NAME_ID2USR "F"
-#define TABLE_NAME_ID2FILE "G"
-#define TABLE_NAME_CU2ID "H"
-#define TABLE_NAME_ID2CU "I"
-#define TABLE_NAME_FID2CUID "J"
-#define TABLE_NAME_FILE2ID "K"
+#define TABLE_NAME_GLOBAL_FILE_ID2FILE "G"
+#define TABLE_NAME_CU_NAME2ID "H"
+//#define TABLE_NAME_ID2CU "I"
+//#define TABLE_NAME_FID2CUID "J"
+#define TABLE_NAME_FILE2LOCAL_ID "K"
 #define TABLE_NAME_USR2REF "L"
 #define TABLE_NAME_USR2OVERRIDEE "M"
 #define TABLE_NAME_USR2OVERRIDER "N"
 #define TABLE_NAME_FILE_LIST "O"
-#define TABLE_NAME_USR2FILE2 "P"
+#define TABLE_NAME_USR2GLOBAL_FILE_ID2 "P"
 #define TABLE_NAME_BUILD_INFO "Q"
+#define TABLE_NAME_USR2ID "R"
+#define TABLE_NAME_CUFILES "S"
 
 #define USE_BASE64
-#define USE_USR2FILE_TABLE2
-//#define TIMER
+//#define USE_USR2FILE_TABLE2
+#define TIMER
+#define DB_NUM 32
 
 #ifdef TIMER
 #include <boost/timer/timer.hpp>
@@ -44,11 +47,6 @@
 namespace cxxtags {
 
 using namespace std;
-
-typedef map<string, string> SsMap;
-typedef pair<string, string> SsPair;
-typedef map<string, int> SiMap;
-typedef pair<string, int> SiPair;
 
 static leveldb::DB* s_db;
 static leveldb::WriteBatch s_wb;
@@ -65,13 +63,14 @@ string s_curDbDir;
 const int k_usrDbDirNum = 4;
 
 static string s_compileUnitId;
-static IdTbl *fileIdTbl;
-static IdTbl *nameIdTbl;
-static IdTbl *usrIdTbl;
+static map<string, FileContext> s_fileContextMap;
+static SiMap s_usrMap;
 static const int k_timerNum = 128;
 #ifdef TIMER
 boost::timer::cpu_timer* s_timers;
 #endif
+static SsMap s_finishedFiles;
+static map<string, SiMap > s_usr2fileMap;
 
 enum {
     TIMER_INS_REF = 64,
@@ -84,6 +83,7 @@ enum {
     TIMER_USR_DB2,
     TIMER_USR_DB3,
     TIMER_DB_CACHE,
+    TIMER_DB_WRITE,
 };
 
 static inline void timerStart(int idx)
@@ -157,9 +157,6 @@ int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, cons
 
     s_dbDir = out_dir;
     s_compileUnit = src_file_name;
-    fileIdTbl = new IdTbl();
-    nameIdTbl = new IdTbl();
-    usrIdTbl = new IdTbl();
 
 #ifdef TIMER
     s_timers = new boost::timer::cpu_timer[k_timerNum];
@@ -187,7 +184,7 @@ int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, cons
     string keyFile = s_compileUnit;
     int rv = 0;
     // check if already registered
-    rv = dbRead(value, dbCommon, TABLE_NAME_CU2ID "|" + s_compileUnit);
+    rv = dbRead(value, dbCommon, TABLE_NAME_CU_NAME2ID "|" + s_compileUnit);
     if(rv < 0) {
         // not found
         // add file
@@ -210,8 +207,7 @@ int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, cons
         else {
             printf("ERROR: db info\n");
         }
-        dbWrite(dbCommon, TABLE_NAME_CU2ID "|" + s_compileUnit, s_compileUnitId);
-        dbWrite(dbCommon, TABLE_NAME_ID2CU "|" + s_compileUnitId, s_compileUnit);
+        dbWrite(dbCommon, TABLE_NAME_CU_NAME2ID "|" + s_compileUnit, s_compileUnitId);
     }
     else if(rv == 0) {
         // alread exists
@@ -221,13 +217,27 @@ int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, cons
 
     // open database for this compile unit
     assert(!s_compileUnitId.empty());
-    s_curDbDir = out_dir + "/" + s_compileUnitId;
-    status = leveldb::DB::Open(s_defaultOptions, s_curDbDir.c_str(), &s_db);
-    if (!status.ok()) {
-        fprintf(stderr, "Open fail: %s\n", status.ToString().c_str());
-        return -1;
+
+    // list of files already processed
+    {
+        leveldb::WriteBatch wb_common;
+        leveldb::DB* db_common;
+        int rv = dbTryOpen(db_common, s_commonDbDir);
+        if(rv < 0) {
+            printf("ERROR: fin: common db open: %s\n", s_commonDbDir.c_str());
+            return -1;
+        }
+        leveldb::Iterator* it = db_common->NewIterator(leveldb::ReadOptions());
+        for (it->SeekToFirst(); it->Valid(); it->Next()) {
+            //cout << it->key().ToString() << ": "  << it->value().ToString() << endl;
+            const string& key = it->key().ToString();
+            if(key.find(TABLE_NAME_FILE_LIST "|") == 0) {
+                s_finishedFiles[key.substr(2)] = it->value().ToString();
+                //cout << key.substr(2) << endl;
+            }
+        }
+        dbClose(db_common);
     }
-    dbWrite(s_db, TABLE_NAME_BUILD_INFO, buildOpt);
     return 0;
 }
 
@@ -277,7 +287,7 @@ static inline char* encodeVal(char* buff, unsigned int val)
 static inline char* encodePos(char *buff, unsigned int fileId, unsigned int line, unsigned col)
 {
     char* p = buff;
-    strncpy(p, TABLE_NAME_POS2USR, 1);
+    strncpy(p, TABLE_NAME_POS2USR_ID, 1);
     p++;
     *p++ = '|';
     p = encodeVal(p, fileId);
@@ -319,7 +329,7 @@ static inline void setKeyValuePos2Usr(char* buffKey, char* buffVal, int buffLen,
         *p++ = '\0';
     }
 #else
-    snprintf(buffKey, buffLen, TABLE_NAME_POS2USR "|%x|%x|%x", fileId,  line, col);
+    snprintf(buffKey, buffLen, TABLE_NAME_POS2USR_ID "|%x|%x|%x", fileId,  line, col);
     snprintf(buffVal, buffLen, "%x", usrId);
 #endif
 }
@@ -329,14 +339,14 @@ static inline void setKeyValueUsr2Decl(char* buffKey, char* buffVal, int buffLen
 #ifdef USE_BASE64
     {
         char* p = (char*)buffKey;
-        strncpy(p, TABLE_NAME_USR2DECL "|", 2);
+        strncpy(p, TABLE_NAME_USR_ID2DECL "|", 2);
         p+=2;
         p = encodeVal(p, usrId);
         *p++ = '\0';
     }
     encodeDecl(buffVal, nameId, fileId, line, col);
 #else
-    snprintf(buffKey, buffLen, TABLE_NAME_USR2DECL "|%x", usrId); 
+    snprintf(buffKey, buffLen, TABLE_NAME_USR_ID2DECL "|%x", usrId); 
     snprintf(buffVal, buffLen, "%x|%x|%x|%x", nameId, fileId, line, col);
 #endif
 }
@@ -355,7 +365,7 @@ static inline void setKeyValueUsr2Def(char* buffKey, char* buffVal, int buffLen,
 #endif
 }
 
-static inline void setPropValue(char* buff, int buffLen, unsigned int nameId, unsigned int fileId, unsigned int line, unsigned int col)
+static inline void encItemInfo(char* buff, int buffLen, unsigned int nameId, unsigned int fileId, unsigned int line, unsigned int col)
 {
 #ifdef USE_BASE64
     encodeRef(buff, nameId, fileId, line, col);
@@ -364,23 +374,31 @@ static inline void setPropValue(char* buff, int buffLen, unsigned int nameId, un
 #endif
 }
 
-static map<string, SiMap > s_usr2fileMap;
-SsMap s_usr2refMap;
 int DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, const string& name, int line, int col)
 {
+    FileContext& fctx = s_fileContextMap[filename];
+
+    if(s_finishedFiles.find(filename) != s_finishedFiles.end()) {
+        // already done
+        return 0;
+    }
     timerResume(TIMER_INS_REF);
 
     //s_timers[TIMER_INS_REF_1].resume();
-    int fileId = fileIdTbl->GetId(filename);
-    int nameId = nameIdTbl->GetId(name);
-    int usrId = usrIdTbl->GetId(usr);
-    setPropValue(gCharBuff0, sizeof(gCharBuff0), nameId, fileId, line, col);
-    SsMap::iterator itr = s_usr2refMap.find(usr);
-    if(itr == s_usr2refMap.end()){ 
-        s_usr2refMap[usr] = string(gCharBuff0);
-    }
-    else {
-        itr->second.append(string(",") + gCharBuff0);
+    int fileId = fctx.m_fileIdTbl.GetId(filename);
+    int nameId = fctx.m_nameIdTbl.GetId(name);
+    s_usrMap[usr] = 1;
+    int usrId = fctx.m_usrIdTbl.GetId(usr);
+    encItemInfo(gCharBuff0, sizeof(gCharBuff0), nameId, fileId, line, col);
+    {
+        SsMap& mapRef = fctx.m_usr2refMap;
+        SsMap::iterator itr = mapRef.find(usr);
+        if(itr == mapRef.end()){ 
+            mapRef[usr] = string(gCharBuff0);
+        }
+        else {
+            itr->second.append(string(",") + gCharBuff0);
+        }
     }
 
     if(!usr.empty()) {
@@ -391,7 +409,7 @@ int DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, c
     // pos -> usr
     timerResume(TIMER_INS_REF_2);
     setKeyValuePos2Usr(gCharBuff0, gCharBuff1, sizeof(gCharBuff0), fileId, line, col, usrId);
-    s_wb.Put(gCharBuff0, gCharBuff1);
+    fctx.m_refList.push_back(SsPair(gCharBuff0, gCharBuff1));
     timerStop(TIMER_INS_REF_2);
     timerStop(TIMER_INS_REF);
     return 0;
@@ -399,19 +417,28 @@ int DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, c
 
 int DbImplLevelDb::insert_decl_value(const string& usr, const string& filename, const string& name, int line, int col, int isDef)
 {
+    FileContext& fctx = s_fileContextMap[filename];
+
+    //printf("DECL: %s, %s, %d, %d, %d\n", usr.c_str(), filename.c_str(), line, col, isDef);
+    if(s_finishedFiles.find(filename) != s_finishedFiles.end()) {
+        // already done
+        return 0;
+    }
     timerResume(TIMER_INS_DECL);
-    int fileId = fileIdTbl->GetId(filename);
-    int nameId = nameIdTbl->GetId(name);
-    int usrId = usrIdTbl->GetId(usr);
+    int fileId = fctx.m_fileIdTbl.GetId(filename);
+    int nameId = fctx.m_nameIdTbl.GetId(name);
+    s_usrMap[usr] = 1;
+    int usrId = fctx.m_usrIdTbl.GetId(usr);
+    leveldb::WriteBatch& wb = fctx.m_wb;
     if(isDef) {
         // usrId -> def info
         setKeyValueUsr2Def(gCharBuff0, gCharBuff1, sizeof(gCharBuff0), nameId, fileId, line, col, usr);
-        s_wb.Put(gCharBuff0, gCharBuff1);
+        fctx.m_declList.push_back(SsPair(gCharBuff0, gCharBuff1));
     }
     else {
         // usrId -> decl info
         setKeyValueUsr2Decl(gCharBuff0, gCharBuff1, sizeof(gCharBuff0), nameId, fileId, line, col, usrId);
-        s_wb.Put(gCharBuff0, gCharBuff1);
+        fctx.m_declList.push_back(SsPair(gCharBuff0, gCharBuff1));
     }
 
     if(!usr.empty()) {
@@ -420,7 +447,7 @@ int DbImplLevelDb::insert_decl_value(const string& usr, const string& filename, 
 
     // pos -> usr
     setKeyValuePos2Usr(gCharBuff0, gCharBuff1, sizeof(gCharBuff0), fileId, line, col, usrId);
-    s_wb.Put(gCharBuff0, gCharBuff1);
+    fctx.m_declList.push_back(SsPair(gCharBuff0, gCharBuff1));
     timerStop(TIMER_INS_DECL);
     return 0;
 }
@@ -431,12 +458,14 @@ int DbImplLevelDb::insert_overriden_value(const string& usr, const string& name,
 {
     timerResume(TIMER_INS_OVERRIDEN);
     //printf("overriden: %s, %s, %s\n", usr.c_str(), filename.c_str(), name.c_str());
-    int fileId = fileIdTbl->GetId(filename);
-    int nameId = nameIdTbl->GetId(name);
-    int usrId = usrIdTbl->GetId(usr);
-    int usrIdOverrider = usrIdTbl->GetId(usrOverrider);
+    FileContext& fctx = s_fileContextMap[filename];
+
+    int fileId = fctx.m_fileIdTbl.GetId(filename);
+    int nameId = fctx.m_nameIdTbl.GetId(name);
+    int usrId = fctx.m_usrIdTbl.GetId(usr);
+    int usrIdOverrider = fctx.m_usrIdTbl.GetId(usrOverrider);
     // usrId -> decl info
-    setPropValue(gCharBuff1, sizeof(gCharBuff1), nameId, fileId, line, col);
+    encItemInfo(gCharBuff1, sizeof(gCharBuff1), nameId, fileId, line, col);
     if(!s_overrideeMap[usr].empty()) {
         s_overrideeMap[usr].append(string(",") + string(gCharBuff1));
     }
@@ -460,7 +489,7 @@ int DbImplLevelDb::insert_overriden_value(const string& usr, const string& name,
     }
     // pos -> usr
     setKeyValuePos2Usr(gCharBuff0, gCharBuff1, sizeof(gCharBuff0), fileId, line, col, usrIdOverrider);
-    s_wb.Put(gCharBuff0, gCharBuff1);
+    fctx.m_wb.Put(gCharBuff0, gCharBuff1);
 
     timerStop(TIMER_INS_OVERRIDEN);
     return 0;
@@ -491,8 +520,7 @@ int DbImplLevelDb::addIdList(leveldb::WriteBatch* db, const SiMap& inMap, const 
     return 0;
 }
 
-static SsMap s_file2fidMap;
-int addFilesToFileList(leveldb::DB* db, leveldb::WriteBatch* wb, const SiMap& inMap)
+int addFilesToFileList(leveldb::DB* db, leveldb::WriteBatch* wb)
 {
     char buf[1024];
     int startId = 0;
@@ -514,15 +542,15 @@ int addFilesToFileList(leveldb::DB* db, leveldb::WriteBatch* wb, const SiMap& in
     }
 
     int id = startId;
-    BOOST_FOREACH(const SiPair& itr, inMap) {
+    typedef pair<string, FileContext> FcPair;
+    BOOST_FOREACH(const FcPair& itr, s_fileContextMap) {
         string fn = itr.first;
         string key = TABLE_NAME_FILE_LIST "|" + fn;
         int rv = dbRead(valStr, db, key);
         if(rv < 0) {
             snprintf(buf, sizeof(buf), "%x", id);
             dbWrite(db, key, s_compileUnitId + "," + string(buf));
-            s_file2fidMap[fn] = buf;
-            dbWrite(db, TABLE_NAME_FID2CUID "|" + string(buf), s_compileUnitId);
+            s_fileContextMap[fn].m_dbId = buf;
             id++;
         }
         else {
@@ -531,8 +559,7 @@ int addFilesToFileList(leveldb::DB* db, leveldb::WriteBatch* wb, const SiMap& in
             assert(pos != string::npos);
             string fid = valStr.substr(pos+1, valStr.size()-1);
             // set fid to map
-            s_file2fidMap[fn] = fid;
-            dbWrite(db, TABLE_NAME_FID2CUID "|" + fid, s_compileUnitId);
+            s_fileContextMap[fn].m_dbId = fid;
         }
     }
     snprintf(buf, sizeof(buf), "%x", id);
@@ -559,34 +586,6 @@ static inline int dbClose(leveldb::DB*& db)
 
 int DbImplLevelDb::fin(void)
 {
-    const SiMap& fileMap = fileIdTbl->GetTbl();
-    const SiMap& nameMap = nameIdTbl->GetTbl();
-    const SiMap& usrMap = usrIdTbl->GetTbl();
-
-    // dump
-    {
-        BOOST_FOREACH(const SsPair& itr, s_overrideeMap) {
-            s_wb.Put(TABLE_NAME_USR2OVERRIDEE "|" + itr.first, itr.second);
-        }
-        typedef pair<string, SiMap> PairType;
-        BOOST_FOREACH(const PairType& itr, s_overriderMap) {
-            const SiMap& usrMap = itr.second;
-            string val = "";
-            BOOST_FOREACH(const SiPair& itr_usr, usrMap) {
-                if(val.empty()) {
-                    val = itr_usr.first;
-                }
-                else {
-                    val.append(string(",") + itr_usr.first);
-                }
-            }
-            s_wb.Put(TABLE_NAME_USR2OVERRIDER "|" + itr.first, val);
-        }
-    }
-
-    // usr
-    addIdList(&s_wb, usrMap, TABLE_NAME_ID2USR);
-
     {
         leveldb::WriteBatch wb_common;
         leveldb::DB* db_common;
@@ -595,13 +594,12 @@ int DbImplLevelDb::fin(void)
             printf("ERROR: fin: common db open: %s\n", s_commonDbDir.c_str());
             return -1;
         }
-        addFilesToFileList(db_common, &wb_common, fileMap);
+        addFilesToFileList(db_common, &wb_common);
         dbFlush(db_common, &wb_common);
         dbClose(db_common);
     }
 
     // update UsrDb
-    // TODO: speed up this part
     {
         leveldb::DB* dbUsrDb = NULL;
         leveldb::WriteBatch wb_usrdb;
@@ -613,12 +611,12 @@ int DbImplLevelDb::fin(void)
             }
         }
         map<string, SiMap> usrFidMap;
-        BOOST_FOREACH(const SiPair& itr, usrMap) {
+        BOOST_FOREACH(const SiPair& itr, s_usrMap) {
             const string& usr = itr.first;
             if(!usr.empty()) {
                 SiMap& fidMap = usrFidMap[usr];
                 BOOST_FOREACH(const SiPair& itr_file_list, s_usr2fileMap[usr]) {
-                    fidMap[s_file2fidMap[itr_file_list.first]] = 0;
+                    fidMap[s_fileContextMap[itr_file_list.first].m_dbId] = 0;
                 }
             }
         }
@@ -630,7 +628,6 @@ int DbImplLevelDb::fin(void)
         curDir.append(string("/") + string(gCharBuff0));
 
         timerStart(TIMER_USR_DB0);
-        timerStart(TIMER_USR_DB2);
         //////
         // open db
         int rv = dbTryOpen(dbUsrDb, curDir);
@@ -638,16 +635,14 @@ int DbImplLevelDb::fin(void)
             printf("ERROR: fin: common db open: %s\n", curDir.c_str());
             return -1;
         }
-        timerStop(TIMER_USR_DB2);
-        timerStart(TIMER_USR_DB1);
 
         // lookup map
         int count = 0;
-        BOOST_FOREACH(const SiPair& itr, usrMap) {
+        BOOST_FOREACH(const SiPair& itr, s_usrMap) {
             const string& usr = itr.first;
             bool isGlobal = 0 == strncmp(usr.c_str(), "c:@", 3);
             bool isMacro = 0 == strncmp(usr.c_str(), "c:macro", 7);
-#if 0
+#if 1
             if(usr != "") {
 #else
             if(!usr.empty() && (isGlobal || isMacro)) {
@@ -655,15 +650,12 @@ int DbImplLevelDb::fin(void)
                 SiMap& file_list_map = usrFidMap[usr];
 #ifdef USE_USR2FILE_TABLE2
                 BOOST_FOREACH(const SiPair& itr_str, file_list_map) {
-                    wb_usrdb.Put(TABLE_NAME_USR2FILE2 "|" + usr + "|" + itr_str.first, "1");
+                    wb_usrdb.Put(TABLE_NAME_USR2GLOBAL_FILE_ID2 "|" + usr + "|" + itr_str.first, "1");
                 }
 #else
                 // check if already registered
-                timerResume(2);
                 string value;
-                int rv = dbRead(value, dbUsrDb, TABLE_NAME_USR2FILE "|" + usr);
-                timerStop(2);
-                timerResume(3);
+                int rv = dbRead(value, dbUsrDb, TABLE_NAME_USR2GLOBAL_FILE_ID "|" + usr);
                 if(rv == 0) {
                     const string delim = ",";
                     list<string> old_list;
@@ -672,15 +664,12 @@ int DbImplLevelDb::fin(void)
                         file_list_map[s] = 0;
                     }
                 }
-                timerStop(3);
-                timerResume(4);
                 string file_list_string = "";
                 BOOST_FOREACH(const SiPair& itr_str, file_list_map) {
                     file_list_string.append(itr_str.first+",");
                 }
                 file_list_string = file_list_string.substr(0, file_list_string.size()-1);
-                timerStop(4);
-                wb_usrdb.Put(TABLE_NAME_USR2FILE "|" + usr, file_list_string);
+                wb_usrdb.Put(TABLE_NAME_USR2GLOBAL_FILE_ID "|" + usr, file_list_string);
 #endif
 
                 count++;
@@ -688,74 +677,126 @@ int DbImplLevelDb::fin(void)
         }
         dbFlush(dbUsrDb, &wb_usrdb);
         dbClose(dbUsrDb);
-        timerStop(TIMER_USR_DB1);
         timerStop(TIMER_USR_DB0);
         // close db
         //////
 #ifdef TIMER
         printf("time: TIMER_USR_DB0: %s", s_timers[TIMER_USR_DB0].format().c_str());
-        printf("time: TIMER_USR_DB1: %s", s_timers[TIMER_USR_DB1].format().c_str());
-        printf("time: TIMER_USR_DB2: %s", s_timers[TIMER_USR_DB2].format().c_str());
         printf("time: TIMER_USR_DB3: %s", s_timers[TIMER_USR_DB3].format().c_str());
-        printf("time: 2: %s", s_timers[2].format().c_str());
-        printf("time: 3: %s", s_timers[3].format().c_str());
-        printf("time: 4: %s", s_timers[4].format().c_str());
         printf("time: TIMER_INS_REF: %s", s_timers[TIMER_INS_REF].format().c_str());
         //printf("time: TIMER_INS_REF_1: %s", s_timers[TIMER_INS_REF_1].format().c_str());
         printf("time: TIMER_INS_REF_2: %s", s_timers[TIMER_INS_REF_2].format().c_str());
         printf("time: TIMER_INS_DECL: %s", s_timers[TIMER_INS_DECL].format().c_str());
-        printf("time: %d times\n", count);
+        printf("time: usr count: %d\n", count);
 #endif
     }
 
-    addIdList(&s_wb, fileMap, TABLE_NAME_ID2FILE);
-    // lookup map
-    BOOST_FOREACH(const SiPair& itr, fileMap) {
-        string key(TABLE_NAME_FILE2ID "|");
-        key.append(itr.first);
-#ifdef USE_BASE64
-        {
-            char* p = gCharBuff1;
-            p = encodeVal(p, itr.second);
-            *p = '\0';
-        }
-#else
-        snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", itr.second);
-#endif
-        s_wb.Put(key, gCharBuff1);
-    }
-
-    addIdList(&s_wb, nameMap, TABLE_NAME_ID2NAME);
-    // dump map
-    BOOST_FOREACH(const SsPair& itr, s_usr2refMap) {
-        const string& usr = itr.first;
-        if(!usr.empty()) {
-            string key(TABLE_NAME_USR2REF "|");
-            key.append(usr + "|" + s_compileUnitId);
-            s_wb.Put(key, itr.second);
-        }
-    }
-    dbFlush(s_db, &s_wb);
-    dbClose(s_db);
-#if 1
-    // make cache?
-    // this speeds up the first access to a database.
-    {
-        timerStart(TIMER_DB_CACHE);
-        leveldb::Status st = leveldb::DB::Open(s_defaultOptions, s_curDbDir, &s_db);
-        assert(st.ok());
-        dbClose(s_db);
-        timerStop(TIMER_DB_CACHE);
 #ifdef TIMER
-        printf("time: TIMER_DB_CACHE: %s", s_timers[TIMER_DB_CACHE].format().c_str());
+    timerStart(TIMER_DB_WRITE);
 #endif
+    {
+        string valFiles;
+        typedef pair<string, FileContext> FcPair;
+        BOOST_FOREACH(const FcPair& itr, s_fileContextMap) {
+            const string& filename = itr.first;
+            const string& dbId = itr.second.m_dbId;
+            valFiles += "," + dbId;
+        }
+        BOOST_FOREACH(const FcPair& itr, s_fileContextMap) {
+            const string& filename = itr.first;
+            const string& dbId = itr.second.m_dbId;
+            FileContext& fctx = s_fileContextMap[filename];
+
+            leveldb::DB*& db = fctx.m_db;
+            leveldb::WriteBatch& wb = fctx.m_wb;
+
+            // decide db directory
+            char* errp = NULL;
+            int id = strtol(dbId.c_str(), &errp, 16);
+            assert(*errp == '\0');
+            snprintf(gCharBuff0, sizeof(gCharBuff0), "%x", id%DB_NUM);
+            string dbDir = string(gCharBuff0);
+
+            // check if already exists
+            //if(boost::filesystem::exists(s_dbDir + "/" + dbDir)) {
+            if(s_finishedFiles.find(filename) != s_finishedFiles.end()) {
+                continue;
+            }
+            int rv = dbTryOpen(db, s_dbDir + "/" + dbDir);
+            if(rv < 0) {
+                printf("ERROR: fin: open: %s\n", s_commonDbDir.c_str());
+                return -1;
+            }
+
+            // ref
+            BOOST_FOREACH(const SsPair& itr, fctx.m_refList) {
+                wb.Put(dbId + itr.first, itr.second);
+            }
+            // decl
+            BOOST_FOREACH(const SsPair& itr, fctx.m_declList) {
+                wb.Put(dbId + itr.first, itr.second);
+            }
+
+            // usr
+            const SiMap& mapRef = fctx.m_usrIdTbl.GetTbl();
+            addIdList(&wb, mapRef, dbId + TABLE_NAME_ID2USR);
+            {
+                BOOST_FOREACH(const SiPair& itr, mapRef) {
+                    string key(dbId + TABLE_NAME_USR2ID "|");
+                    key.append(itr.first);
+#ifdef USE_BASE64
+                    {
+                        char* p = gCharBuff1;
+                        p = encodeVal(p, itr.second);
+                        *p = '\0';
+                    }
+#else
+                    snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", itr.second);
+#endif
+                    wb.Put(key, gCharBuff1);
+                }
+            }
+            BOOST_FOREACH(const SsPair& itr, fctx.m_usr2refMap) {
+                const string& usr = itr.first;
+                if(!usr.empty()) {
+                    string key(dbId + TABLE_NAME_USR2REF "|");
+                    //key.append(usr + "|" + s_compileUnitId);
+                    key.append(usr);
+                    wb.Put(key, itr.second);
+                }
+            }
+            const SiMap& fileMap = fctx.m_fileIdTbl.GetTbl();
+            addIdList(&wb, fileMap, dbId + TABLE_NAME_GLOBAL_FILE_ID2FILE);
+            // lookup map
+            BOOST_FOREACH(const SiPair& itr, fileMap) {
+                string key(dbId + TABLE_NAME_FILE2LOCAL_ID "|");
+                key.append(itr.first);
+#ifdef USE_BASE64
+                {
+                    char* p = gCharBuff1;
+                    p = encodeVal(p, itr.second);
+                    *p = '\0';
+                }
+#else
+                snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", itr.second);
+#endif
+                wb.Put(key, gCharBuff1);
+            }
+            const SiMap& nameMap = fctx.m_nameIdTbl.GetTbl();
+            addIdList(&wb, nameMap, dbId + TABLE_NAME_ID2NAME);
+
+            wb.Put(dbId + TABLE_NAME_CUFILES, valFiles);
+
+            dbFlush(db, &wb);
+            dbClose(db);
+        }
     }
+#ifdef TIMER
+    timerStop(TIMER_DB_WRITE);
+    printf("time: TIMER_DB_WRITE: %s", s_timers[TIMER_DB_WRITE].format().c_str());
 #endif
 
     delete s_defaultOptions.block_cache;
-    delete fileIdTbl;
-    delete nameIdTbl;
-    delete usrIdTbl;
     return 0;
 }
 

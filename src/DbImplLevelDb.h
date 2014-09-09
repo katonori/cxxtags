@@ -4,7 +4,9 @@
 #include <map>
 #include <stdint.h>
 #include <sstream>
+#include <list>
 #include <leveldb/db.h>
+#include <leveldb/write_batch.h>
 #include "IIndexDb.h"
 
 namespace cxxtags {
@@ -48,6 +50,25 @@ public:
         return mMap;
     }
 };
+
+typedef std::map<std::string, std::string> SsMap;
+typedef std::pair<std::string, std::string> SsPair;
+typedef std::map<std::string, int> SiMap;
+typedef std::pair<std::string, int> SiPair;
+
+struct FileContext
+{
+    IdTbl m_fileIdTbl;
+    IdTbl m_nameIdTbl;
+    IdTbl m_usrIdTbl;
+    std::list<SsPair> m_refList;
+    std::list<SsPair> m_declList;
+    SsMap m_usr2refMap;
+    std::string m_dbId;
+    leveldb::WriteBatch m_wb;
+    leveldb::DB* m_db;
+};
+
 };
 
 #endif //#ifndef _DB_H_

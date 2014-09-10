@@ -493,6 +493,7 @@ class QueryHandlerRef(HandlerBase):
             usage()
             sys.exit(1)
         self.m_srcFileName, self.m_lineNo, self.m_colNo = argv
+        self.m_srcFileName = os.path.abspath(self.m_srcFileName)
         self.m_lineNo = format(int(self.m_lineNo), 'x')
         self.m_colNo = format(int(self.m_colNo), 'x')
         if USE_BASE64 != 0:
@@ -708,7 +709,9 @@ class QueryHandlerRebuild(HandlerBase):
             print "ERROR: cannot open database of '%s'"%(self.m_srcFileName)
             sys.exit(1)
         rv = self.GetMainDb().get(self.m_dbId + TABLE_NAME_BUILD_INFO)
-        assert rv != None
+        if rv == None:
+            print "ERROR: cannot obtain build options from the database."
+            sys.exit(1)
         workDir, excludes, opt = rv.split("|")
         if excludes != "":
             excludes = " -e " + excludes
@@ -719,7 +722,6 @@ class QueryHandlerRebuild(HandlerBase):
         return 
 
     def parseArg(self, argv):
-        print argv
         if len(argv) != 1:
             usage()
             sys.exit(1)

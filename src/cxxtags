@@ -52,6 +52,9 @@ class CxxTagsCoreWrapper:
             elif arg == "-v":
                 self.mIsVerbose = 1
                 del argv[i]
+            elif arg == "-f":
+                self.mOptCore += " -f"
+                del argv[i]
             elif arg == "-o":
                 #self.mOutFile = argv[i+1]
                 #print "-o: "+self.mOutFile

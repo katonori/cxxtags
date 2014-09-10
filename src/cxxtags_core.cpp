@@ -14,9 +14,10 @@
 #include <boost/filesystem/path.hpp>
 
 namespace cxxtags {
-static int gIsPartial = 0;
-static int gIsEmpty = 0;
-static int gIsSkelton = 0; // only USRs and file names are recorded.
+static bool gIsPartial = false;
+static bool gIsEmpty = false;
+static bool gIsSkelton = false; // only USRs and file names are recorded.
+static bool gIsRebuild = false;
 static std::string gLastClassUsr = "";
 cxxtags::IIndexDb* gDb;
 
@@ -513,7 +514,7 @@ static int perform_test_load_source(int argc, const char **argv,
   setCursorTypeAvailable(CXCursor_CXXBaseSpecifier);
 
   gDb = new cxxtags::DbImplLevelDb();
-  check_rv(gDb->init(out_dir, in_file_name, gExcludeListStr, gIsPartial, gIsSkelton, cur_dir, argc-1, argv+1));
+  check_rv(gDb->init(out_dir, in_file_name, gExcludeListStr, gIsPartial, gIsSkelton, gIsRebuild, cur_dir, argc-1, argv+1));
 
   Idx = clang_createIndex(/* excludeDeclsFromPCH */0,
                           /* displayDiagnosics=*/0);
@@ -578,17 +579,22 @@ static int indexSource(int argc, const char **argv) {
                 argc-=2;
             }
             else if(strncmp(*argv, "-p", 2) == 0) {
-                gIsPartial = 1;
+                gIsPartial = true;
                 argv++;
                 argc--;
             }
             else if(strncmp(*argv, "-s", 2) == 0) {
-                gIsSkelton = 1;
+                gIsSkelton = true;
+                argv++;
+                argc--;
+            }
+            else if(strncmp(*argv, "-f", 2) == 0) {
+                gIsRebuild = true;
                 argv++;
                 argc--;
             }
             else if(strncmp(*argv, "-E", 2) == 0) {
-                gIsEmpty = 1;
+                gIsEmpty = true;
                 argv++;
                 argc--;
             }

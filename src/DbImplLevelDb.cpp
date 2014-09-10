@@ -69,6 +69,7 @@ boost::timer::cpu_timer* s_timers;
 #endif
 static SsMap s_finishedFiles;
 static map<string, SiMap > s_usr2fileMap;
+static string s_buildOpt;
 
 enum {
     TIMER_INS_REF = 64,
@@ -138,7 +139,7 @@ static int dbTryOpen(leveldb::DB*& db, string dir)
     return 0;
 }
 
-int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, const string& excludeList, int isPartial, int isSkel, const char* curDir, int argc, const char** argv)
+int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, const string& excludeList, int isPartial, int isSkel, bool isRebuild, const char* curDir, int argc, const char** argv)
 {
     leveldb::DB* dbCommon = NULL;
     s_defaultOptions.create_if_missing = true;
@@ -148,9 +149,9 @@ int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, cons
     s_defaultOptions.filter_policy = leveldb::NewBloomFilterPolicy(10);
 
     // build options
-    string buildOpt = string(curDir) + "|" + excludeList + "|";
+    s_buildOpt = string(curDir) + "|" + excludeList + "|";
     for(int i = 0; i < argc; i++) {
-        buildOpt += " " + string(argv[i]);
+        s_buildOpt += " " + string(argv[i]);
     }
 
     s_dbDir = out_dir;
@@ -217,7 +218,7 @@ int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, cons
     assert(!s_compileUnitId.empty());
 
     // list of files already processed
-    {
+    if(!isRebuild) {
         leveldb::WriteBatch wb_common;
         leveldb::DB* db_common;
         int rv = dbTryOpen(db_common, s_commonDbDir);
@@ -802,6 +803,7 @@ int DbImplLevelDb::fin(void)
             addIdList(&wb, nameMap, dbId + TABLE_NAME_ID2NAME);
 
             wb.Put(dbId + TABLE_NAME_CUFILES, valFiles);
+            wb.Put(dbId + TABLE_NAME_BUILD_INFO, s_buildOpt);
 
             dbFlush(db, &wb);
             dbClose(db);

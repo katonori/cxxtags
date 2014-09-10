@@ -106,6 +106,7 @@ class HandlerBase:
     m_srcFileName = ""
     m_cuName = ""
     m_dbId = 0
+    m_lineNo = 0
     m_colNo = 0
     m_fileCount = 0
     m_dbList = [None]*DB_NUM
@@ -120,6 +121,7 @@ class HandlerBase:
         self.m_srcFileName = ""
         self.m_cuName = ""
         self.m_dbId = 0
+        self.m_lineNo = 0
         self.m_colNo = 0
         self.m_dbList = [None]*DB_NUM
         count = self.mFileListDb.get("file_count")
@@ -702,15 +704,15 @@ class QueryHandlerTable(HandlerBase):
 
 class QueryHandlerRebuild(HandlerBase):
     def DoQuery(self):
-        if None == self.InitDb(self.m_srcFileName):
-            print("ERROR: InitDb() failed")
-            return None
-        rv = self.mDb.get(TABLE_NAME_BUILD_INFO)
+        if self.InitDbByFilename(self.m_srcFileName) == None:
+            print "ERROR: cannot open database of '%s'"%(self.m_srcFileName)
+            sys.exit(1)
+        rv = self.GetMainDb().get(self.m_dbId + TABLE_NAME_BUILD_INFO)
         assert rv != None
         workDir, excludes, opt = rv.split("|")
         if excludes != "":
             excludes = " -e " + excludes
-        cmd = "cxxtags " + excludes + " " + self.mDbDir + " " + self.m_srcFileName + " " + opt
+        cmd = "cxxtags -f " + excludes + " " + self.mDbDir + " " + self.m_srcFileName + " " + opt
         self.CloseDb()
         (rv, out) = commands.getstatusoutput(cmd)
         print out

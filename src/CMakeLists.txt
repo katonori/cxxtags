@@ -28,7 +28,6 @@ endif(CYGWIN)
 install(FILES
     ${PROJECT_BINARY_DIR}/cxxtags_core${EXTENSION}
     ${PROJECT_SOURCE_DIR}/cxxtags
-    ${PROJECT_SOURCE_DIR}/cxxtags_db_manager
     ${PROJECT_SOURCE_DIR}/cxxtags_query
     ${PROJECT_SOURCE_DIR}/cxxtags_util.py
     ${PROJECT_SOURCE_DIR}/cxxtags_run_proj

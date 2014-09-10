@@ -129,7 +129,8 @@ class HandlerBase:
     def InitDbByFilename(self, filename):
         q = TABLE_NAME_FILE_LIST + "|" + filename
         rv = self.mFileListDb.get(q)
-        assert rv != None
+        if rv == None:
+            return None
         cuId, dbId = rv.split(",")
         self.m_dbId = dbId
         DEBUG_PRINT("InitDbByFilename: " + dbId)
@@ -311,7 +312,9 @@ class QueryHandlerDecl(HandlerBase):
     #
     def DoQuery(self):
         self.InitUsrDb()
-        assert self.InitDbByFilename(self.m_srcFileName) != None
+        if self.InitDbByFilename(self.m_srcFileName) == None:
+            print "ERROR: cannot open database of '%s'"%(self.m_srcFileName)
+            sys.exit(1)
         usrId = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         DEBUG_PRINT("usrId: " + str(usrId))
         if usrId:
@@ -376,7 +379,9 @@ class QueryHandlerDef(HandlerBase):
     def DoQuery(self, isOnlyMainCompileUnit):
         self.m_isOnlyMainCompileUnit = isOnlyMainCompileUnit
         self.InitUsrDb()
-        assert self.InitDbByFilename(self.m_srcFileName) != None
+        if self.InitDbByFilename(self.m_srcFileName) == None:
+            print "ERROR: cannot open database of '%s'"%(self.m_srcFileName)
+            sys.exit(1)
         usrId = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         usr = id2usr(self.GetMainDb(), self.m_dbId, usrId)
         DEBUG_PRINT("usr: " + str(usr))
@@ -435,7 +440,9 @@ class QueryHandlerRef(HandlerBase):
     def DoQuery(self):
         startTime = time.time()
         self.InitUsrDb()
-        assert self.InitDbByFilename(self.m_srcFileName) != None
+        if self.InitDbByFilename(self.m_srcFileName) == None:
+            print "ERROR: cannot open database of '%s'"%(self.m_srcFileName)
+            sys.exit(1)
         usrId = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         mainDb = self.GetMainDb()
         usr = id2usr(mainDb, self.m_dbId, usrId)
@@ -496,29 +503,30 @@ class QueryHandlerOverride(HandlerBase):
     #
     def DoQuery(self):
         startTime = time.time()
-        # get compileunit
-        if None == self.InitDb(self.m_srcFileName):
-            print "ERROR: DB oopen"
-            return None
+        self.InitUsrDb()
+        if self.InitDbByFilename(self.m_srcFileName) == None:
+            print "ERROR: cannot open database of '%s'"%(self.m_srcFileName)
+            sys.exit(1)
         usrId = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
-        usr = id2usr(self.mDb, self.m_dbId, usrId)
+        usr = id2usr(self.GetMainDb(), self.m_dbId, usrId)
         DEBUG_PRINT("usr: " + str(usr))
         if usr:
             self.GetAllOverrides(usr)
 
     def GetAllOverrides(self, usr):
         resultList = []
-        q = TABLE_NAME_USR2OVERRIDER + "|" + str(usr)
-        rv = self.mDb.get(q)
+        mainDb = self.GetMainDb()
+        q = self.m_dbId + TABLE_NAME_USR2OVERRIDER + "|" + str(usr)
+        rv = mainDb.get(q)
         DEBUG_PRINT("q: " + str(q))
         DEBUG_PRINT("usr2overrirder: " + str(rv))
         if rv:
             rvList = rv.split(",")
             for rv in rvList:
                 usrId = rv
-                decl = self.mDb.get(TABLE_NAME_USR_ID2DECL + "|%s"%(usrId))
+                decl = mainDb.get(self.m_dbId + TABLE_NAME_USR_ID2DECL + "|%s"%(usrId))
                 nameId, fileId, line, col = decl.split("|")
-                name, fn = GetResultString(self.mDb, nameId, fileId)
+                name, fn = GetResultString(mainDb, self.m_dbId, nameId, fileId)
                 if fn != None and name != None:
                     resultList.append((name, fn, line, col))
         for i in resultList:
@@ -542,12 +550,12 @@ class QueryHandlerOverrideN(HandlerBase):
     #
     def DoQuery(self):
         startTime = time.time()
-        # get compileunit
-        if None == self.InitDb(self.m_srcFileName):
-            print "ERROR: DB oopen"
-            return None
+        self.InitUsrDb()
+        if self.InitDbByFilename(self.m_srcFileName) == None:
+            print "ERROR: cannot open database of '%s'"%(self.m_srcFileName)
+            sys.exit(1)
         usrId = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
-        usr = id2usr(self.mDb, self.m_dbId, usrId)
+        usr = id2usr(self.GetMainDb(), self.m_dbId, usrId)
         DEBUG_PRINT("usr: " + str(usr))
         if usr:
             self.GetAllOverriders(usr)
@@ -557,12 +565,13 @@ class QueryHandlerOverrideN(HandlerBase):
         DEBUG_PRINT("dbIdList: " + str(dbIdList))
         resultList = []
         for dbId in dbIdList:
-            if dbId == self.m_dbId:
-                db = self.mDb
-            else:
+            idx = int(dbId, 16)%DB_NUM
+            db = self.m_dbList[idx]
+            if db == None:
                 db = self.OpenDbById(dbId)
+                self.m_dbList[idx] = db
             count = 0
-            q = TABLE_NAME_USR2OVERRIDEE + "|" + str(usr)
+            q = dbId + TABLE_NAME_USR2OVERRIDEE + "|" + str(usr)
             DEBUG_PRINT("q: " + q)
             rv = db.get(q)
             DEBUG_PRINT("usr2overrirden: " + str(rv))
@@ -570,11 +579,9 @@ class QueryHandlerOverrideN(HandlerBase):
                 rvList = rv.split(",")
                 for rv in rvList:
                     nameId, fileId, line, col = rv.split("|")
-                    name, fn = GetResultString(db, nameId, fileId)
+                    name, fn = GetResultString(db, dbId, nameId, fileId)
                     if name != None and fn != None:
                         resultList.append((name, fn, line, col))
-            if db != self.mDb:
-                db.close()
         for i in set(resultList):
             name, fn, line, col = i
             self.PrintResult(name, fn, line, col)

@@ -63,6 +63,8 @@ struct FileContext
     IdTbl m_usrIdTbl;
     std::list<SsPair> m_refList;
     std::list<SsPair> m_declList;
+    SsMap m_overrideeMap;
+    std::map<std::string, SiMap> m_overriderMap;
     SsMap m_usr2refMap;
     std::string m_dbId;
     leveldb::WriteBatch m_wb;

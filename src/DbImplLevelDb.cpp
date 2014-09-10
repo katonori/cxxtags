@@ -48,8 +48,6 @@ namespace cxxtags {
 
 using namespace std;
 
-static leveldb::DB* s_db;
-static leveldb::WriteBatch s_wb;
 static string s_compileUnit;
 static string s_commonDbDir;
 static string s_dbDir;
@@ -452,8 +450,6 @@ int DbImplLevelDb::insert_decl_value(const string& usr, const string& filename, 
     return 0;
 }
 
-SsMap s_overrideeMap;
-map<string, SiMap> s_overriderMap;
 int DbImplLevelDb::insert_overriden_value(const string& usr, const string& name, const string& filename, int line, int col, const string& usrOverrider, int isDef)
 {
     timerResume(TIMER_INS_OVERRIDEN);
@@ -466,11 +462,11 @@ int DbImplLevelDb::insert_overriden_value(const string& usr, const string& name,
     int usrIdOverrider = fctx.m_usrIdTbl.GetId(usrOverrider);
     // usrId -> decl info
     encItemInfo(gCharBuff1, sizeof(gCharBuff1), nameId, fileId, line, col);
-    if(!s_overrideeMap[usr].empty()) {
-        s_overrideeMap[usr].append(string(",") + string(gCharBuff1));
+    if(!fctx.m_overrideeMap[usr].empty()) {
+        fctx.m_overrideeMap[usr].append(string(",") + string(gCharBuff1));
     }
     else {
-        s_overrideeMap[usr] = string(gCharBuff1);
+        fctx.m_overrideeMap[usr] = string(gCharBuff1);
     }
 
 #ifdef USE_BASE64
@@ -482,7 +478,7 @@ int DbImplLevelDb::insert_overriden_value(const string& usr, const string& name,
 #else
     snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", usrId);
 #endif
-    s_overriderMap[usrOverrider][gCharBuff1] = 0;
+    fctx.m_overriderMap[usrOverrider][gCharBuff1] = 0;
 
     if(!usr.empty()) {
         s_usr2fileMap[usr][filename] = 0;
@@ -735,6 +731,26 @@ int DbImplLevelDb::fin(void)
             // decl
             BOOST_FOREACH(const SsPair& itr, fctx.m_declList) {
                 wb.Put(dbId + itr.first, itr.second);
+            }
+            // override
+            {
+                BOOST_FOREACH(const SsPair& itr, fctx.m_overrideeMap) {
+                    wb.Put(dbId + TABLE_NAME_USR2OVERRIDEE "|" + itr.first, itr.second);
+                }
+                typedef pair<string, SiMap> PairType;
+                BOOST_FOREACH(const PairType& itr, fctx.m_overriderMap) {
+                    const SiMap& usrMap = itr.second;
+                    string val = "";
+                    BOOST_FOREACH(const SiPair& itr_usr, usrMap) {
+                        if(val.empty()) {
+                            val = itr_usr.first;
+                        }
+                        else {
+                            val.append(string(",") + itr_usr.first);
+                        }
+                    }
+                    wb.Put(dbId + TABLE_NAME_USR2OVERRIDER "|" + itr.first, val);
+                }
             }
 
             // usr

@@ -113,9 +113,9 @@ class CxxTagsCoreWrapper:
         #self.mTimeList.append(time.time())
         rv = os.system(cmd)
         #self.mTimeList.append(time.time())
-        self.updateBuildOptionDatabase(cur_dir, buildOpt)
+        self.updateBuildOptionDatabase(in_file, buildOpt)
 
-    def updateBuildOptionDatabase(self, curDir, opt):
+    def updateBuildOptionDatabase(self, inFile, opt):
         configDir = os.environ['HOME'] + "/.cxxtags/"
         # register build options
         if not os.path.exists(configDir):
@@ -132,7 +132,7 @@ class CxxTagsCoreWrapper:
                 None
             f.close()
         with open(configDir + "/build_opt.json", "w") as f:
-            config[curDir] = opt
+            config[inFile] = opt
             f.writelines(json.dumps(config, indent=4))
 
 cxxtags = CxxTagsCoreWrapper()

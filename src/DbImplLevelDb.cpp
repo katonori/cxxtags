@@ -584,6 +584,49 @@ static inline int dbClose(leveldb::DB*& db)
     return 0;
 }
 
+static int s_usrCount = 0;
+int writeUsrDb(const SiMap& usrMap, map<string, SiMap> usrFidMap, leveldb::DB* dbUsrDb, leveldb::WriteBatch& wb_usrdb, const string& dbName)
+{
+    // lookup map
+    BOOST_FOREACH(const SiPair& itr, usrMap) {
+        const string& usr = itr.first;
+        bool isGlobal = 0 == strncmp(usr.c_str(), "c:@", 3);
+        bool isMacro = 0 == strncmp(usr.c_str(), "c:macro", 7);
+#if 1
+        if(usr != "") {
+#else
+        if(!usr.empty() && (isGlobal || isMacro)) {
+#endif
+            SiMap& file_list_map = usrFidMap[usr];
+#ifdef USE_USR2FILE_TABLE2
+            BOOST_FOREACH(const SiPair& itr_str, file_list_map) {
+                wb_usrdb.Put(dbName + "|" + usr + "|" + itr_str.first, "1");
+            }
+#else
+            // check if already registered
+            string value;
+            int rv = dbRead(value, dbUsrDb, dbName + "|" + usr);
+            if(rv == 0) {
+                const string delim = ",";
+                list<string> old_list;
+                boost::split(old_list, value, boost::is_any_of(delim));
+                BOOST_FOREACH(const string& s, old_list) {
+                    file_list_map[s] = 0;
+                }
+            }
+            string file_list_string = "";
+            BOOST_FOREACH(const SiPair& itr_str, file_list_map) {
+                file_list_string.append(itr_str.first+",");
+            }
+            file_list_string = file_list_string.substr(0, file_list_string.size()-1);
+            wb_usrdb.Put(dbName + "|" + usr, file_list_string);
+#endif
+
+            s_usrCount++;
+        }
+    }
+}
+
 int DbImplLevelDb::fin(void)
 {
     {
@@ -648,83 +691,14 @@ int DbImplLevelDb::fin(void)
             return -1;
         }
 
-        // lookup map
-        int count = 0;
-        BOOST_FOREACH(const SiPair& itr, s_refUsrMap) {
-            const string& usr = itr.first;
-            bool isGlobal = 0 == strncmp(usr.c_str(), "c:@", 3);
-            bool isMacro = 0 == strncmp(usr.c_str(), "c:macro", 7);
-#if 1
-            if(usr != "") {
-#else
-            if(!usr.empty() && (isGlobal || isMacro)) {
-#endif
-                SiMap& file_list_map = refUsrFidMap[usr];
 #ifdef USE_USR2FILE_TABLE2
-                BOOST_FOREACH(const SiPair& itr_str, file_list_map) {
-                    wb_usrdb.Put(TABLE_NAME_REF_USR2GLOBAL_FILE_ID2 "|" + usr + "|" + itr_str.first, "1");
-                }
+        writeUsrDb(s_refUsrMap, refUsrFidMap, dbUsrDb, wb_usrdb, TABLE_NAME_REF_USR2GLOBAL_FILE_ID2);
+        writeUsrDb(s_defUsrMap, defUsrFidMap, dbUsrDb, wb_usrdb, TABLE_NAME_DEF_USR2GLOBAL_FILE_ID2);
 #else
-                // check if already registered
-                string value;
-                int rv = dbRead(value, dbUsrDb, TABLE_NAME_REF_USR2GLOBAL_FILE_ID "|" + usr);
-                if(rv == 0) {
-                    const string delim = ",";
-                    list<string> old_list;
-                    boost::split(old_list, value, boost::is_any_of(delim));
-                    BOOST_FOREACH(const string& s, old_list) {
-                        file_list_map[s] = 0;
-                    }
-                }
-                string file_list_string = "";
-                BOOST_FOREACH(const SiPair& itr_str, file_list_map) {
-                    file_list_string.append(itr_str.first+",");
-                }
-                file_list_string = file_list_string.substr(0, file_list_string.size()-1);
-                wb_usrdb.Put(TABLE_NAME_REF_USR2GLOBAL_FILE_ID "|" + usr, file_list_string);
+        writeUsrDb(s_refUsrMap, refUsrFidMap, dbUsrDb, wb_usrdb, TABLE_NAME_REF_USR2GLOBAL_FILE_ID);
+        writeUsrDb(s_defUsrMap, defUsrFidMap, dbUsrDb, wb_usrdb, TABLE_NAME_DEF_USR2GLOBAL_FILE_ID);
 #endif
 
-                count++;
-            }
-        }
-
-        BOOST_FOREACH(const SiPair& itr, s_defUsrMap) {
-            const string& usr = itr.first;
-            bool isGlobal = 0 == strncmp(usr.c_str(), "c:@", 3);
-            bool isMacro = 0 == strncmp(usr.c_str(), "c:macro", 7);
-#if 1
-            if(usr != "") {
-#else
-            if(!usr.empty() && (isGlobal || isMacro)) {
-#endif
-                SiMap& file_list_map = defUsrFidMap[usr];
-#ifdef USE_USR2FILE_TABLE2
-                BOOST_FOREACH(const SiPair& itr_str, file_list_map) {
-                    wb_usrdb.Put(TABLE_NAME_DEF_USR2GLOBAL_FILE_ID2 "|" + usr + "|" + itr_str.first, "1");
-                }
-#else
-                // check if already registered
-                string value;
-                int rv = dbRead(value, dbUsrDb, TABLE_NAME_DEF_USR2GLOBAL_FILE_ID "|" + usr);
-                if(rv == 0) {
-                    const string delim = ",";
-                    list<string> old_list;
-                    boost::split(old_list, value, boost::is_any_of(delim));
-                    BOOST_FOREACH(const string& s, old_list) {
-                        file_list_map[s] = 0;
-                    }
-                }
-                string file_list_string = "";
-                BOOST_FOREACH(const SiPair& itr_str, file_list_map) {
-                    file_list_string.append(itr_str.first+",");
-                }
-                file_list_string = file_list_string.substr(0, file_list_string.size()-1);
-                wb_usrdb.Put(TABLE_NAME_DEF_USR2GLOBAL_FILE_ID "|" + usr, file_list_string);
-#endif
-
-                count++;
-            }
-        }
         dbFlush(dbUsrDb, &wb_usrdb);
         dbClose(dbUsrDb);
         timerStop(TIMER_USR_DB0);
@@ -737,7 +711,7 @@ int DbImplLevelDb::fin(void)
         //printf("time: TIMER_INS_REF_1: %s", s_timers[TIMER_INS_REF_1].format().c_str());
         printf("time: TIMER_INS_REF_2: %s", s_timers[TIMER_INS_REF_2].format().c_str());
         printf("time: TIMER_INS_DECL: %s", s_timers[TIMER_INS_DECL].format().c_str());
-        printf("time: usr count: %d\n", count);
+        printf("time: usr count: %d\n", s_usrCount);
 #endif
     }
 

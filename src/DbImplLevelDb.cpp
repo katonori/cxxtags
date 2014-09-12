@@ -136,7 +136,7 @@ static int dbTryOpen(leveldb::DB*& db, string dir)
         usleep(1000);
     }
     if (!st.ok()) {
-        fprintf(stderr, "Open fail.: %s: %s\n", s_commonDbDir.c_str(), st.ToString().c_str());
+        fprintf(stderr, "Open fail.: %s\n", st.ToString().c_str());
         return -1;
     }
     return 0;
@@ -720,6 +720,12 @@ int DbImplLevelDb::fin(void)
 #endif
     {
         string valFiles;
+        leveldb::DB* dbList[DB_NUM];
+        for(int i = 0; i < DB_NUM; i++) {
+            dbList[i] = NULL;
+        }
+        leveldb::WriteBatch wbList[DB_NUM];
+
         typedef pair<string, FileContext> FcPair;
         BOOST_FOREACH(const FcPair& itr, s_fileContextMap) {
             const string& filename = itr.first;
@@ -731,14 +737,12 @@ int DbImplLevelDb::fin(void)
             const string& dbId = itr.second.m_dbId;
             FileContext& fctx = s_fileContextMap[filename];
 
-            leveldb::DB*& db = fctx.m_db;
-            leveldb::WriteBatch& wb = fctx.m_wb;
-
             // decide db directory
             char* errp = NULL;
             int id = strtol(dbId.c_str(), &errp, 16);
+            int idRem = id % DB_NUM;
             assert(*errp == '\0');
-            snprintf(gCharBuff0, sizeof(gCharBuff0), "%x", id%DB_NUM);
+            snprintf(gCharBuff0, sizeof(gCharBuff0), "%x", idRem);
             string dbDir = string(gCharBuff0);
 
             // check if already exists
@@ -746,10 +750,15 @@ int DbImplLevelDb::fin(void)
             if(s_finishedFiles.find(filename) != s_finishedFiles.end()) {
                 continue;
             }
-            int rv = dbTryOpen(db, s_dbDir + "/" + dbDir);
-            if(rv < 0) {
-                printf("ERROR: fin: open: %s\n", s_commonDbDir.c_str());
-                return -1;
+
+            leveldb::DB*& db = dbList[idRem];
+            leveldb::WriteBatch& wb = wbList[idRem];
+            if(db == NULL) {
+                int rv = dbTryOpen(db, s_dbDir + "/" + dbDir);
+                if(rv < 0) {
+                    printf("ERROR: fin: open: %s\n", s_commonDbDir.c_str());
+                    return -1;
+                }
             }
 
             // ref
@@ -831,9 +840,12 @@ int DbImplLevelDb::fin(void)
 
             wb.Put(dbId + TABLE_NAME_CUFILES, valFiles);
             wb.Put(dbId + TABLE_NAME_BUILD_INFO, s_buildOpt);
-
-            dbFlush(db, &wb);
-            dbClose(db);
+        }
+        for(int i = 0; i < DB_NUM; i++) {
+            if(dbList[i]) {
+                dbFlush(dbList[i], &wbList[i]);
+                dbClose(dbList[i]);
+            }
         }
     }
 #ifdef TIMER

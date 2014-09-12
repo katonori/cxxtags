@@ -22,7 +22,7 @@ import time
 import commands
 
 TABLE_NAME_POS2USR_ID = "A"
-TABLE_NAME_USR2GLOBAL_FILE_ID = "B"
+TABLE_NAME_REF_USR2GLOBAL_FILE_ID = "B"
 TABLE_NAME_ID2NAME = "C"
 TABLE_NAME_USR_ID2DECL = "D"
 TABLE_NAME_USR2DEF = "E"
@@ -36,10 +36,12 @@ TABLE_NAME_USR2REF = "L"
 TABLE_NAME_USR2OVERRIDEE = "M"
 TABLE_NAME_USR2OVERRIDER = "N"
 TABLE_NAME_FILE_LIST = "O"
-TABLE_NAME_USR2GLOBAL_FILE_ID2 = "P"
+TABLE_NAME_REF_USR2GLOBAL_FILE_ID2 = "P"
 TABLE_NAME_BUILD_INFO = "Q"
 TABLE_NAME_USR2ID = "R"
 TABLE_NAME_CUFILES = "S"
+TABLE_NAME_DEF_USR2GLOBAL_FILE_ID = "T"
+TABLE_NAME_DEF_USR2GLOBAL_FILE_ID2 = "U"
 
 DB_NUM = 32
 
@@ -238,7 +240,7 @@ class HandlerBase:
             return None
         return usr
 
-    def GetDbIdListByUsr(self, usr):
+    def GetDbIdListByDefUsr(self, usr):
         dbIdList = []
         if USE_USR2FILE_TABLE2:
             DEBUG_PRINT("usrDbList: " + str(self.mUsrDbList))
@@ -252,7 +254,29 @@ class HandlerBase:
                     i += 1
         else:
             for db in self.mUsrDbList:
-                res = db.get(TABLE_NAME_USR2GLOBAL_FILE_ID + "|" + usr)
+                res = db.get(TABLE_NAME_DEF_USR2GLOBAL_FILE_ID + "|" + usr)
+                if res:
+                    for fid in res.split(","):
+                        dbIdList.append(fid)
+        if dbIdList == []:
+            dbIdList.append(self.m_dbId)
+        return list(set(dbIdList))
+
+    def GetDbIdListByRefUsr(self, usr):
+        dbIdList = []
+        if USE_USR2FILE_TABLE2:
+            DEBUG_PRINT("usrDbList: " + str(self.mUsrDbList))
+            for db in self.mUsrDbList:
+                i = 0
+                while i < int(self.m_fileCount, 16) + 1:
+                    q = TABLE_NAME_USR2GLOBAL_FILE_ID2 + "|" + usr + "|" + format(i, 'x')
+                    res = db.get(q)
+                    if res:
+                        dbIdList.append(format(i, 'x'))
+                    i += 1
+        else:
+            for db in self.mUsrDbList:
+                res = db.get(TABLE_NAME_REF_USR2GLOBAL_FILE_ID + "|" + usr)
                 if res:
                     for fid in res.split(","):
                         dbIdList.append(fid)
@@ -396,7 +420,7 @@ class QueryHandlerDef(HandlerBase):
     def GetDef(self, usr):
         dbIdList = []
         if self.m_isOnlyMainCompileUnit == False:
-            dbIdList = self.GetDbIdListByUsr(usr)
+            dbIdList = self.GetDbIdListByDefUsr(usr)
         else:
             rv = self.GetMainDb().get(self.m_dbId + TABLE_NAME_CUFILES)
             assert rv != None
@@ -455,7 +479,7 @@ class QueryHandlerRef(HandlerBase):
 
     def GetAllRefs(self, usr):
         startTime = time.time()
-        dbIdList = self.GetDbIdListByUsr(usr)
+        dbIdList = self.GetDbIdListByRefUsr(usr)
         endTime = time.time()
         DEBUG_PRINT("get all CUs: TIME: %s ms"%(str((endTime-startTime)*1000.0)))
         prevTime = 0
@@ -564,7 +588,7 @@ class QueryHandlerOverrideN(HandlerBase):
             self.GetAllOverriders(usr)
 
     def GetAllOverriders(self, usr):
-        dbIdList = self.GetDbIdListByUsr(usr)
+        dbIdList = self.GetDbIdListByDefUsr(usr)
         DEBUG_PRINT("dbIdList: " + str(dbIdList))
         resultList = []
         for dbId in dbIdList:
@@ -613,10 +637,10 @@ class QueryHandlerName(HandlerBase):
             return None
         for usrDb in self.mUsrDbList:
             for l in usrDb:
-                cre = re.compile(TABLE_NAME_USR2GLOBAL_FILE_ID + r'\\|.*' + self.mName)
+                cre = re.compile(TABLE_NAME_REF_USR2GLOBAL_FILE_ID + r'\\|.*' + self.mName)
                 if cre.search(l[0]):
                     (tbl, usr) = l[0].split("|")
-                    dbIdList = self.GetDbIdListByUsr(usr)
+                    dbIdList = self.GetDbIdListByDefUsr(usr)
                     for dbId in dbIdList:
                         db = self.OpenDbById(dbId)
                         q = TABLE_NAME_USR2DEF + "|" + usr

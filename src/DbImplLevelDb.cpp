@@ -16,7 +16,7 @@
 #include <boost/algorithm/string.hpp>
 
 #define TABLE_NAME_POS2USR_ID "A"
-#define TABLE_NAME_USR2GLOBAL_FILE_ID "B"
+#define TABLE_NAME_REF_USR2GLOBAL_FILE_ID "B"
 #define TABLE_NAME_ID2NAME "C"
 #define TABLE_NAME_USR_ID2DECL "D"
 #define TABLE_NAME_USR2DEF "E"
@@ -30,10 +30,12 @@
 #define TABLE_NAME_USR2OVERRIDEE "M"
 #define TABLE_NAME_USR2OVERRIDER "N"
 #define TABLE_NAME_FILE_LIST "O"
-#define TABLE_NAME_USR2GLOBAL_FILE_ID2 "P"
+#define TABLE_NAME_REF_USR2GLOBAL_FILE_ID2 "P"
 #define TABLE_NAME_BUILD_INFO "Q"
 #define TABLE_NAME_USR2ID "R"
 #define TABLE_NAME_CUFILES "S"
+#define TABLE_NAME_DEF_USR2GLOBAL_FILE_ID "T"
+#define TABLE_NAME_DEF_USR2GLOBAL_FILE_ID2 "U"
 
 #define USE_BASE64
 //#define USE_USR2FILE_TABLE2
@@ -62,7 +64,8 @@ const int k_usrDbDirNum = 4;
 
 static string s_compileUnitId;
 static map<string, FileContext> s_fileContextMap;
-static SiMap s_usrMap;
+static SiMap s_refUsrMap;
+static SiMap s_defUsrMap;
 static const int k_timerNum = 128;
 #ifdef TIMER
 boost::timer::cpu_timer* s_timers;
@@ -386,7 +389,7 @@ int DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, c
     //s_timers[TIMER_INS_REF_1].resume();
     int fileId = fctx.m_fileIdTbl.GetId(filename);
     int nameId = fctx.m_nameIdTbl.GetId(name);
-    s_usrMap[usr] = 1;
+    s_refUsrMap[usr] = 1;
     int usrId = fctx.m_usrIdTbl.GetId(usr);
     encItemInfo(gCharBuff0, sizeof(gCharBuff0), nameId, fileId, line, col);
     {
@@ -426,10 +429,10 @@ int DbImplLevelDb::insert_decl_value(const string& usr, const string& filename, 
     timerResume(TIMER_INS_DECL);
     int fileId = fctx.m_fileIdTbl.GetId(filename);
     int nameId = fctx.m_nameIdTbl.GetId(name);
-    s_usrMap[usr] = 1;
     int usrId = fctx.m_usrIdTbl.GetId(usr);
     leveldb::WriteBatch& wb = fctx.m_wb;
     if(isDef) {
+        s_defUsrMap[usr] = 1;
         // usrId -> def info
         setKeyValueUsr2Def(gCharBuff0, gCharBuff1, sizeof(gCharBuff0), nameId, fileId, line, col, usr);
         fctx.m_declList.push_back(SsPair(gCharBuff0, gCharBuff1));
@@ -607,11 +610,23 @@ int DbImplLevelDb::fin(void)
                 return -1;
             }
         }
-        map<string, SiMap> usrFidMap;
-        BOOST_FOREACH(const SiPair& itr, s_usrMap) {
+
+        map<string, SiMap> refUsrFidMap; // store the file IDs a USR found in
+        BOOST_FOREACH(const SiPair& itr, s_refUsrMap) {
             const string& usr = itr.first;
             if(!usr.empty()) {
-                SiMap& fidMap = usrFidMap[usr];
+                SiMap& fidMap = refUsrFidMap[usr];
+                BOOST_FOREACH(const SiPair& itr_file_list, s_usr2fileMap[usr]) {
+                    fidMap[s_fileContextMap[itr_file_list.first].m_dbId] = 0;
+                }
+            }
+        }
+
+        map<string, SiMap> defUsrFidMap;
+        BOOST_FOREACH(const SiPair& itr, s_defUsrMap) {
+            const string& usr = itr.first;
+            if(!usr.empty()) {
+                SiMap& fidMap = defUsrFidMap[usr];
                 BOOST_FOREACH(const SiPair& itr_file_list, s_usr2fileMap[usr]) {
                     fidMap[s_fileContextMap[itr_file_list.first].m_dbId] = 0;
                 }
@@ -635,7 +650,7 @@ int DbImplLevelDb::fin(void)
 
         // lookup map
         int count = 0;
-        BOOST_FOREACH(const SiPair& itr, s_usrMap) {
+        BOOST_FOREACH(const SiPair& itr, s_refUsrMap) {
             const string& usr = itr.first;
             bool isGlobal = 0 == strncmp(usr.c_str(), "c:@", 3);
             bool isMacro = 0 == strncmp(usr.c_str(), "c:macro", 7);
@@ -644,15 +659,15 @@ int DbImplLevelDb::fin(void)
 #else
             if(!usr.empty() && (isGlobal || isMacro)) {
 #endif
-                SiMap& file_list_map = usrFidMap[usr];
+                SiMap& file_list_map = refUsrFidMap[usr];
 #ifdef USE_USR2FILE_TABLE2
                 BOOST_FOREACH(const SiPair& itr_str, file_list_map) {
-                    wb_usrdb.Put(TABLE_NAME_USR2GLOBAL_FILE_ID2 "|" + usr + "|" + itr_str.first, "1");
+                    wb_usrdb.Put(TABLE_NAME_REF_USR2GLOBAL_FILE_ID2 "|" + usr + "|" + itr_str.first, "1");
                 }
 #else
                 // check if already registered
                 string value;
-                int rv = dbRead(value, dbUsrDb, TABLE_NAME_USR2GLOBAL_FILE_ID "|" + usr);
+                int rv = dbRead(value, dbUsrDb, TABLE_NAME_REF_USR2GLOBAL_FILE_ID "|" + usr);
                 if(rv == 0) {
                     const string delim = ",";
                     list<string> old_list;
@@ -666,7 +681,45 @@ int DbImplLevelDb::fin(void)
                     file_list_string.append(itr_str.first+",");
                 }
                 file_list_string = file_list_string.substr(0, file_list_string.size()-1);
-                wb_usrdb.Put(TABLE_NAME_USR2GLOBAL_FILE_ID "|" + usr, file_list_string);
+                wb_usrdb.Put(TABLE_NAME_REF_USR2GLOBAL_FILE_ID "|" + usr, file_list_string);
+#endif
+
+                count++;
+            }
+        }
+
+        BOOST_FOREACH(const SiPair& itr, s_defUsrMap) {
+            const string& usr = itr.first;
+            bool isGlobal = 0 == strncmp(usr.c_str(), "c:@", 3);
+            bool isMacro = 0 == strncmp(usr.c_str(), "c:macro", 7);
+#if 1
+            if(usr != "") {
+#else
+            if(!usr.empty() && (isGlobal || isMacro)) {
+#endif
+                SiMap& file_list_map = defUsrFidMap[usr];
+#ifdef USE_USR2FILE_TABLE2
+                BOOST_FOREACH(const SiPair& itr_str, file_list_map) {
+                    wb_usrdb.Put(TABLE_NAME_DEF_USR2GLOBAL_FILE_ID2 "|" + usr + "|" + itr_str.first, "1");
+                }
+#else
+                // check if already registered
+                string value;
+                int rv = dbRead(value, dbUsrDb, TABLE_NAME_DEF_USR2GLOBAL_FILE_ID "|" + usr);
+                if(rv == 0) {
+                    const string delim = ",";
+                    list<string> old_list;
+                    boost::split(old_list, value, boost::is_any_of(delim));
+                    BOOST_FOREACH(const string& s, old_list) {
+                        file_list_map[s] = 0;
+                    }
+                }
+                string file_list_string = "";
+                BOOST_FOREACH(const SiPair& itr_str, file_list_map) {
+                    file_list_string.append(itr_str.first+",");
+                }
+                file_list_string = file_list_string.substr(0, file_list_string.size()-1);
+                wb_usrdb.Put(TABLE_NAME_DEF_USR2GLOBAL_FILE_ID "|" + usr, file_list_string);
 #endif
 
                 count++;

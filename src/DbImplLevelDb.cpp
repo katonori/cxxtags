@@ -40,7 +40,7 @@
 #define USE_BASE64
 //#define USE_USR2FILE_TABLE2
 #define TIMER
-#define DB_NUM 32
+#define DB_NUM 1
 
 #ifdef TIMER
 #include <boost/timer/timer.hpp>

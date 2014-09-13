@@ -119,6 +119,7 @@ static int dbTryOpen(leveldb::DB*& db, string dir)
     time_t start;
     time(&start);
     leveldb::Status st;
+    time_t now;
     while(1) {
         timerStart(TIMER_USR_DB3);
         st= leveldb::DB::Open(s_defaultOptions, dir, &db);
@@ -126,7 +127,6 @@ static int dbTryOpen(leveldb::DB*& db, string dir)
         if(st.ok() || !st.IsIOError()) {
             break;
         }
-        time_t now;
         time(&now);
         if(now - start > 10) {
             // timeout
@@ -136,7 +136,7 @@ static int dbTryOpen(leveldb::DB*& db, string dir)
         usleep(1000);
     }
     if (!st.ok()) {
-        fprintf(stderr, "Open fail.: %s\n", st.ToString().c_str());
+        fprintf(stderr, "Open fail.: wait time %ld sec: %s\n", now - start, st.ToString().c_str());
         return -1;
     }
     return 0;
@@ -430,7 +430,6 @@ int DbImplLevelDb::insert_decl_value(const string& usr, const string& filename, 
     int fileId = fctx.m_fileIdTbl.GetId(filename);
     int nameId = fctx.m_nameIdTbl.GetId(name);
     int usrId = fctx.m_usrIdTbl.GetId(usr);
-    leveldb::WriteBatch& wb = fctx.m_wb;
     if(isDef) {
         s_defUsrMap[usr] = 1;
         // usrId -> def info
@@ -520,7 +519,7 @@ int DbImplLevelDb::addIdList(leveldb::WriteBatch* db, const SiMap& inMap, const 
     return 0;
 }
 
-int addFilesToFileList(leveldb::DB* db, leveldb::WriteBatch* wb)
+int addFilesToFileList(leveldb::DB* db)
 {
     char buf[1024];
     int startId = 0;
@@ -637,7 +636,7 @@ int DbImplLevelDb::fin(void)
             printf("ERROR: fin: common db open: %s\n", s_commonDbDir.c_str());
             return -1;
         }
-        addFilesToFileList(db_common, &wb_common);
+        addFilesToFileList(db_common);
         dbFlush(db_common, &wb_common);
         dbClose(db_common);
     }
@@ -725,6 +724,7 @@ int DbImplLevelDb::fin(void)
             dbList[i] = NULL;
         }
         leveldb::WriteBatch wbList[DB_NUM];
+        char dbDirtyFlags[DB_NUM] = {0};
 
         typedef pair<string, FileContext> FcPair;
         BOOST_FOREACH(const FcPair& itr, s_fileContextMap) {
@@ -741,9 +741,6 @@ int DbImplLevelDb::fin(void)
             char* errp = NULL;
             int id = strtol(dbId.c_str(), &errp, 16);
             int idRem = id % DB_NUM;
-            assert(*errp == '\0');
-            snprintf(gCharBuff0, sizeof(gCharBuff0), "%x", idRem);
-            string dbDir = string(gCharBuff0);
 
             // check if already exists
             //if(boost::filesystem::exists(s_dbDir + "/" + dbDir)) {
@@ -751,15 +748,8 @@ int DbImplLevelDb::fin(void)
                 continue;
             }
 
-            leveldb::DB*& db = dbList[idRem];
             leveldb::WriteBatch& wb = wbList[idRem];
-            if(db == NULL) {
-                int rv = dbTryOpen(db, s_dbDir + "/" + dbDir);
-                if(rv < 0) {
-                    printf("ERROR: fin: open: %s\n", s_commonDbDir.c_str());
-                    return -1;
-                }
-            }
+            dbDirtyFlags[idRem] = 1;
 
             // ref
             BOOST_FOREACH(const SsPair& itr, fctx.m_refList) {
@@ -842,9 +832,17 @@ int DbImplLevelDb::fin(void)
             wb.Put(dbId + TABLE_NAME_BUILD_INFO, s_buildOpt);
         }
         for(int i = 0; i < DB_NUM; i++) {
-            if(dbList[i]) {
-                dbFlush(dbList[i], &wbList[i]);
-                dbClose(dbList[i]);
+            if(dbDirtyFlags[i]) {
+                leveldb::DB* db;
+                snprintf(gCharBuff0, sizeof(gCharBuff0), "%x", i);
+                string dbDir = string(gCharBuff0);
+                int rv = dbTryOpen(db, s_dbDir + "/" + dbDir);
+                if(rv < 0) {
+                    printf("ERROR: fin: open: %s\n", s_commonDbDir.c_str());
+                    return -1;
+                }
+                dbFlush(db, &wbList[i]);
+                dbClose(db);
             }
         }
     }

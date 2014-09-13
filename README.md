@@ -153,3 +153,7 @@ perform a query to the database.
 * item\_name: Specify the name of the item that you want to inspect.  
 * line\_no: line number.
 * column\_no: column number.
+
+Note
+------------------------
+For vim users, the wrapper plugin of cxxtags [cxxtags-vim](https://github.com/katonori/cxxtags-vim) is available.

@@ -247,6 +247,7 @@ class CmdRunner():
             #cmd = cmd.replace('"', '\\"')
             cmdList.append(cmd)
 
+        total = len(cmdList)
         process_list = [None]*self.m_numProc
         q = multiprocessing.Queue()
         i = 0
@@ -256,10 +257,10 @@ class CmdRunner():
             if process_list[i] == None:
                 if len(cmdList) != 0:
                     cmd = cmdList.pop(0)
-                    print "#" + str(self.m_count) + ":" + cmd
+                    self.m_count += 1
+                    print "#" + str(self.m_count) + "/" + str(total) + ":" + cmd
                     process_list[i] = multiprocessing.Process(target=self.RunOne, args=(q, cmd))
                     process_list[i].start()
-                    self.m_count += 1
                     #print "start: " + cmd
             elif False == process_list[i].is_alive():
                 process_list[i].join()

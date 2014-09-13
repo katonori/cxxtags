@@ -242,7 +242,7 @@ class CmdRunner():
         cmdList = []
         for r in result:
             dirname, defs, incs, filename = r
-            cmd = "cd \"" + dirname + "\" && " + CXXTAGS + " " + self.m_options + " \"" + parser.GetDbDir() + "\" \"" + filename + "\" " + defs + " " + incs + self.m_buildOptions
+            cmd = "cd \"" + dirname + "\" && " + CXXTAGS + " " + self.m_options + " \"" + parser.GetDbDir() + "\" \"" + filename + "\" -- " + defs + " " + incs + self.m_buildOptions
             #print cmd
             #cmd = cmd.replace('"', '\\"')
             cmdList.append(cmd)

@@ -88,6 +88,11 @@ class Db:
                 return self.m_instance.Get(key)
         except KeyError as e:
             return None
+    def getItr(self):
+        if USE_PLYVEL:
+            return self.m_instance
+        else:
+            return self.m_instance.RangeIter()
     def close(self):
         if USE_PLYVEL:
             return self.m_instance.close()
@@ -145,6 +150,7 @@ class HandlerBase:
 
     def InitUsrDb(self):
         dbList = os.listdir(self.mDbDir + "/usr_db")
+        DEBUG_PRINT("usrDbList: " + str(dbList))
         for dir in dbList:
             if re.match("^[0-9]+$", dir):
                 db = Db(self.mDbDir + "/usr_db/" + dir)
@@ -277,12 +283,19 @@ class HandlerBase:
         else:
             for db in self.mUsrDbList:
                 res = db.get(TABLE_NAME_REF_USR2GLOBAL_FILE_ID + "|" + usr)
+                DEBUG_PRINT("usrDb: " + str(res))
                 if res:
                     for fid in res.split(","):
                         dbIdList.append(fid)
-        if dbIdList == []:
-            dbIdList.append(self.m_dbId)
         return list(set(dbIdList))
+
+    def GetDbByDbId(self, dbId):
+        idx = int(dbId, 16)%DB_NUM
+        db = self.m_dbList[idx]
+        if db == None:
+            db = self.OpenDbById(dbId)
+            self.m_dbList[idx] = db
+        return db
 
     def CloseDb(self):
         if self.mFileListDb:
@@ -362,11 +375,7 @@ class QueryHandlerDecl(HandlerBase):
         result = []
         DEBUG_PRINT("usr: " + usr)
         for dbId in dbIdList:
-            idx = int(dbId, 16)%DB_NUM
-            db = self.m_dbList[idx]
-            if db == None:
-                db = self.OpenDbById(dbId)
-                self.m_dbList[idx] = db
+            db = self.GetDbByDbId(dbId)
             usrId = usr2id(db, dbId, usr)
             if usrId == None:
                 continue
@@ -429,11 +438,7 @@ class QueryHandlerDef(HandlerBase):
         DEBUG_PRINT("m_dbList: " + str(self.m_dbList))
         result = []
         for dbId in dbIdList:
-            idx = int(dbId, 16)%DB_NUM
-            db = self.m_dbList[idx]
-            if db == None:
-                db = self.OpenDbById(dbId)
-                self.m_dbList[idx] = db
+            db = self.GetDbByDbId(dbId)
             #q = self.m_dbId + TABLE_NAME_USR2DEF + "|%s"%(usr)
             q = dbId + TABLE_NAME_USR2DEF + "|%s"%(usr)
             DEBUG_PRINT("q: " + q)
@@ -480,6 +485,8 @@ class QueryHandlerRef(HandlerBase):
     def GetAllRefs(self, usr):
         startTime = time.time()
         dbIdList = self.GetDbIdListByRefUsr(usr)
+        if dbIdList == []:
+            dbIdList.append(self.m_dbId)
         endTime = time.time()
         DEBUG_PRINT("get all CUs: TIME: %s ms"%(str((endTime-startTime)*1000.0)))
         prevTime = 0
@@ -488,11 +495,7 @@ class QueryHandlerRef(HandlerBase):
             DEBUG_PRINT("ref interval: " + str((time.time()-prevTime)*1000))
             prevTime = time.time()
             resultList = []
-            idx = int(dbId, 16)%DB_NUM
-            db = self.m_dbList[idx]
-            if db == None:
-                db = self.OpenDbById(dbId)
-                self.m_dbList[idx] = db
+            db = self.GetDbByDbId(dbId)
             count = 0
             DEBUG_PRINT("time: open: " + dbId + ": " + str((time.time()-prevTime)*1000) + " ms")
             timeDb0 = time.time()
@@ -592,11 +595,7 @@ class QueryHandlerOverrideN(HandlerBase):
         DEBUG_PRINT("dbIdList: " + str(dbIdList))
         resultList = []
         for dbId in dbIdList:
-            idx = int(dbId, 16)%DB_NUM
-            db = self.m_dbList[idx]
-            if db == None:
-                db = self.OpenDbById(dbId)
-                self.m_dbList[idx] = db
+            db = self.GetDbByDbId(dbId)
             count = 0
             q = dbId + TABLE_NAME_USR2OVERRIDEE + "|" + str(usr)
             DEBUG_PRINT("q: " + q)
@@ -629,39 +628,42 @@ class QueryHandlerName(HandlerBase):
     # Handle Rquest for infomation about name
     #
     mName = 0
-    def DoQuery(self):
+    def CheckUsr(self, cre, table, l):
         resultList = []
+        if cre.search(l[0]):
+            (tbl, usr) = l[0].split("|")
+            DEBUG_PRINT("usr: " + usr)
+            dbIdList = self.GetDbIdListByRefUsr(usr)
+            DEBUG_PRINT("dbIdList: " + str(dbIdList))
+            for dbId in dbIdList:
+                db = self.GetDbByDbId(dbId)
+                q = dbId + table + "|" + usr
+                val = db.get(q)
+                if val != None:
+                    for v in val.split(","):
+                        nameId, fileId, line, col = v.split("|")
+                        name, fn = GetResultString(db, dbId, nameId, fileId)
+                        if name != None and fn != None:
+                            resultList.append((name, fn, line, col))
+        return resultList
+
+    def DoQuery(self):
         # get compileunit
         if None == self.InitUsrDb():
             print "ERROR: DB oopen"
             return None
         for usrDb in self.mUsrDbList:
-            for l in usrDb:
+            for l in usrDb.getItr():
                 cre = re.compile(TABLE_NAME_REF_USR2GLOBAL_FILE_ID + r'\\|.*' + self.mName)
-                if cre.search(l[0]):
-                    (tbl, usr) = l[0].split("|")
-                    dbIdList = self.GetDbIdListByDefUsr(usr)
-                    for dbId in dbIdList:
-                        db = self.OpenDbById(dbId)
-                        q = TABLE_NAME_USR2DEF + "|" + usr
-                        val = db.get(q)
-                        if val != None:
-                            nameId, fileId, line, col = val.split("|")
-                            name, fn = GetResultString(db, nameId, fileId)
-                            if name != None and fn != None:
-                                resultList.append((name, fn, line, col))
-                        q = TABLE_NAME_USR2REF + "|" + usr
-                        val = db.get(q)
-                        if val != None:
-                            nameId, fileId, line, col = val.split("|")
-                            name, fn = GetResultString(db, nameId, fileId)
-                            if name != None and fn != None:
-                                resultList.append((name, fn, line, col))
-                        db.close()
-        resultList = list(set(resultList))
-        for i in set(resultList):
-            name, fn, line, col = i
-            self.PrintResult(name, fn, line, col)
+                resultList = self.CheckUsr(cre, TABLE_NAME_USR2REF, l)
+                for i in resultList:
+                    name, fn, line, col = i
+                    self.PrintResult(name, fn, line, col)
+                cre = re.compile(TABLE_NAME_DEF_USR2GLOBAL_FILE_ID + r'\\|.*' + self.mName)
+                resultList = self.CheckUsr(cre, TABLE_NAME_USR2DEF, l)
+                for i in resultList:
+                    name, fn, line, col = i
+                    self.PrintResult(name, fn, line, col)
 
     def parseArg(self, argv):
         global gPartialCompare
@@ -675,8 +677,6 @@ class QueryHandlerName(HandlerBase):
             sys.exit(1)
         name = args[0]
         fileName = ""
-        lineNo = -1
-        colNo = -1
         for opt, val in optlist:
             if opt == "-f":
                 fileName = val
@@ -684,11 +684,6 @@ class QueryHandlerName(HandlerBase):
                 gPartialCompare = 1
         self.mName = name
         self.m_srcFileName = fileName
-        self.m_lineNo = lineNo
-        self.m_colNo = colNo
-        if USE_BASE64 != 0:
-            self.m_lineNo = self.EncVal(self.m_lineNo)
-            self.m_colNo = self.EncVal(self.m_colNo)
 
 class QueryHandlerTable(HandlerBase):
     #

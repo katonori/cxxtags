@@ -1,29 +1,29 @@
 PROJ_ROOT = ../../
 include ../util/common.mk
 
-MERGER_OUT = db
+DB_DIR = db
 .PHONY: clean db
 .SUFFIXES: .db .cpp
 
-DB_FILES = ns0.db ns1.db main.db
+CXXTAGS = $(PROJ_ROOT)/bin/cxxtags 
 
-$(MERGER_OUT):
-	$(CXXTAGS) -I./subdir db ns0.cpp
-	$(CXXTAGS) -I. -I./subdir db subdir/ns1.cpp
-	$(CXXTAGS) -I./subdir db main.cpp
-test: check clean $(MERGER_OUT)
-	./test.py $(MERGER_OUT)
-	#$(CXXTAGS_DB_MANAGER) rebuild $(MERGER_OUT) ns0.h
-	#./test.py $(MERGER_OUT)
+$(DB_DIR):
+	$(CXXTAGS) db ns0.cpp -- -I./subdir 
+	$(CXXTAGS) db subdir/ns1.cpp -- -I. -I./subdir
+	$(CXXTAGS) db main.cpp -- -I./subdir 
+test: check clean $(DB_DIR)
+	./test.py $(DB_DIR)
+	#$(CXXTAGS_DB_MANAGER) rebuild $(DB_DIR) ns0.h
+	#./test.py $(DB_DIR)
 ns1.db:
-	$(CXXTAGS) $(CXXTAGS_INCLUDES) $(MERGER_OUT) ./subdir/ns1.cpp -I. 
-html: $(MERGER_OUT)
-	$(DUMPER) $(MERGER_OUT)
+	$(CXXTAGS) $(DB_DIR) ./subdir/ns1.cpp -- $(CXXTAGS_INCLUDES) -I. 
+html: $(DB_DIR)
+	$(DUMPER) $(DB_DIR)
 prog:
 	$(CXX) -I./subdir -c ns0.cpp
 	$(CXX) -I./subdir -c subdir/ns1.cpp
 	$(CXX) -I./subdir -c main.cpp
 	$(CXX) ns0.o ns1.o main.o -o prog
 clean:
-	rm -rf $(MERGER_OUT) html $(DB_FILES)
+	rm -rf $(DB_DIR) html
 include ../util/common_rule.mk

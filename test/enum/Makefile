@@ -1,19 +1,18 @@
 PROJ_ROOT = ../../
 include ../util/common.mk
 
-MERGER_OUT = db
+DB_DIR = db
 .PHONY: clean check
 .SUFFIXES: .db .cpp
 
-DB_FILES = main.db
-
-$(MERGER_OUT): $(DB_FILES)
-test: check clean $(MERGER_OUT)
-	./test.py $(MERGER_OUT)
-html: $(MERGER_OUT)
-	$(DUMPER) $(MERGER_OUT)
+$(DB_DIR):
+	$(CXXTAGS) $(DB_DIR) main.cpp -- $(CXXTAGS_INCLUDES)
+test: check clean $(DB_DIR)
+	./test.py $(DB_DIR)
+html: $(DB_DIR)
+	$(DUMPER) $(DB_DIR)
 prog: main.cpp
 	$(CXX) main.cpp -o prog
 clean:
-	rm -rf html $(MERGER_OUT) $(DB_FILES)
+	rm -rf html $(DB_DIR)
 include ../util/common_rule.mk

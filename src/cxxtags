@@ -24,7 +24,7 @@ class CxxTagsCoreWrapper:
             None
 
     def printUsage(self):
-        print "usage: cxxtags [-e,--exclude exclude_list] input_file out_dir -- [compiler_arguments]"
+        print "usage: cxxtags [-e,--exclude exclude_list] out_dir input_file -- [compiler_arguments]"
 
     # parse arguments.
     def parseArgs(self, argv):

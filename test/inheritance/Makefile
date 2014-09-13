@@ -1,17 +1,17 @@
 PROJ_ROOT = ../../
 include ../util/common.mk
 
-MERGER_OUT = db
+DB_DIR = db
 .PHONY: clean check
 
-$(MERGER_OUT):
+$(DB_DIR):
 	$(CXXTAGS) db inhe.cpp
-test: check clean $(MERGER_OUT)
-	./test.py $(MERGER_OUT)
-html: $(MERGER_OUT)
-	$(DUMPER) $(MERGER_OUT)
+test: check clean $(DB_DIR)
+	./test.py $(DB_DIR)
+html: $(DB_DIR)
+	$(DUMPER) $(DB_DIR)
 prog: inhe.cpp
 	g++ inhe.cpp -o prog
 clean:
-	rm -rf html $(MERGER_OUT)
+	rm -rf html $(DB_DIR)
 include ../util/common_rule.mk

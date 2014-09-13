@@ -60,7 +60,7 @@ leveldb::WriteOptions s_defaultWoptions;
 leveldb::Options s_defaultOptions;
 string s_curDbDir;
 
-const int k_usrDbDirNum = 4;
+const int k_usrDbDirNum = 8;
 
 static string s_compileUnitId;
 static map<string, FileContext> s_fileContextMap;

@@ -40,10 +40,14 @@ How to build
 * Build the project using cmake
     * run cmake specifying LLVM\_HOME, LEVELDB\_HOME and BOOST\_HOME and run build
 
-                $ mkdir -p build && cd build
-                $ cmake -DLLVM_HOME=/pkg/llvm-3.2/ -DLEVELDB_HOME=/pkg/leveldb-1.15.0/ -DBOOST_HOME=/opt/local/ ../
-                $ make
-                $ make install
+```
+            $ mkdir -p build && cd build
+            $ cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -DLLVM_HOME=/pkg/llvm-3.2/ -DLEVELDB_HOME=/pkg/leveldb-1.15.0/ -DBOOST_HOME=/opt/local/ ../
+            $ make
+            $ make install
+            # build the tag database
+            $ ../../bin/cxxtags_run_proj compile_commands.json
+```
 
 * Install
     * copy the contents of ${CXXTAGS\_REPOSITORY\_ROOT}/bin directory to your installation path
@@ -72,29 +76,59 @@ For more information about the compilation database, see clang site[http://clang
 ### Run query to the database
 
 To retrieve information from the database use *cxxtags_query*. 
-For example, if you want to know where an item refered at line #8 and column #12 in file b.c is declared.
+For example, if you want to know where an item refered at line #30 and column #8 in file a.cpp is declared.
 invoke this command
 
-                $ cxxtags_query def _db b.c 8 12
+```
+    # buld the database if it's not done yet
+    $ cxxtags _db a.cpp
+    # do a query
+    $ cxxtags_query def _db a.cpp 30 8
+```
 
-If b.c is like this
+If a.cpp is like this
 
 
-         int func()
-         {
-             return 1;
-         }
+```C
+#include <iostream>
+namespace NS0 {
+    class C0 {
+        public:
+            void f0() { std::cout << "C0::f0\n"; }
+            void f1() { std::cout << "C0::f1\n"; }
+    };
+    class C1 {
+        public:
+            void f0() { std::cout << "C1::f0\n"; }
+            void f1() { std::cout << "C1::f1\n"; }
+    };
+};
+namespace NS1 {
+    class C0 {
+        public:
+            void f0() { std::cout << "C0::f0\n"; }
+            void f1() { std::cout << "C0::f1\n"; }
+    };
+    class C1 {
+        public:
+            void f0() { std::cout << "C1::f0\n"; }
+            void f1() { std::cout << "C1::f1\n"; }
+    };
+};
 
-         int main()
-         {
-             return func() + 1;
-         }
-
+int main()
+{
+    NS1::C0 c0;
+    c0.f1();
+    return 0;
+}
+```
 
 you will get output linke this.
 
-                func|/devel/cxxtags/src/b.c|1|5|int func()
-
+```
+    f1|/home/user0/devel/cxxtags/src/build/a.cpp|18|18|            void f1() { std::cout << "C0::f1\n"; }
+```
 
 Commands
 ------------------------

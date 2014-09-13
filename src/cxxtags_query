@@ -734,7 +734,7 @@ class QueryHandlerRebuild(HandlerBase):
         workDir, excludes, opt = rv.split("|")
         if excludes != "":
             excludes = " -e " + excludes
-        cmd = "cxxtags -f " + excludes + " " + self.mDbDir + " " + self.m_srcFileName + " " + opt
+        cmd = "cxxtags -f " + excludes + " " + self.mDbDir + " " + self.m_srcFileName + " -- " + opt
         self.CloseDb()
         (rv, out) = commands.getstatusoutput(cmd)
         print out

@@ -624,6 +624,7 @@ int writeUsrDb(const SiMap& usrMap, map<string, SiMap> usrFidMap, leveldb::DB* d
             s_usrCount++;
         }
     }
+    return 0;
 }
 
 int DbImplLevelDb::fin(void)

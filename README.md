@@ -38,10 +38,10 @@ How to build
         $ git clone https://github.com/katonori/cxxtags.git
 
 * Build the project using cmake
-    * run cmake specifying LLVM\_HOME, LEVELDB\_HOME and BOOST\_HOME and run build
+    * run cmake specifying LLVM\_HOME and LEVELDB\_HOME and run build
 
             $ mkdir -p build && cd build
-            $ cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -DLLVM_HOME=/pkg/llvm-3.2/ -DLEVELDB_HOME=/pkg/leveldb-1.15.0/ -DBOOST_HOME=/opt/local/ ../
+            $ cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -DLLVM_HOME=/pkg/llvm-3.2/ -DLEVELDB_HOME=/pkg/leveldb-1.15.0/ ../
             $ make
             $ make install
             # build the tag database

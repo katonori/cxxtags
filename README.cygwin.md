@@ -57,6 +57,6 @@ How to setup cxxtags on cygwin
         git clone https://github.com/katonori/cxxtags.git
         cd cxxtags/src/
         mkdir build && cd build
-        cmake -DLLVM_HOME=/usr/ -DLEVELDB_HOME=/usr/local/ -DBOOST_HOME=/usr/ ../
+        cmake -DLLVM_HOME=/usr/ -DLEVELDB_HOME=/usr/local/ ../
         make install
 

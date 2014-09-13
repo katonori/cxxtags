@@ -74,7 +74,7 @@ static inline std::string formatName(std::string name)
 static std::string getCursorSourceLocation(unsigned int& line, unsigned int& column, const CXCursor& Cursor) {
   CXSourceLocation Loc = clang_getCursorLocation(Cursor);
   CXFile file;
-  clang_getExpansionLocation(Loc, &file, &line, &column, 0);
+  clang_getSpellingLocation(Loc, &file, &line, &column, 0);
   CXString filename = clang_getFileName(file);
   if (!clang_getCString(filename)) {
     clang_disposeString(filename);

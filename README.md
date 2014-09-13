@@ -57,26 +57,17 @@ How to use
 
 **cxxtags** needs compile options such as "-I" "-D" to retrieve correct informations.
 
-If you want to generate tags of cmake project, You can generate tags by steps below.
+If your project uses cmake, You can generate tag database by steps below.
 
 * Run cmake with `-DCMAKE_EXPORT_COMPILE_COMMANDS=1` option and build as usual. This generate a file "compile\_commands.json"
   which contains the list of built files and their build options and working directory.
-* Generate database of the project to directory "\_db" by cxxtags\_run\_proj
+* Generate the tag database of the project to directory "\_db" by cxxtags\_run\_proj
 
         $ cxxtags_run_proj _db compile_commands.json
 
-Or use wrapper scripts of compilers.
-g++.py and gcc.py included in this package are wrapper script of **cxxtags** and compilers.
-This generate tag database
-and run compilers. You can use this script like below
+Or you can also use [Bear](https://github.com/rizsotto/Bear.git) to generate the compialtion database.
 
-
-                $ env CXXTAGS_DB_DST=`pwd`/_db g++.py -O a.cpp
-                
-or
-
-                $ env CXXTAGS_DB_DST=`pwd`/_db make CXX=g++.py
-
+For more information about the compilation database, see clang site[http://clang.llvm.org/docs/JSONCompilationDatabase.html](http://clang.llvm.org/docs/JSONCompilationDatabase.html).
 
 ### Run query to the database
 

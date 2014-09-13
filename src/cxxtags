@@ -24,7 +24,7 @@ class CxxTagsCoreWrapper:
             None
 
     def printUsage(self):
-        print "usage: cxxtags [-e,--exclude exclude_list] input_file out_dir [compiler_arguments]"
+        print "usage: cxxtags [-e,--exclude exclude_list] input_file out_dir -- [compiler_arguments]"
 
     # parse arguments.
     def parseArgs(self, argv):
@@ -38,27 +38,31 @@ class CxxTagsCoreWrapper:
             arg = argv[i]
             if arg == "-e" or arg == "--exclude":
                 self.mExcludeList = argv[i+1]
-                del argv[i:i+2]
-            #elif arg == "-p" or arg == "--partial":
-            #    self.mOptCore += " -p"
-            #    del argv[i]
-            #elif arg == "-E" or arg == "--empty":
-            #    self.mOptCore += " -E"
-            #    self.mIsEmptyMode = True
-            #    del argv[i]
-            #elif arg == "-s" or arg == "--skel":
-            #    self.mOptCore += " -s"
-            #    del argv[i]
+                i += 2
             elif arg == "-v":
                 self.mIsVerbose = 1
-                del argv[i]
+                i += 1
             elif arg == "-f":
                 self.mOptCore += " -f"
-                del argv[i]
-            elif arg == "-o":
-                #self.mOutFile = argv[i+1]
-                #print "-o: "+self.mOutFile
-                del argv[i:i+2]
+                i += 1
+            elif arg == "--":
+                # end of cxxtags arguments
+                i += 1
+                break
+            else:
+                self.mInFileList.append(arg)
+                i += 1
+        return argv[i:]
+
+    def removeInputFileArg(self, argv):
+        srcList = []
+        i = 0
+        while True:
+            if i >= len(argv):
+                break
+            arg = argv[i]
+            if arg == "-o":
+                i += 2
             elif arg == "-D":
                 # ignore "-D xxx" options
                 # "-Dxxx" format is treated as another option.
@@ -70,12 +74,13 @@ class CxxTagsCoreWrapper:
             elif arg == "-x" or arg == "-MF" or arg == "-MT":
                 # ignore options that take an additional argument.
                 i += 2
-            elif re.search("^[^-]", arg):
-                self.mInFileList.append(argv[i])
-                #print "infile: "+in_file
-                del argv[i]
+            elif arg.startswith("-"):
+                i += 1
             else:
-                i+=1
+                srcList.append(arg)
+                i += 1
+        for a in srcList:
+            argv.remove(a)
         return argv
 
     def run(self):
@@ -85,10 +90,11 @@ class CxxTagsCoreWrapper:
 
         # process args
         argv = self.parseArgs(sys.argv[1:])
+        argv = self.removeInputFileArg(argv)
         if argv == None:
             self.printUsage()
             sys.exit(1)
-        if len(self.mInFileList) == 0:
+        if len(self.mInFileList) != 2:
             self.printUsage()
             sys.exit(1)
         out_dir = self.mInFileList[0]
@@ -96,9 +102,6 @@ class CxxTagsCoreWrapper:
         out_dir = os.path.abspath(out_dir)
         if out_dir != "" and not os.path.exists(out_dir):
             os.makedirs(out_dir)
-        if len(self.mInFileList) > 2:
-            print "ERROR: multiple file are specified"
-            sys.exit(1)
         opt = ""
 
         if not os.path.exists(in_file):
@@ -113,27 +116,6 @@ class CxxTagsCoreWrapper:
         #self.mTimeList.append(time.time())
         rv = os.system(cmd)
         #self.mTimeList.append(time.time())
-        self.updateBuildOptionDatabase(in_file, buildOpt)
-
-    def updateBuildOptionDatabase(self, inFile, opt):
-        configDir = os.environ['HOME'] + "/.cxxtags/"
-        # register build options
-        if not os.path.exists(configDir):
-            os.mkdir(configDir)
-        config = {}
-        try:
-            f = open(configDir + "/build_opt.json", "r")
-        except IOError as e:
-            None
-        else:
-            try:
-                config = json.load(f)
-            except ValueError as e:
-                None
-            f.close()
-        with open(configDir + "/build_opt.json", "w") as f:
-            config[inFile] = opt
-            f.writelines(json.dumps(config, indent=4))
 
 cxxtags = CxxTagsCoreWrapper()
 cxxtags.run()

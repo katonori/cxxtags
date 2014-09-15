@@ -12,7 +12,7 @@ Several IDEs(Visual Studio, Eclipse, Xcode, etc.) already have this tagging(inde
 built-in and not portable(even though Eclipse(CDT) is a open source project). **cxxtags** aims to be light-weight and
 portable source code tagging system.
 
-Old **cxxtags** version based on sqlite3 is moved to https://github.com/katonori/cxxtags_sqlite3
+Old **cxxtags** version based on sqlite3 is moved to [https://github.com/katonori/cxxtags\_sqlite3](https://github.com/katonori/cxxtags_sqlite3)
 
 Requirement
 ------------------------

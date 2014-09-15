@@ -652,7 +652,7 @@ class QueryHandlerName(HandlerBase):
                     for v in val.split(","):
                         nameId, fileId, line, col = v.split("|")
                         name, fn = GetResultString(db, dbId, nameId, fileId)
-                        if name != None and fn != None:
+                        if name != None and fn != None and (self.mName in name):
                             resultList.append((name, fn, line, col))
         return resultList
 

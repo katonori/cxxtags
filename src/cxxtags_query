@@ -43,7 +43,7 @@ TABLE_NAME_CUFILES = "S"
 TABLE_NAME_DEF_USR2GLOBAL_FILE_ID = "T"
 TABLE_NAME_DEF_USR2GLOBAL_FILE_ID2 = "U"
 
-DB_NUM = 1
+DB_NUM = 16
 
 gDebugMode = 0
 gVerboseMode = 0
@@ -152,7 +152,7 @@ class HandlerBase:
         dbList = os.listdir(self.mDbDir + "/usr_db")
         DEBUG_PRINT("usrDbList: " + str(dbList))
         for dir in dbList:
-            if re.match("^[0-9]+$", dir):
+            if re.match("^[0-9a-f]+$", dir):
                 db = Db(self.mDbDir + "/usr_db/" + dir)
                 if db == None:
                     print("ERROR: db open: " + str(dir))
@@ -830,27 +830,19 @@ def main():
                 db = Db(name)
                 tmp = None
                 res = ""
-                total = 0
                 for d in db.getItr():
-                    total += len(str(d))
                     f.write(str(d))
-                    if total > 1*1024*1024:
-                        break
                 print res
                 db.close()
             for i in os.listdir(dbDir):
-                if re.match("[0-9a-f]+", i):
+                if re.match("^[0-9a-f]+", i):
                     name = dbDir + "/" + i
                     print name
                     db = Db(name)
                     tmp = None
                     res = ""
-                    total = 0
                     for d in db.getItr():
-                        total += len(str(d))
                         f.write(str(d))
-                        if total > 1*1024*1024:
-                            break
                     print res
                     db.close()
     else:

@@ -270,6 +270,7 @@ class CmdRunner():
             if i >= self.m_numProc:
                 i = 0
             time.sleep(0.001)
+        commands.getstatusoutput("cxxtags_query dryrun " + parser.GetDbDir())
 
 """
 " start

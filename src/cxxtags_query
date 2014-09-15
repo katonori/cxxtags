@@ -77,9 +77,9 @@ class Db:
     m_instance = None
     def __init__(self, dirname):
         if USE_PLYVEL:
-            self.m_instance = plyvel.DB(dirname, bloom_filter_bits=10, lru_cache_size=(128<<20))
+            self.m_instance = plyvel.DB(dirname, bloom_filter_bits=10, lru_cache_size=(128<<20), create_if_missing=False)
         else:
-            self.m_instance = leveldb.LevelDB(dirname, block_cache_size=(128<<20))
+            self.m_instance = leveldb.LevelDB(dirname, block_cache_size=(128<<20), create_if_missing=False)
     def get(self, key):
         try:
             if USE_PLYVEL:
@@ -298,16 +298,25 @@ class HandlerBase:
         return db
 
     def CloseDb(self):
+        timeS = time.time()
         if self.mFileListDb:
             self.mFileListDb.close()
             self.mFileListDb = None
+        timeE = time.time()
+        DEBUG_PRINT("time: close: fileListDb: " + str(timeE - timeS))
+        timeS = time.time()
         for db in self.mUsrDbList:
             db.close()
         self.mUsrDbList = []
+        timeE = time.time()
+        DEBUG_PRINT("time: close: usrDb: " + str(timeE - timeS))
+        timeS = time.time()
         for db in self.m_dbList:
             if db:
                 db.close()
         self.m_dbList = [None]*DB_NUM
+        timeE = time.time()
+        DEBUG_PRINT("time: close: dbList: " + str(timeE - timeS))
 
     def PrintResult(self, name, fileName, line, col):
         if USE_BASE64 != 0:
@@ -746,100 +755,6 @@ class QueryHandlerRebuild(HandlerBase):
             sys.exit(1)
         self.m_srcFileName = os.path.abspath(argv[0])
 
-class QueryHandlerType(HandlerBase):
-    #
-    # Handle Rquest for infomation about type
-    #
-    def DoQuery(self):
-        usr = self.GetUsrId(self.m_srcFileName, self.m_lineNo, self.m_colNo)
-        DEBUG_PRINT("usr: " + str(usr))
-        if usr:
-            typeUsr = self.GetTypeUsr(usr, self.m_srcFileName, self.m_lineNo, self.m_colNo)
-            usrList = self.GetBaseClassInfo(typeUsr)
-            if usrList:
-                for i in usrList:
-                    baseUsr, accessibility = i
-                    self.GetTypeInfo(baseUsr, self.m_srcFileName, self.m_lineNo, self.m_colNo)
-            self.GetTypeInfo(typeUsr, self.m_srcFileName, self.m_lineNo, self.m_colNo)
-
-    def GetTypeInfo(self, typeUsr, fileName, lineNo, colNo):
-        done_dict = {}
-        if typeUsr != "":
-            try:
-                db = cxxtags_util.db_connect(self.mUsrDbName)
-                cur = db.cursor()
-                # get type name
-                q = 'SELECT name_list.name FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name=?'
-                cur.execute(q, (typeUsr,))
-                result = cur.fetchone()
-                typeName = ""
-                if result:
-                    typeName, = result
-                q = 'SELECT usr_list.name, name_list.name, file_list.name, decl.line, decl.col FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name LIKE ? ORDER BY decl.is_def'
-                cur.execute(q, (typeUsr+'%',))
-                result = cur.fetchall()
-            except sqlite3.Error, e:
-                print "ERROR: type info: ", e.args[0]
-                sys.exit(1)
-            finally:
-                db.close()
-            typeUsrPrint = typeUsr.replace("c:", "")
-            typeUsrPrint = typeUsrPrint.replace("@N@", "::")
-            typeUsrPrint = typeUsrPrint.replace("@C@", "::")
-            for i in result:
-                resultUsr, resultName, resultFileName, resultLine, resultCol = i
-                if done_dict.has_key(resultUsr):
-                    continue
-                done_dict[resultUsr] = 1
-                if resultUsr.find(typeUsr+"@FI@") != -1: # val
-                    resultUsr = resultUsr.replace(typeUsr+"@FI@", "")
-                    self.PrintResult(resultName, typeName, resultFileName, resultLine, resultCol, "value")
-                elif resultUsr.find(typeUsr+"@F@") != -1: # function
-                    resultUsr = resultUsr.replace(typeUsr+"@F@", "")
-                    resultUsr = re.sub('#.*$', "", resultUsr)
-                    self.PrintResult(resultName, typeName, resultFileName, resultLine, resultCol, "function")
-                elif resultUsr.find(typeUsr+"@") != -1:
-                    self.PrintResult(resultUsr, typeName, resultFileName, resultLine, resultCol, "other")
-
-    def GetTypeUsr(self, usr, fileName, lineNo, colNo):
-        try:
-            db = cxxtags_util.db_connect(self.mUsrDbName)
-            cur = db.cursor()
-            q = 'SELECT usr_list_type.name FROM '+ cxxtags_util.QUERY_JOINED_TABLE_DECL + ' WHERE usr_list.name=? LIMIT 1'
-            cur.execute(q, (usr,))
-            result = cur.fetchone()
-        except sqlite3.Error, e:
-            print "ERROR: GetTypeUsr: ", e.args[0]
-            sys.exit(1)
-        finally:
-            db.close()
-        typeUsr, = result
-        return typeUsr
-
-    def GetBaseClassInfo(self, usr):
-        try:
-            db = cxxtags_util.db_connect(self.mUsrDbName)
-            cur = db.cursor()
-            q = 'SELECT usr_list_base.name, base_class.accessibility FROM '+ cxxtags_util.QUERY_JOINED_TABLE_BASE_CLASS + ' WHERE usr_list.name=?'
-            cur.execute(q, (usr,))
-            result = cur.fetchall()
-        except sqlite3.Error, e:
-            print "ERROR: type info: ", e.args[0]
-            sys.exit(1)
-        finally:
-            db.close()
-        return result
-
-    def parseArg(self, argv):
-        if len(argv) != 3:
-            usage()
-            sys.exit(1)
-        self.m_srcFileName, self.m_lineNo, self.m_colNo = argv
-        self.m_srcFileName = os.path.abspath(self.m_srcFileName)
-
-    def PrintResult(self, name, typeName, fileName, line, col, kind):
-        print typeName + OUTPUT_DELIMITER + name + OUTPUT_DELIMITER + fileName + OUTPUT_DELIMITER + str(line) + OUTPUT_DELIMITER + str(col) + OUTPUT_DELIMITER + kind + OUTPUT_DELIMITER + cxxtags_util.get_line_from_file(fileName, line)
-
 def main():
     global gVerboseMode
     result = []
@@ -907,15 +822,39 @@ def main():
         handler.parseArg(argv[2:])
         handler.DoQuery()
         handler.CloseDb()
-        """
-    elif queryType == 'type': # get type info
-        handler = QueryHandlerType(dbDir)
-        handler.parseArg(argv[2:])
-        handler.DoQuery()
-        handler.CloseDb()
-        """
+    elif queryType == 'dryrun': #
+        with open(os.devnull,"w") as f:
+            for i in os.listdir(dbDir + "/usr_db"):
+                name = dbDir + "/usr_db/" + i
+                print name
+                db = Db(name)
+                tmp = None
+                res = ""
+                total = 0
+                for d in db.getItr():
+                    total += len(str(d))
+                    f.write(str(d))
+                    if total > 1*1024*1024:
+                        break
+                print res
+                db.close()
+            for i in os.listdir(dbDir):
+                if re.match("[0-9a-f]+", i):
+                    name = dbDir + "/" + i
+                    print name
+                    db = Db(name)
+                    tmp = None
+                    res = ""
+                    total = 0
+                    for d in db.getItr():
+                        total += len(str(d))
+                        f.write(str(d))
+                        if total > 1*1024*1024:
+                            break
+                    print res
+                    db.close()
     else:
-        print "ERROR: query type must be ref, decl, def, override, overriden, name, dump or type"
+        print "ERROR: query type must be ref, decl, def, override, overriden, name or dump"
         sys.exit(1)
 
 #######

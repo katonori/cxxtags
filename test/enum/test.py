@@ -341,6 +341,26 @@ q_list = [
 "decl "+db_dir+" "+cur_dir+"/main.cpp 108 9", #check
 "def "+db_dir+" "+cur_dir+"/main.cpp 108 9", #check
 "ref "+db_dir+" "+cur_dir+"/main.cpp 108 9", #check
+
+"decl "+db_dir+" "+cur_dir+"/main.cpp 111 6", #namedEnum
+"def "+db_dir+" "+cur_dir+"/main.cpp 111 6", #namedEnum
+"ref "+db_dir+" "+cur_dir+"/main.cpp 111 6", #namedEnum
+
+"decl "+db_dir+" "+cur_dir+"/main.cpp 112 5", #VAL2_0
+"def "+db_dir+" "+cur_dir+"/main.cpp 112 5", #VAL2_0
+"ref "+db_dir+" "+cur_dir+"/main.cpp 112 5", #VAL2_0
+
+"decl "+db_dir+" "+cur_dir+"/main.cpp 113 5", #VAL2_1
+"def "+db_dir+" "+cur_dir+"/main.cpp 113 5", #VAL2_1
+"ref "+db_dir+" "+cur_dir+"/main.cpp 113 5", #VAL2_1
+
+"decl "+db_dir+" "+cur_dir+"/main.cpp 115 1", #namedEnum
+"def "+db_dir+" "+cur_dir+"/main.cpp 115 1", #namedEnum
+"ref "+db_dir+" "+cur_dir+"/main.cpp 115 1", #namedEnum
+
+"decl "+db_dir+" "+cur_dir+"/main.cpp 115 15", #VAL2_1
+"def "+db_dir+" "+cur_dir+"/main.cpp 115 15", #VAL2_1
+"ref "+db_dir+" "+cur_dir+"/main.cpp 115 15", #VAL2_1
 ]
 
 a_list = [
@@ -675,16 +695,35 @@ a_list = [
 ["check|"+cur_dir+"/main.cpp|89|14|        void check()"],
 ["check|"+cur_dir+"/main.cpp|89|14|        void check()"],
 ['check|'+cur_dir+r'/main.cpp|108|9|    c11.check();'],
+# 111 6
+["namedEnum|"+cur_dir+"/main.cpp|111|6|enum namedEnum {"],
+["namedEnum|"+cur_dir+"/main.cpp|111|6|enum namedEnum {"],
+["namedEnum|"+cur_dir+"/main.cpp|115|1|namedEnum e = VAL2_1;"],
+# 112 5
+["VAL2_0|"+cur_dir+"/main.cpp|112|5|    VAL2_0,"],
+["VAL2_0|"+cur_dir+"/main.cpp|112|5|    VAL2_0,"],
+[""],
+# 113 5
+["VAL2_1|"+cur_dir+"/main.cpp|113|5|    VAL2_1,"],
+["VAL2_1|"+cur_dir+"/main.cpp|113|5|    VAL2_1,"],
+["VAL2_1|"+cur_dir+"/main.cpp|115|15|namedEnum e = VAL2_1;"],
+# 115 5
+["namedEnum|"+cur_dir+"/main.cpp|111|6|enum namedEnum {"],
+["namedEnum|"+cur_dir+"/main.cpp|111|6|enum namedEnum {"],
+["namedEnum|"+cur_dir+"/main.cpp|115|1|namedEnum e = VAL2_1;"],
+# 115 15
+["VAL2_1|"+cur_dir+"/main.cpp|113|5|    VAL2_1,"],
+["VAL2_1|"+cur_dir+"/main.cpp|113|5|    VAL2_1,"],
+["VAL2_1|"+cur_dir+"/main.cpp|115|15|namedEnum e = VAL2_1;"],
 ]
 
 err = 0
 i = 0
 for q in q_list:
-    rv = common.test_one(q, a_list[i])
+    err += common.test_one(q, a_list[i])
     i+=1
-if rv == 0:
+if err == 0:
     print "OK"
 else:
-    err += 1
     print "ERR: %d"%(err)
 exit(err)

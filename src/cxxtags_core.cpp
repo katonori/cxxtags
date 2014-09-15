@@ -60,6 +60,12 @@ static inline std::string formatName(std::string name)
     if(pos == 0) {
         name = name.substr(6, name.size()-6);
     }
+    else {
+        std::string::size_type pos = name.find("enum ");
+        if(pos == 0) {
+            name = name.substr(5, name.size()-5);
+        }
+    }
     pos = name.rfind(":");
     if(pos != std::string::npos) {
         name = name.substr(pos+1, name.size()-(pos+1));

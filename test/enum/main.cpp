@@ -107,3 +107,9 @@ int main()
     c10.check();
     c11.check();
 }
+
+enum namedEnum {
+    VAL2_0,
+    VAL2_1,
+};
+namedEnum e = VAL2_1;

@@ -123,6 +123,8 @@ you will get output linke this.
 
         f1|/home/user0/devel/cxxtags/src/build/a.cpp|18|18|            void f1() { std::cout << "C0::f1\n"; }
 
+For vim users, the wrapper plugin of *cxxtags* [cxxtags-vim](https://github.com/katonori/cxxtags-vim) is available.
+
 Commands
 ------------------------
 
@@ -154,6 +156,3 @@ perform a query to the database.
 * line\_no: line number.
 * column\_no: column number.
 
-Note
-------------------------
-For vim users, the wrapper plugin of cxxtags [cxxtags-vim](https://github.com/katonori/cxxtags-vim) is available.

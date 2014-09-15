@@ -5,7 +5,7 @@
 namespace cxxtags {
 class IIndexDb {
 public:
-    virtual int init(const std::string& db_file_name, const std::string& src_file_name, const std::string& excludeList, int isPartial, int isSkel, bool isRebuild, const char* curDir, int argc, const char** argv) = 0;
+    virtual int init(const std::string& db_file_name, const std::string& src_file_name, const std::string& excludeList, bool isRebuild, const char* curDir, int argc, const char** argv) = 0;
     virtual int fin(void) = 0;
     virtual int insert_ref_value(const std::string& usr, const std::string& filename, const std::string& name, int line, int col) = 0;
     virtual int insert_decl_value(const std::string& usr, const std::string& filename, const std::string& name, int line, int col, int isDef) = 0;

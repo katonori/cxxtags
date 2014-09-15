@@ -319,13 +319,27 @@ class HandlerBase:
         timeE = time.time()
         DEBUG_PRINT("time: close: dbList: " + str(timeE - timeS))
 
+    def getToken(self, filename, line, col):
+        # get token name from the file
+        token = ""
+        with open(filename, "r") as f:
+            lines = f.readlines()
+            l = lines[line-1][col-1:]
+            m = re.search("^([a-zA-Z-0-9_]+)", l)
+            if m:
+                token = m.group(1)
+        return token
+
     def PrintResult(self, name, fileName, line, col):
         if USE_BASE64 != 0:
             line = self.DecVal(line)
             col = self.DecVal(col)
         lineInt = int(line, 16)
         colInt = int(col, 16)
-        print str(name) + OUTPUT_DELIMITER + str(fileName) + OUTPUT_DELIMITER + str(lineInt) + OUTPUT_DELIMITER + str(colInt) + OUTPUT_DELIMITER + str(cxxtags_util.get_line_from_file(fileName, lineInt))
+        # get token from filenam
+        tokenName = self.getToken(fileName, lineInt, colInt)
+        if name == tokenName:
+            print str(name) + OUTPUT_DELIMITER + str(fileName) + OUTPUT_DELIMITER + str(lineInt) + OUTPUT_DELIMITER + str(colInt) + OUTPUT_DELIMITER + str(cxxtags_util.get_line_from_file(fileName, lineInt))
 
     def parseArg(self, argv):
         if len(argv) != 3:
@@ -339,13 +353,7 @@ class HandlerBase:
             self.m_lineNo = self.EncVal(self.m_lineNo)
             self.m_colNo = self.EncVal(self.m_colNo)
         # get token name from the file
-        with open(self.m_srcFileName, "r") as f:
-            lines = f.readlines()
-            l = lines[int(lineNo)-1][int(colNo)-1:]
-            m = re.search("^([a-zA-Z-0-9_]+)", l)
-            if m:
-                self.m_tokenName = m.group(1)
-            self.m_tokenName
+        self.m_tokenName = self.getToken(self.m_srcFileName, int(lineNo), int(colNo))
         DEBUG_PRINT("token: " + self.m_tokenName)
 
 def id2usr(db, dbId, id):

@@ -12,7 +12,7 @@
 namespace cxxtags {
 class DbImplLevelDb : public IIndexDb {
 public:
-    virtual int init(const std::string& out_dir, const std::string& src_file_name, const std::string& excludeList, int isPartial, int isSkel, bool isRebuild, const char* curDir, int argc, const char** argv);
+    virtual int init(const std::string& out_dir, const std::string& src_file_name, const std::string& excludeList, bool isRebuild, const char* curDir, int argc, const char** argv);
     virtual int fin(void);
     virtual int insert_ref_value(const std::string& usr, const std::string& filename, const std::string& name, int line, int col);
     virtual int insert_decl_value(const std::string& usr, const std::string& filename, const std::string& name, int line, int col, int isDef);

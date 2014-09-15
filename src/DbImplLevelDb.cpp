@@ -141,7 +141,7 @@ static int dbTryOpen(leveldb::DB*& db, string dir)
     return 0;
 }
 
-int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, const string& excludeList, int isPartial, int isSkel, bool isRebuild, const char* curDir, int argc, const char** argv)
+int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, const string& excludeList, bool isRebuild, const char* curDir, int argc, const char** argv)
 {
     leveldb::DB* dbCommon = NULL;
     s_defaultOptions.create_if_missing = true;

@@ -14,9 +14,6 @@
 #include <boost/filesystem/path.hpp>
 
 namespace cxxtags {
-static bool gIsPartial = false;
-static bool gIsEmpty = false;
-static bool gIsSkelton = false; // only USRs and file names are recorded.
 static bool gIsRebuild = false;
 static std::string gLastClassUsr = "";
 cxxtags::IIndexDb* gDb;
@@ -154,26 +151,10 @@ static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::strin
 {
     // get type information
     CXType curTypeOrig = clang_getCursorType(Cursor);
-    if(gIsSkelton) {
-        return;
-    }
     int isDef = clang_isCursorDefinition(Cursor);
     //
     // if the option '-p' is specified
     // 
-    if(gIsPartial) {
-        CXCursor parentCur = clang_getCursorSemanticParent(Cursor);
-        if(curTypeOrig.kind == CXType_LValueReference) {
-            curTypeOrig = clang_getPointeeType(curTypeOrig);
-        }
-        while(curTypeOrig.kind == CXType_Pointer) {
-            curTypeOrig = clang_getPointeeType(curTypeOrig);
-        }
-        // type is canonical && scope is function internal then skip
-        if(isBuiltinType(curTypeOrig.kind) && isLocalDecl(parentCur.kind)) {
-            return;
-        }
-    }
     // insert to database
     check_rv(gDb->insert_decl_value(cUsr, fileName, name, line, column, isDef));
 }
@@ -181,10 +162,6 @@ static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::strin
 // process declarations
 static inline void procFuncDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column)
 {
-    // get result type information
-    if(gIsSkelton) {
-        return;
-    }
     int isDef = clang_isCursorDefinition(Cursor);
     // insert to database
     check_rv(gDb->insert_decl_value(cUsr, fileName, name, line, column, isDef));
@@ -202,9 +179,6 @@ static inline void procCXXMethodDecl(const CXCursor& Cursor, const char* cUsr, s
         CXString cxRefUSR = clang_getCursorUSR(cursorOverridden[i]);
         const char *cRefUsr = clang_getCString(cxRefUSR);
         assert(cRefUsr);
-        if(gIsSkelton) {
-            return;
-        }
         int isDef = clang_isCursorDefinition(Cursor);
         // insert information about overrides to database
         check_rv(gDb->insert_overriden_value(cRefUsr, name, fileName, line, column, cUsr, isDef));
@@ -232,22 +206,12 @@ static inline void procRef(const CXCursor& Cursor, std::string name, std::string
         CXString cxRefUSR = clang_getCursorUSR(refCur);
         cUsr = clang_getCString(cxRefUSR);
         assert(cUsr);
-        if(gIsSkelton) {
-            return;
-        }
+#if 0
         //printf("ref: %s: %d, %d\n", cUsr, line, column);
         //
         // if the option '-p' is specified
         // 
-        if(gIsPartial) {
-            // skip if the scope is function internal
-            CXCursor parentCur = clang_getCursorSemanticParent(refCur);
-            if(isLocalDecl(parentCur.kind)) {
-                return;
-            }
-        }
         // refered location
-#if 0
         CXFile ref_file;
         CXSourceLocation ref_loc = clang_getCursorLocation(refCur);
         clang_getSpellingLocation(ref_loc, &ref_file, &ref_line, &ref_column, 0);
@@ -284,10 +248,6 @@ static inline void procCXXBaseClassInfo(const CXCursor& Cursor, std::string name
     cxBaseUsr = clang_getCursorUSR(refCur);
     cBaseUsr = clang_getCString(cxBaseUsr);
     int accessibility = clang_getCXXAccessSpecifier(Cursor);
-    // convert to ID
-    if(gIsSkelton) {
-        return;
-    }
     // insert to database
     check_rv(gDb->insert_base_class_value(gLastClassUsr, cBaseUsr, line, column, accessibility));
     clang_disposeString(cxBaseUsr);
@@ -516,7 +476,7 @@ static int perform_test_load_source(int argc, const char **argv,
   setCursorTypeAvailable(CXCursor_CXXBaseSpecifier);
 
   gDb = new cxxtags::DbImplLevelDb();
-  check_rv(gDb->init(out_dir, in_file_name, gExcludeListStr, gIsPartial, gIsSkelton, gIsRebuild, cur_dir, argc-1, argv+1));
+  check_rv(gDb->init(out_dir, in_file_name, gExcludeListStr, gIsRebuild, cur_dir, argc-1, argv+1));
 
   Idx = clang_createIndex(/* excludeDeclsFromPCH */0,
                           /* displayDiagnosics=*/0);
@@ -580,23 +540,8 @@ static int indexSource(int argc, const char **argv) {
                 argv+=2;
                 argc-=2;
             }
-            else if(strncmp(*argv, "-p", 2) == 0) {
-                gIsPartial = true;
-                argv++;
-                argc--;
-            }
-            else if(strncmp(*argv, "-s", 2) == 0) {
-                gIsSkelton = true;
-                argv++;
-                argc--;
-            }
             else if(strncmp(*argv, "-f", 2) == 0) {
                 gIsRebuild = true;
-                argv++;
-                argc--;
-            }
-            else if(strncmp(*argv, "-E", 2) == 0) {
-                gIsEmpty = true;
                 argv++;
                 argc--;
             }

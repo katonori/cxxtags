@@ -117,5 +117,6 @@ class CxxTagsCoreWrapper:
         rv = os.system(cmd)
         #self.mTimeList.append(time.time())
 
-cxxtags = CxxTagsCoreWrapper()
-cxxtags.run()
+if __name__ == "__main__":
+    cxxtags = CxxTagsCoreWrapper()
+    cxxtags.run()

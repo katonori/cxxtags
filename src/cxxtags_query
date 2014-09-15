@@ -116,6 +116,7 @@ class HandlerBase:
     m_lineNo = 0
     m_colNo = 0
     m_fileCount = 0
+    m_tokenName = ""
     m_dbList = [None]*DB_NUM
 
     def __init__(self, dbDir):
@@ -237,7 +238,7 @@ class HandlerBase:
         mainDb = self.GetMainDb()
         fid = file2id(mainDb, self.m_dbId, fileName)
         DEBUG_PRINT("fid: " + str(fid) + "," + fileName)
-        q = self.m_dbId + TABLE_NAME_POS2USR_ID + "|%s|%s|%s"%(fid, lineNo, colNo)
+        q = self.m_dbId + TABLE_NAME_POS2USR_ID + "|%s|%s|%s|%s"%(self.m_tokenName, fid, lineNo, colNo)
         DEBUG_PRINT("q: " + q)
         usr = mainDb.get(q)
         DEBUG_PRINT("usrId: " + str(usr))
@@ -326,6 +327,27 @@ class HandlerBase:
         colInt = int(col, 16)
         print str(name) + OUTPUT_DELIMITER + str(fileName) + OUTPUT_DELIMITER + str(lineInt) + OUTPUT_DELIMITER + str(colInt) + OUTPUT_DELIMITER + str(cxxtags_util.get_line_from_file(fileName, lineInt))
 
+    def parseArg(self, argv):
+        if len(argv) != 3:
+            usage()
+            sys.exit(1)
+        fn, lineNo, colNo = argv
+        self.m_srcFileName = os.path.abspath(fn)
+        self.m_lineNo = format(int(lineNo), 'x')
+        self.m_colNo = format(int(colNo), 'x')
+        if USE_BASE64 != 0:
+            self.m_lineNo = self.EncVal(self.m_lineNo)
+            self.m_colNo = self.EncVal(self.m_colNo)
+        # get token name from the file
+        with open(self.m_srcFileName, "r") as f:
+            lines = f.readlines()
+            l = lines[int(lineNo)-1][int(colNo)-1:]
+            m = re.search("^([a-zA-Z-0-9_]+)", l)
+            if m:
+                self.m_tokenName = m.group(1)
+            self.m_tokenName
+        DEBUG_PRINT("token: " + self.m_tokenName)
+
 def id2usr(db, dbId, id):
     result = db.get(dbId + TABLE_NAME_ID2USR + "|%s"%(str(id)))
     return result
@@ -400,20 +422,6 @@ class QueryHandlerDecl(HandlerBase):
                     return name, fileName, line, col
         return None
 
-
-    def parseArg(self, argv):
-        if len(argv) != 3:
-            usage()
-            sys.exit(1)
-        self.m_srcFileName, self.m_lineNo, self.m_colNo = argv
-        self.m_lineNo = format(int(self.m_lineNo), 'x')
-        self.m_colNo = format(int(self.m_colNo), 'x')
-        if USE_BASE64 != 0:
-            self.m_lineNo = self.EncVal(self.m_lineNo)
-            self.m_colNo = self.EncVal(self.m_colNo)
-        self.m_srcFileName = os.path.abspath(self.m_srcFileName)
-        DEBUG_PRINT("src: " + self.m_srcFileName)
-
 class QueryHandlerDef(HandlerBase):
     #
     # Handle Rquest for infomation about definition
@@ -460,18 +468,6 @@ class QueryHandlerDef(HandlerBase):
                 if fileName != None and name != None:
                     result.append((name, fileName, line, col))
         return result
-
-    def parseArg(self, argv):
-        if len(argv) != 3:
-            usage()
-            sys.exit(1)
-        self.m_srcFileName, self.m_lineNo, self.m_colNo = argv
-        self.m_lineNo = format(int(self.m_lineNo), 'x')
-        self.m_colNo = format(int(self.m_colNo), 'x')
-        if USE_BASE64 != 0:
-            self.m_lineNo = self.EncVal(self.m_lineNo)
-            self.m_colNo = self.EncVal(self.m_colNo)
-        self.m_srcFileName = os.path.abspath(self.m_srcFileName)
 
 class QueryHandlerRef(HandlerBase):
     #
@@ -524,18 +520,6 @@ class QueryHandlerRef(HandlerBase):
                 resultName, resultFileName, resultLine, resultCol = i
                 self.PrintResult(resultName, resultFileName, resultLine, resultCol)
 
-    def parseArg(self, argv):
-        if len(argv) != 3:
-            usage()
-            sys.exit(1)
-        self.m_srcFileName, self.m_lineNo, self.m_colNo = argv
-        self.m_srcFileName = os.path.abspath(self.m_srcFileName)
-        self.m_lineNo = format(int(self.m_lineNo), 'x')
-        self.m_colNo = format(int(self.m_colNo), 'x')
-        if USE_BASE64 != 0:
-            self.m_lineNo = self.EncVal(self.m_lineNo)
-            self.m_colNo = self.EncVal(self.m_colNo)
-
 class QueryHandlerOverride(HandlerBase):
     #
     # Handle Rquest for infomation about reference
@@ -571,17 +555,6 @@ class QueryHandlerOverride(HandlerBase):
         for i in resultList:
             resultName, resultFileName, resultLine, resultCol = i
             self.PrintResult(resultName, resultFileName, resultLine, resultCol)
-
-    def parseArg(self, argv):
-        if len(argv) != 3:
-            usage()
-            sys.exit(1)
-        self.m_srcFileName, self.m_lineNo, self.m_colNo = argv
-        self.m_lineNo = format(int(self.m_lineNo), 'x')
-        self.m_colNo = format(int(self.m_colNo), 'x')
-        if USE_BASE64 != 0:
-            self.m_lineNo = self.EncVal(self.m_lineNo)
-            self.m_colNo = self.EncVal(self.m_colNo)
 
 class QueryHandlerOverrideN(HandlerBase):
     #
@@ -620,17 +593,6 @@ class QueryHandlerOverrideN(HandlerBase):
         for i in set(resultList):
             name, fn, line, col = i
             self.PrintResult(name, fn, line, col)
-
-    def parseArg(self, argv):
-        if len(argv) != 3:
-            usage()
-            sys.exit(1)
-        self.m_srcFileName, self.m_lineNo, self.m_colNo = argv
-        self.m_lineNo = format(int(self.m_lineNo), 'x')
-        self.m_colNo = format(int(self.m_colNo), 'x')
-        if USE_BASE64 != 0:
-            self.m_lineNo = self.EncVal(self.m_lineNo)
-            self.m_colNo = self.EncVal(self.m_colNo)
 
 class QueryHandlerName(HandlerBase):
     #

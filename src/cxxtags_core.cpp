@@ -247,6 +247,7 @@ static inline void procRef(const CXCursor& Cursor, std::string name, std::string
             }
         }
         // refered location
+#if 0
         CXFile ref_file;
         CXSourceLocation ref_loc = clang_getCursorLocation(refCur);
         clang_getSpellingLocation(ref_loc, &ref_file, &ref_line, &ref_column, 0);
@@ -265,6 +266,7 @@ static inline void procRef(const CXCursor& Cursor, std::string name, std::string
                 return;
             }
         }
+#endif
         // insert to database.
         check_rv(gDb->insert_ref_value(cUsr, fileName, name, line, column));
         clang_disposeString(cxRefUSR);

@@ -24,13 +24,17 @@ class MKParser(ProjParserBase):
             resultList = []
             for l in f.readlines():
                 l = l.replace("\n", "")
-                m = re.search("Entering directory `(.+)'$", l)
+                m = re.search("Entering directory [`'](.+)'$", l)
                 if m:
                     dirname = m.group(1)
                 else:
                     l = re.sub("^\S+", "", l)
                     print l
-                    resultList.append((dirname, "", l, ""))
+                    m = re.search("(\S+\.(cpp|c|cxx))[\s$]", l)
+                    srcFile = ""
+                    if m:
+                        srcFile = m.group(1)
+                    resultList.append((dirname, "", l, srcFile))
         return resultList
 
 class CmakeJsonParser(ProjParserBase):

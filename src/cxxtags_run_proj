@@ -29,7 +29,7 @@ class MKParser(ProjParserBase):
                     dirname = m.group(1)
                 else:
                     l = re.sub("^\S+", "", l)
-                    print l
+                    #print l
                     m = re.search("(\S+\.(cpp|c|cxx|cc))[\s$]", l)
                     srcFile = ""
                     if m:
@@ -74,10 +74,10 @@ class VSParser(ProjParserBase):
             path = path.replace('\\', '/')
             path = re.sub("%\(.+\)", "", path)
             m = re.match("^([a-zA-Z]):/", path)
-            if m:
+            if m: # abspath
                 drive = m.group(1)
                 path = path.replace(drive + ":/", "/cygdrive/" + drive + "/")
-        return os.path.abspath(path)
+        return path
 
     def procNode(self, elem):
         tag = elem.tag
@@ -87,6 +87,7 @@ class VSParser(ProjParserBase):
             name = self.m_elemPrefix+"Platform"
             platform =  elem.find(name).text
             self.m_projConfigList.append(config + "|" + platform)
+            #print "config: " + config
         elif tag == (self.m_elemPrefix+"ItemDefinitionGroup"):
             """
             " build options
@@ -124,6 +125,7 @@ class VSParser(ProjParserBase):
                 src = e.get("Include")
                 if not re.match("^[a-zA-Z]:", src):
                     src = self.m_curProjDir + os.sep + e.get("Include")
+                print "src: " + src
                 self.m_sourceFiles.append(self.convPath(src))
 
     def Run(self):
@@ -157,8 +159,8 @@ class VSParser(ProjParserBase):
                 self.procNode(e)
 
             # dump
-            #print "projDir: " + self.m_curProjDir
-            print "project: " + prj
+            print "projDir: " + self.m_curProjDir
+            #print "project: " + prj
             #print self.m_curProjDir
             #print abspath
             # dump result
@@ -280,7 +282,9 @@ class CmdRunner():
             elif False == process_list[i].is_alive():
                 process_list[i].join()
                 process_list[i] = None
-                print q.get()
+                out = q.get()
+                if out != "":
+                    print out
             i += 1
             if i >= self.m_numProc:
                 i = 0

@@ -61,14 +61,18 @@ class VSParser(ProjParserBase):
     m_projConfigList = []
     m_itemDefinitionGroup = {}
     m_includePath = {}
-    m_souceFiles = []
+    m_sourceFiles = []
     m_isCygwin = os.sep != '\\'
     m_solDir = ""
     m_curProjDir = ""
 
+    def clear(self):
+        self.m_sourceFiles = []
+
     def convPath(self, path):
         if self.m_isCygwin:
             path = path.replace('\\', '/')
+            path = re.sub("%\(.+\)", "", path)
             m = re.match("^([a-zA-Z]):/", path)
             if m:
                 drive = m.group(1)
@@ -117,7 +121,10 @@ class VSParser(ProjParserBase):
             key = "./"+self.m_elemPrefix+"ClCompile"
             defElemList = elem.findall(key)
             for e in defElemList:
-                self.m_souceFiles.append(self.convPath(self.m_curProjDir + os.sep + e.get("Include")))
+                src = e.get("Include")
+                if not re.match("^[a-zA-Z]:", src):
+                    src = self.m_curProjDir + os.sep + e.get("Include")
+                self.m_sourceFiles.append(self.convPath(src))
 
     def Run(self):
         slnFile = self.m_filename
@@ -138,11 +145,9 @@ class VSParser(ProjParserBase):
         resultList = []
         # proc projects
         for prj in projList:
-            print prj
+            self.clear()
             abspath = self.convPath(self.m_solDir + os.sep + prj)
             self.m_curProjDir = os.path.dirname(abspath)
-            print self.m_curProjDir
-            print abspath
             tree = parse(abspath)
             elem = tree.getroot()
             m = re.search("({.+}).+", elem.tag)
@@ -153,25 +158,31 @@ class VSParser(ProjParserBase):
 
             # dump
             #print "projDir: " + self.m_curProjDir
+            print "project: " + prj
+            #print self.m_curProjDir
+            #print abspath
             # dump result
-            config = self.m_itemDefinitionGroup.keys()[0]
-            #print "config: " + config
-            # defs
-            #print "defs: " + self.m_itemDefinitionGroup[config]
-            defs = ""
-            for d in self.m_itemDefinitionGroup[config].split(";"):
-                if False == d.startswith("%"):
-                    defs += " -D" + d
-            #print "defs: " + defs
-            # includes
-            incs = ""
-            for i in self.m_includePath[config].split(";"):
-                if False == i.startswith("%"):
-                    incs += " -I" + i
-            #print "incs: " + incs
-            # dump result
-            for s in self.m_souceFiles:
-                resultList.append((self.m_curProjDir, defs, incs, s))
+            keys = self.m_itemDefinitionGroup.keys()
+            if len(keys) != 0:
+                config = keys[0]
+                #print "config: " + config
+                # defs
+                #print "defs: " + self.m_itemDefinitionGroup[config]
+                defs = ""
+                for d in self.m_itemDefinitionGroup[config].split(";"):
+                    if False == d.startswith("%"):
+                        defs += " -D" + d
+                #print "defs: " + defs
+                # includes
+                incs = ""
+                for i in self.m_includePath[config].split(";"):
+                    if False == i.startswith("%"):
+                        incs += " -I" + i
+                #print "incs: " + incs
+                # dump result
+                for s in self.m_sourceFiles:
+                    resultList.append((self.m_curProjDir, defs, incs, s))
+                    #print "line: " + prj + ":" + self.m_curProjDir + ":" + defs + ":" + incs + ":" + s
         return resultList
 
 class CmdRunner():

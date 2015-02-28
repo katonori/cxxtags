@@ -53,17 +53,22 @@ static inline std::string getName(const CXCursor& C)
     return name;
 }
 
+const char* keywordListWithSpace[] = {
+    "class ",
+    "enum ",
+    "struct ",
+    "union ",
+};
+
 static inline std::string formatName(std::string name)
 {
-
-    std::string::size_type pos = name.find("class ");
-    if(pos == 0) {
-        name = name.substr(6, name.size()-6);
-    }
-    else {
-        std::string::size_type pos = name.find("enum ");
+    std::string::size_type pos;
+    for(int i = 0; i < sizeof(keywordListWithSpace)/sizeof(keywordListWithSpace[0]); ++i) {
+        std::string kw = keywordListWithSpace[i];
+        pos = name.find(kw);
         if(pos == 0) {
-            name = name.substr(5, name.size()-5);
+            name = name.substr(kw.size(), name.size()-kw.size());
+            break;
         }
     }
     pos = name.rfind(":");

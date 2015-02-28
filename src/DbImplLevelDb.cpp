@@ -39,7 +39,7 @@
 
 #define USE_BASE64
 //#define USE_USR2FILE_TABLE2
-#define DB_NUM 16
+#define DB_NUM 1
 
 #ifdef TIMER
 #include <boost/timer/timer.hpp>
@@ -59,7 +59,7 @@ leveldb::WriteOptions s_defaultWoptions;
 leveldb::Options s_defaultOptions;
 string s_curDbDir;
 
-const int k_usrDbDirNum = 16;
+const int k_usrDbDirNum = 1;
 
 static string s_compileUnitId;
 static map<string, FileContext> s_fileContextMap;

@@ -38,7 +38,6 @@ class CxxTagsCoreWrapper:
         try:
             f = open(self.mConfigFile)
         except Exception as e:
-            raise e
             return
         jd = json.load(f)
         if jd.has_key("build_opt"):

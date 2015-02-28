@@ -20,6 +20,11 @@ target_link_libraries(cxxtags_core clang stdc++ leveldb snappy
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_TIMER_LIBRARY}
 )
+add_custom_command(
+    TARGET cxxtags_core
+    PRE_BUILD
+    COMMAND ${PROJECT_SOURCE_DIR}/cxxtags_query genconfig ${PROJECT_SOURCE_DIR}/config.h
+)
 
 if(CYGWIN)
     set(EXTENSION ".exe")

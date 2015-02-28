@@ -15,31 +15,7 @@
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string.hpp>
 
-#define TABLE_NAME_POS2USR_ID "A"
-#define TABLE_NAME_REF_USR2GLOBAL_FILE_ID "B"
-#define TABLE_NAME_ID2NAME "C"
-#define TABLE_NAME_USR_ID2DECL "D"
-#define TABLE_NAME_USR2DEF "E"
-#define TABLE_NAME_ID2USR "F"
-#define TABLE_NAME_GLOBAL_FILE_ID2FILE "G"
-#define TABLE_NAME_CU_NAME2ID "H"
-//#define TABLE_NAME_ID2CU "I"
-//#define TABLE_NAME_FID2CUID "J"
-#define TABLE_NAME_FILE2LOCAL_ID "K"
-#define TABLE_NAME_USR2REF "L"
-#define TABLE_NAME_USR2OVERRIDEE "M"
-#define TABLE_NAME_USR2OVERRIDER "N"
-#define TABLE_NAME_FILE_LIST "O"
-#define TABLE_NAME_REF_USR2GLOBAL_FILE_ID2 "P"
-#define TABLE_NAME_BUILD_INFO "Q"
-#define TABLE_NAME_USR2ID "R"
-#define TABLE_NAME_CUFILES "S"
-#define TABLE_NAME_DEF_USR2GLOBAL_FILE_ID "T"
-#define TABLE_NAME_DEF_USR2GLOBAL_FILE_ID2 "U"
-
-#define USE_BASE64
-//#define USE_USR2FILE_TABLE2
-#define DB_NUM 1
+#include "config.h"
 
 #ifdef TIMER
 #include <boost/timer/timer.hpp>
@@ -265,7 +241,7 @@ static inline int dbRead(string& value, leveldb::DB* db, const string& key)
     return 0;
 }
 
-#ifdef USE_BASE64
+#if (USE_BASE64 != 0)
 static char encoding_table[] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
                                 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
                                 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
@@ -325,7 +301,7 @@ static inline char* encodeDecl(char *buff, unsigned int nameId, unsigned int fil
 
 static inline void setKeyValuePos2Usr(char* buffKey, char* buffVal, int buffLen, const string& name, unsigned int fileId, unsigned int line, unsigned int col, unsigned int usrId)
 {
-#ifdef USE_BASE64
+#if (USE_BASE64 != 0)
     encodePos(buffKey, name, fileId, line, col);
     {
         char* p = (char*)buffVal;
@@ -340,7 +316,7 @@ static inline void setKeyValuePos2Usr(char* buffKey, char* buffVal, int buffLen,
 
 static inline void setKeyValueUsr2Decl(char* buffKey, char* buffVal, int buffLen, unsigned int nameId, unsigned int fileId, unsigned int line, unsigned int col, unsigned int usrId)
 {
-#ifdef USE_BASE64
+#if (USE_BASE64 != 0)
     {
         char* p = (char*)buffKey;
         strncpy(p, TABLE_NAME_USR_ID2DECL "|", 2);
@@ -361,7 +337,7 @@ static inline void setKeyValueUsr2Def(char* buffKey, char* buffVal, int buffLen,
     strncpy(p, TABLE_NAME_USR2DEF "|", 2);
     p+=2;
     strncpy(p, usr.c_str(), usr.size()+1);
-#ifdef USE_BASE64
+#if (USE_BASE64 != 0)
     encodeDecl(buffVal, nameId, fileId, line, col);
 #else
     // usrId -> def info
@@ -371,7 +347,7 @@ static inline void setKeyValueUsr2Def(char* buffKey, char* buffVal, int buffLen,
 
 static inline void encItemInfo(char* buff, int buffLen, unsigned int nameId, unsigned int fileId, unsigned int line, unsigned int col)
 {
-#ifdef USE_BASE64
+#if (USE_BASE64 != 0)
     encodeRef(buff, nameId, fileId, line, col);
 #else
     snprintf(buff, buffLen, "%x|%x|%x|%x", nameId, fileId, line, col);
@@ -476,7 +452,7 @@ int DbImplLevelDb::insert_overriden_value(const string& usr, const string& name,
         fctx.m_overrideeMap[usr] = string(gCharBuff1);
     }
 
-#ifdef USE_BASE64
+#if (USE_BASE64 != 0)
     {
         char* p = gCharBuff1;
         p = encodeVal(p, usrId);
@@ -508,7 +484,7 @@ int DbImplLevelDb::addIdList(leveldb::WriteBatch* db, const SiMap& inMap, const 
     string prefix = tableName + "|";
     // lookup map
     BOOST_FOREACH(const SiPair& itr, inMap) {
-#ifdef USE_BASE64
+#if (USE_BASE64 != 0)
         char* p = gCharBuff0;
         strncpy(p, prefix.c_str(), prefix.size());
         p += prefix.size();
@@ -792,7 +768,7 @@ int DbImplLevelDb::fin(void)
                 BOOST_FOREACH(const SiPair& itr, mapRef) {
                     string key(dbId + TABLE_NAME_USR2ID "|");
                     key.append(itr.first);
-#ifdef USE_BASE64
+#if (USE_BASE64 != 0)
                     {
                         char* p = gCharBuff1;
                         p = encodeVal(p, itr.second);
@@ -819,7 +795,7 @@ int DbImplLevelDb::fin(void)
             BOOST_FOREACH(const SiPair& itr, fileMap) {
                 string key(dbId + TABLE_NAME_FILE2LOCAL_ID "|");
                 key.append(itr.first);
-#ifdef USE_BASE64
+#if (USE_BASE64 != 0)
                 {
                     char* p = gCharBuff1;
                     p = encodeVal(p, itr.second);

@@ -8,6 +8,7 @@ OUTPUT_DELIMITER = '|'
 USE_BASE64 = 1
 USE_USR2FILE_TABLE2 = False
 USE_PLYVEL = False
+DB_NUM = 1
 
 import sys
 if USE_PLYVEL:
@@ -43,8 +44,6 @@ TABLE_NAME_CUFILES = "S"
 TABLE_NAME_DEF_USR2GLOBAL_FILE_ID = "T"
 TABLE_NAME_DEF_USR2GLOBAL_FILE_ID2 = "U"
 
-DB_NUM = 1
-
 gDebugMode = 0
 gVerboseMode = 0
 gPartialCompare = 0
@@ -67,6 +66,31 @@ DECODING_TABLE = {'A':0, 'B':1, 'C':2, 'D':3, 'E':4, 'F':5, 'G':6, 'H':7,
                   'o':40, 'p':41, 'q':42, 'r':43, 's':44, 't':45, 'u':46, 'v':47,
                   'w':48, 'x':49, 'y':50, 'z':51, '0':52, '1':53, '2':54, '3':55,
                   '4':56, '5':57, '6':58, '7':59, '8':60, '9':61, '+':62, '/':63}
+
+def genCConfig(filename):
+    with open(filename, "w") as f:
+        f.write('#define USE_BASE64 %d\n'%(USE_BASE64))
+        f.write('#define DB_NUM %d\n'%(DB_NUM))
+        f.write('#define TABLE_NAME_POS2USR_ID "%s"\n'%(TABLE_NAME_POS2USR_ID))
+        f.write('#define TABLE_NAME_REF_USR2GLOBAL_FILE_ID "%s"\n'%(TABLE_NAME_REF_USR2GLOBAL_FILE_ID))
+        f.write('#define TABLE_NAME_ID2NAME "%s"\n'%(TABLE_NAME_ID2NAME))
+        f.write('#define TABLE_NAME_USR_ID2DECL "%s"\n'%(TABLE_NAME_USR_ID2DECL))
+        f.write('#define TABLE_NAME_USR2DEF "%s"\n'%(TABLE_NAME_USR2DEF))
+        f.write('#define TABLE_NAME_ID2USR "%s"\n'%(TABLE_NAME_ID2USR))
+        f.write('#define TABLE_NAME_GLOBAL_FILE_ID2FILE "%s"\n'%(TABLE_NAME_GLOBAL_FILE_ID2FILE))
+        f.write('#define TABLE_NAME_CU_NAME2ID "%s"\n'%(TABLE_NAME_CU_NAME2ID))
+        f.write('#define TABLE_NAME_ID2CU "%s"\n'%(TABLE_NAME_ID2CU))
+        f.write('#define TABLE_NAME_FILE2LOCAL_ID "%s"\n'%(TABLE_NAME_FILE2LOCAL_ID))
+        f.write('#define TABLE_NAME_USR2REF "%s"\n'%(TABLE_NAME_USR2REF))
+        f.write('#define TABLE_NAME_USR2OVERRIDEE "%s"\n'%(TABLE_NAME_USR2OVERRIDEE))
+        f.write('#define TABLE_NAME_USR2OVERRIDER "%s"\n'%(TABLE_NAME_USR2OVERRIDER))
+        f.write('#define TABLE_NAME_FILE_LIST "%s"\n'%(TABLE_NAME_FILE_LIST))
+        f.write('#define TABLE_NAME_REF_USR2GLOBAL_FILE_ID2 "%s"\n'%(TABLE_NAME_REF_USR2GLOBAL_FILE_ID2))
+        f.write('#define TABLE_NAME_BUILD_INFO "%s"\n'%(TABLE_NAME_BUILD_INFO))
+        f.write('#define TABLE_NAME_USR2ID "%s"\n'%(TABLE_NAME_USR2ID))
+        f.write('#define TABLE_NAME_CUFILES "%s"\n'%(TABLE_NAME_CUFILES))
+        f.write('#define TABLE_NAME_DEF_USR2GLOBAL_FILE_ID "%s"\n'%(TABLE_NAME_DEF_USR2GLOBAL_FILE_ID))
+        f.write('#define TABLE_NAME_DEF_USR2GLOBAL_FILE_ID2 "%s"\n'%(TABLE_NAME_DEF_USR2GLOBAL_FILE_ID2))
 
 def DEBUG_PRINT(str):
     global gVerboseMode
@@ -745,7 +769,9 @@ def main():
 
     queryType = argv[0]
     dbDir = argv[1]
-    if queryType == 'ref': # get all references
+    if queryType == 'genconfig':
+        genCConfig(argv[1])
+    elif queryType == 'ref': # get all references
         handler = QueryHandlerRef(dbDir)
         handler.parseArg(argv[2:])
         handler.DoQuery()

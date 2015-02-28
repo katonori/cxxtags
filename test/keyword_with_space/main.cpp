@@ -11,6 +11,7 @@ union U0 {
     float c;
 };
 class C0 {
+public:
     int   a;
 };
 enum E0 {

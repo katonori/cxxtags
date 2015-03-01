@@ -31,7 +31,7 @@ TABLE_NAME_ID2USR = "F"
 TABLE_NAME_GLOBAL_FILE_ID2FILE = "G"
 TABLE_NAME_CU_NAME2ID = "H"
 TABLE_NAME_ID2CU = "I"
-#TABLE_NAME_FID2CUID = "J"
+TABLE_NAME_GLOBAL_FID2CUID = "J"
 TABLE_NAME_FILE2LOCAL_ID = "K"
 TABLE_NAME_USR2REF = "L"
 TABLE_NAME_USR2OVERRIDEE = "M"
@@ -80,6 +80,7 @@ def genCConfig(filename):
         f.write('#define TABLE_NAME_GLOBAL_FILE_ID2FILE "%s"\n'%(TABLE_NAME_GLOBAL_FILE_ID2FILE))
         f.write('#define TABLE_NAME_CU_NAME2ID "%s"\n'%(TABLE_NAME_CU_NAME2ID))
         f.write('#define TABLE_NAME_ID2CU "%s"\n'%(TABLE_NAME_ID2CU))
+        f.write('#define TABLE_NAME_GLOBAL_FID2CUID "%s"\n'%(TABLE_NAME_GLOBAL_FID2CUID))
         f.write('#define TABLE_NAME_FILE2LOCAL_ID "%s"\n'%(TABLE_NAME_FILE2LOCAL_ID))
         f.write('#define TABLE_NAME_USR2REF "%s"\n'%(TABLE_NAME_USR2REF))
         f.write('#define TABLE_NAME_USR2OVERRIDEE "%s"\n'%(TABLE_NAME_USR2OVERRIDEE))
@@ -136,10 +137,11 @@ class HandlerBase:
     mUsrDbName = None
     m_srcFileName = ""
     m_cuName = ""
-    m_dbId = 0
-    m_lineNo = 0
-    m_colNo = 0
-    m_fileCount = 0
+    m_dbId = None
+    m_cuGlobalFid = None
+    m_lineNo = None
+    m_colNo = None
+    m_fileCount = None
     m_tokenName = ""
     m_dbList = [None]*DB_NUM
 
@@ -159,6 +161,14 @@ class HandlerBase:
         count = self.mFileListDb.get("file_count")
         assert count != None
         self.m_fileCount = count
+
+    def GetDbIdByFilename(self, filename):
+        q = TABLE_NAME_FILE_LIST + "|" + filename
+        rv = self.mFileListDb.get(q)
+        if rv == None:
+            return None
+        cuId, dbId = rv.split(",")
+        return dbId
 
     def InitDbByFilename(self, filename):
         q = TABLE_NAME_FILE_LIST + "|" + filename
@@ -194,7 +204,10 @@ class HandlerBase:
         return self.mFileListDb.get(TABLE_NAME_ID2CU + "|" + cuId)
 
     def GetDbDirNo(self):
-        return int(self.m_dbId, 16)%DB_NUM
+        return self.CalcDbDirNo(self.m_dbId)
+
+    def CalcDbDirNo(self, dbId):
+        return int(dbId, 16)%DB_NUM
 
     def GetMainDb(self):
         return self.m_dbList[int(self.m_dbId, 16)%DB_NUM]
@@ -313,6 +326,17 @@ class HandlerBase:
                     for fid in res.split(","):
                         dbIdList.append(fid)
         return list(set(dbIdList))
+
+    def GetDbCuIdByDbId(self, dbId):
+        idx = int(dbId, 16)%DB_NUM
+        db = self.m_dbList[idx]
+        if db == None:
+            db = self.OpenDbById(dbId)
+            self.m_dbList[idx] = db
+        q = TABLE_NAME_GLOBAL_FID2CUID + "|" + dbId
+        DEBUG_PRINT("GetDbByDbId: " + q)
+        res = self.mFileListDb.get(TABLE_NAME_GLOBAL_FID2CUID + "|" + dbId)
+        return res
 
     def GetDbByDbId(self, dbId):
         idx = int(dbId, 16)%DB_NUM
@@ -608,7 +632,12 @@ class QueryHandlerOverrideN(HandlerBase):
         for dbId in dbIdList:
             db = self.GetDbByDbId(dbId)
             count = 0
-            q = dbId + TABLE_NAME_USR2OVERRIDEE + "|" + str(usr)
+            cuId = self.GetDbCuIdByDbId(dbId)
+            filename = self.Id2Cu(cuId)
+            DEBUG_PRINT("cuname: " + filename)
+            cuDbId = self.GetDbIdByFilename(filename)
+            DEBUG_PRINT("cuDbId: " + cuDbId)
+            q = cuDbId + TABLE_NAME_USR2OVERRIDEE + "|" + str(usr)
             DEBUG_PRINT("q: " + q)
             rv = db.get(q)
             DEBUG_PRINT("usr2overrirden: " + str(rv))
@@ -616,7 +645,7 @@ class QueryHandlerOverrideN(HandlerBase):
                 rvList = rv.split(",")
                 for rv in rvList:
                     nameId, fileId, line, col = rv.split("|")
-                    name, fn = GetResultString(db, dbId, nameId, fileId)
+                    name, fn = GetResultString(db, cuDbId, nameId, fileId)
                     if name != None and fn != None:
                         resultList.append((name, fn, line, col))
         for i in set(resultList):

@@ -184,6 +184,7 @@ int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, cons
             printf("ERROR: db info\n");
         }
         dbWrite(dbCommon, TABLE_NAME_CU_NAME2ID "|" + s_compileUnit, s_compileUnitId);
+        dbWrite(dbCommon, TABLE_NAME_ID2CU "|" + s_compileUnitId, s_compileUnit);
     }
     else if(rv == 0) {
         // alread exists
@@ -529,20 +530,21 @@ int addFilesToFileList(leveldb::DB* db)
         string fn = itr->first;
         string key = TABLE_NAME_FILE_LIST "|" + fn;
         int rv = dbRead(valStr, db, key);
+        string fid;
         if(rv < 0) {
             snprintf(buf, sizeof(buf), "%x", id);
-            dbWrite(db, key, s_compileUnitId + "," + string(buf));
-            s_fileContextMap[fn].m_dbId = buf;
+            fid = string(buf);
+            dbWrite(db, key, s_compileUnitId + "," + fid);
             id++;
         }
         else {
             // get fid
             size_t pos = valStr.find(",");
             assert(pos != string::npos);
-            string fid = valStr.substr(pos+1, valStr.size()-1);
-            // set fid to map
-            s_fileContextMap[fn].m_dbId = fid;
+            fid = valStr.substr(pos+1, valStr.size()-1);
         }
+        s_fileContextMap[fn].m_dbId = fid;
+        dbWrite(db, TABLE_NAME_GLOBAL_FID2CUID "|" + fid, s_compileUnitId);
     }
     snprintf(buf, sizeof(buf), "%x", id);
     dbWrite(db, keyFileCount, buf);

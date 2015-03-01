@@ -16,7 +16,6 @@
 
 #include "config.h"
 
-#define TIMER
 #ifdef TIMER
 #include <boost/timer/timer.hpp>
 #endif

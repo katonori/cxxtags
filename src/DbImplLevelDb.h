@@ -55,7 +55,6 @@ typedef std::map<std::string, std::string> SsMap;
 typedef std::pair<std::string, std::string> SsPair;
 typedef std::map<std::string, int> SiMap;
 typedef std::pair<std::string, int> SiPair;
-
 struct FileContext
 {
     IdTbl m_fileIdTbl;
@@ -70,6 +69,8 @@ struct FileContext
     leveldb::WriteBatch m_wb;
     leveldb::DB* m_db;
 };
+typedef std::map<std::string, FileContext> FcMap;
+typedef std::pair<std::string, FileContext> FcPair;
 
 };
 

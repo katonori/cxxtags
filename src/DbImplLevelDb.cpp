@@ -12,11 +12,11 @@
 #include <unistd.h>
 #include <boost/filesystem/path.hpp>
 #include <boost/filesystem/operations.hpp>
-#include <boost/foreach.hpp>
 #include <boost/algorithm/string.hpp>
 
 #include "config.h"
 
+#define TIMER
 #ifdef TIMER
 #include <boost/timer/timer.hpp>
 #endif
@@ -38,7 +38,7 @@ string s_curDbDir;
 const int k_usrDbDirNum = 1;
 
 static string s_compileUnitId;
-static map<string, FileContext> s_fileContextMap;
+static FcMap s_fileContextMap;
 static SiMap s_refUsrMap;
 static SiMap s_defUsrMap;
 static const int k_timerNum = 128;
@@ -483,17 +483,19 @@ int DbImplLevelDb::addIdList(leveldb::WriteBatch* db, const SiMap& inMap, const 
 {
     string prefix = tableName + "|";
     // lookup map
-    BOOST_FOREACH(const SiPair& itr, inMap) {
+    for(SiMap::const_iterator itr = inMap.begin();
+            itr != inMap.end();
+            ++itr) {
 #if (USE_BASE64 != 0)
         char* p = gCharBuff0;
         strncpy(p, prefix.c_str(), prefix.size());
         p += prefix.size();
-        p = encodeVal(p, itr.second);
+        p = encodeVal(p, itr->second);
         *p++ = '\0';
 #else
         snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%x", tableName.c_str(), itr.second);
 #endif
-        snprintf(gCharBuff1, sizeof(gCharBuff1), "%s", itr.first.c_str());
+        snprintf(gCharBuff1, sizeof(gCharBuff1), "%s", itr->first.c_str());
         db->Put(gCharBuff0, gCharBuff1);
     }
     return 0;
@@ -522,8 +524,10 @@ int addFilesToFileList(leveldb::DB* db)
 
     int id = startId;
     typedef pair<string, FileContext> FcPair;
-    BOOST_FOREACH(const FcPair& itr, s_fileContextMap) {
-        string fn = itr.first;
+    for(FcMap::const_iterator itr = s_fileContextMap.begin();
+            itr != s_fileContextMap.end();
+            ++itr) {
+        string fn = itr->first;
         string key = TABLE_NAME_FILE_LIST "|" + fn;
         int rv = dbRead(valStr, db, key);
         if(rv < 0) {
@@ -567,8 +571,10 @@ static int s_usrCount = 0;
 int writeUsrDb(const SiMap& usrMap, map<string, SiMap> usrFidMap, leveldb::DB* dbUsrDb, leveldb::WriteBatch& wb_usrdb, const string& dbName)
 {
     // lookup map
-    BOOST_FOREACH(const SiPair& itr, usrMap) {
-        const string& usr = itr.first;
+    for(SiMap::const_iterator itr = usrMap.begin();
+            itr != usrMap.end();
+            ++itr) {
+        const string& usr = itr->first;
         bool isGlobal = 0 == strncmp(usr.c_str(), "c:@", 3);
         bool isMacro = 0 == strncmp(usr.c_str(), "c:macro", 7);
 #if 1
@@ -578,7 +584,9 @@ int writeUsrDb(const SiMap& usrMap, map<string, SiMap> usrFidMap, leveldb::DB* d
 #endif
             SiMap& file_list_map = usrFidMap[usr];
 #ifdef USE_USR2FILE_TABLE2
-            BOOST_FOREACH(const SiPair& itr_str, file_list_map) {
+            for(SiMap::const_iterator itr_str = file_list_map.begin();
+                    itr_str != file_list_map.end();
+                    ++itr_str) {
                 wb_usrdb.Put(dbName + "|" + usr + "|" + itr_str.first, "1");
             }
 #else
@@ -589,13 +597,17 @@ int writeUsrDb(const SiMap& usrMap, map<string, SiMap> usrFidMap, leveldb::DB* d
                 const string delim = ",";
                 list<string> old_list;
                 boost::split(old_list, value, boost::is_any_of(delim));
-                BOOST_FOREACH(const string& s, old_list) {
-                    file_list_map[s] = 0;
+                for(list<string>::const_iterator itr = old_list.begin();
+                        itr != old_list.end();
+                        ++itr) {
+                    file_list_map[*itr] = 0;
                 }
             }
             string file_list_string = "";
-            BOOST_FOREACH(const SiPair& itr_str, file_list_map) {
-                file_list_string.append(itr_str.first+",");
+            for(SiMap::const_iterator itr_str = file_list_map.begin();
+                    itr_str != file_list_map.end();
+                    ++itr_str) {
+                file_list_string.append(itr_str->first+",");
             }
             file_list_string = file_list_string.substr(0, file_list_string.size()-1);
             wb_usrdb.Put(dbName + "|" + usr, file_list_string);
@@ -635,23 +647,31 @@ int DbImplLevelDb::fin(void)
         }
 
         map<string, SiMap> refUsrFidMap; // store the file IDs a USR found in
-        BOOST_FOREACH(const SiPair& itr, s_refUsrMap) {
-            const string& usr = itr.first;
+        for(SiMap::const_iterator itr = s_refUsrMap.begin();
+                itr != s_refUsrMap.end();
+                ++itr) {
+            const string& usr = itr->first;
             if(!usr.empty()) {
                 SiMap& fidMap = refUsrFidMap[usr];
-                BOOST_FOREACH(const SiPair& itr_file_list, s_usr2fileMap[usr]) {
-                    fidMap[s_fileContextMap[itr_file_list.first].m_dbId] = 0;
+                for(SiMap::const_iterator itr_file_list = s_usr2fileMap[usr].begin();
+                        itr_file_list != s_usr2fileMap[usr].end();
+                        ++itr_file_list) {
+                    fidMap[s_fileContextMap[itr_file_list->first].m_dbId] = 0;
                 }
             }
         }
 
         map<string, SiMap> defUsrFidMap;
-        BOOST_FOREACH(const SiPair& itr, s_defUsrMap) {
-            const string& usr = itr.first;
+        for(SiMap::const_iterator itr = s_defUsrMap.begin();
+                itr != s_defUsrMap.end();
+                ++itr) {
+            const string& usr = itr->first;
             if(!usr.empty()) {
                 SiMap& fidMap = defUsrFidMap[usr];
-                BOOST_FOREACH(const SiPair& itr_file_list, s_usr2fileMap[usr]) {
-                    fidMap[s_fileContextMap[itr_file_list.first].m_dbId] = 0;
+                for(SiMap::const_iterator itr_file_list = s_usr2fileMap[usr].begin();
+                        itr_file_list != s_usr2fileMap[usr].end();
+                        ++itr_file_list) {
+                    fidMap[s_fileContextMap[itr_file_list->first].m_dbId] = 0;
                 }
             }
         }
@@ -707,15 +727,18 @@ int DbImplLevelDb::fin(void)
         leveldb::WriteBatch wbList[DB_NUM];
         char dbDirtyFlags[DB_NUM] = {0};
 
-        typedef pair<string, FileContext> FcPair;
-        BOOST_FOREACH(const FcPair& itr, s_fileContextMap) {
-            const string& filename = itr.first;
-            const string& dbId = itr.second.m_dbId;
+        for(map<string, FileContext>::const_iterator itr = s_fileContextMap.begin();
+                itr != s_fileContextMap.end();
+                ++itr) {
+            const string& filename = itr->first;
+            const string& dbId = itr->second.m_dbId;
             valFiles += "," + dbId;
         }
-        BOOST_FOREACH(const FcPair& itr, s_fileContextMap) {
-            const string& filename = itr.first;
-            const string& dbId = itr.second.m_dbId;
+        for(FcMap::const_iterator itr = s_fileContextMap.begin();
+                itr != s_fileContextMap.end();
+                ++itr) {
+            const string& filename = itr->first;
+            const string& dbId = itr->second.m_dbId;
             FileContext& fctx = s_fileContextMap[filename];
 
             // decide db directory
@@ -733,31 +756,41 @@ int DbImplLevelDb::fin(void)
             dbDirtyFlags[idRem] = 1;
 
             // ref
-            BOOST_FOREACH(const SsPair& itr, fctx.m_refList) {
-                wb.Put(dbId + itr.first, itr.second);
+            for(list<SsPair>::const_iterator itr = fctx.m_refList.begin();
+                    itr != fctx.m_refList.end();
+                    ++itr) {
+                wb.Put(dbId + itr->first, itr->second);
             }
             // decl
-            BOOST_FOREACH(const SsPair& itr, fctx.m_declList) {
-                wb.Put(dbId + itr.first, itr.second);
+            for(list<SsPair>::const_iterator itr = fctx.m_declList.begin();
+                    itr != fctx.m_declList.end();
+                    ++itr) {
+                wb.Put(dbId + itr->first, itr->second);
             }
             // override
             {
-                BOOST_FOREACH(const SsPair& itr, fctx.m_overrideeMap) {
-                    wb.Put(dbId + TABLE_NAME_USR2OVERRIDEE "|" + itr.first, itr.second);
+                for(SsMap::const_iterator itr = fctx.m_overrideeMap.begin();
+                        itr != fctx.m_overrideeMap.end();
+                        ++itr) {
+                    wb.Put(dbId + TABLE_NAME_USR2OVERRIDEE "|" + itr->first, itr->second);
                 }
                 typedef pair<string, SiMap> PairType;
-                BOOST_FOREACH(const PairType& itr, fctx.m_overriderMap) {
-                    const SiMap& usrMap = itr.second;
+                for(map<string, SiMap>::const_iterator itr = fctx.m_overriderMap.begin();
+                        itr != fctx.m_overriderMap.end();
+                        ++itr) {
+                    const SiMap& usrMap = itr->second;
                     string val = "";
-                    BOOST_FOREACH(const SiPair& itr_usr, usrMap) {
+                    for(SiMap::const_iterator itr_usr = usrMap.begin();
+                            itr_usr != usrMap.end();
+                            ++itr_usr) {
                         if(val.empty()) {
-                            val = itr_usr.first;
+                            val = itr_usr->first;
                         }
                         else {
-                            val.append(string(",") + itr_usr.first);
+                            val.append(string(",") + itr_usr->first);
                         }
                     }
-                    wb.Put(dbId + TABLE_NAME_USR2OVERRIDER "|" + itr.first, val);
+                    wb.Put(dbId + TABLE_NAME_USR2OVERRIDER "|" + itr->first, val);
                 }
             }
 
@@ -765,44 +798,50 @@ int DbImplLevelDb::fin(void)
             const SiMap& mapRef = fctx.m_usrIdTbl.GetTbl();
             addIdList(&wb, mapRef, dbId + TABLE_NAME_ID2USR);
             {
-                BOOST_FOREACH(const SiPair& itr, mapRef) {
+                for(SiMap::const_iterator itr = mapRef.begin();
+                        itr != mapRef.end();
+                        ++itr) {
                     string key(dbId + TABLE_NAME_USR2ID "|");
-                    key.append(itr.first);
+                    key.append(itr->first);
 #if (USE_BASE64 != 0)
                     {
                         char* p = gCharBuff1;
-                        p = encodeVal(p, itr.second);
+                        p = encodeVal(p, itr->second);
                         *p = '\0';
                     }
 #else
-                    snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", itr.second);
+                    snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", itr->second);
 #endif
                     wb.Put(key, gCharBuff1);
                 }
             }
-            BOOST_FOREACH(const SsPair& itr, fctx.m_usr2refMap) {
-                const string& usr = itr.first;
+            for(SsMap::const_iterator itr = fctx.m_usr2refMap.begin();
+                    itr != fctx.m_usr2refMap.end();
+                    ++itr) {
+                const string& usr = itr->first;
                 if(!usr.empty()) {
                     string key(dbId + TABLE_NAME_USR2REF "|");
                     //key.append(usr + "|" + s_compileUnitId);
                     key.append(usr);
-                    wb.Put(key, itr.second);
+                    wb.Put(key, itr->second);
                 }
             }
             const SiMap& fileMap = fctx.m_fileIdTbl.GetTbl();
             addIdList(&wb, fileMap, dbId + TABLE_NAME_GLOBAL_FILE_ID2FILE);
             // lookup map
-            BOOST_FOREACH(const SiPair& itr, fileMap) {
+            for(SiMap::const_iterator itr = fileMap.begin();
+                    itr != fileMap.end();
+                    ++itr) {
                 string key(dbId + TABLE_NAME_FILE2LOCAL_ID "|");
-                key.append(itr.first);
+                key.append(itr->first);
 #if (USE_BASE64 != 0)
                 {
                     char* p = gCharBuff1;
-                    p = encodeVal(p, itr.second);
+                    p = encodeVal(p, itr->second);
                     *p = '\0';
                 }
 #else
-                snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", itr.second);
+                snprintf(gCharBuff1, sizeof(gCharBuff1), "%x", itr->second);
 #endif
                 wb.Put(key, gCharBuff1);
             }

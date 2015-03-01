@@ -552,7 +552,7 @@ class QueryHandlerRef(HandlerBase):
                 resultName, resultFileName, resultLine, resultCol = i
                 self.PrintResult(resultName, resultFileName, resultLine, resultCol)
 
-class QueryHandlerOverride(HandlerBase):
+class QueryHandlerOverride(QueryHandlerDecl):
     #
     # Handle Rquest for infomation about reference
     #
@@ -574,16 +574,13 @@ class QueryHandlerOverride(HandlerBase):
         q = self.m_dbId + TABLE_NAME_USR2OVERRIDER + "|" + str(usr)
         rv = mainDb.get(q)
         DEBUG_PRINT("q: " + str(q))
-        DEBUG_PRINT("usr2overrirder: " + str(rv))
+        DEBUG_PRINT("usr2overriden: usrId=" + str(rv))
+
         if rv:
             rvList = rv.split(",")
-            for rv in rvList:
-                usrId = rv
-                decl = mainDb.get(self.m_dbId + TABLE_NAME_USR_ID2DECL + "|%s"%(usrId))
-                nameId, fileId, line, col = decl.split("|")
-                name, fn = GetResultString(mainDb, self.m_dbId, nameId, fileId)
-                if fn != None and name != None:
-                    resultList.append((name, fn, line, col))
+            for usrId in rvList:
+                name, fn, line, col = self.QueryDeclInfo(usrId)
+                resultList.append((name, fn, line, col))
         for i in resultList:
             resultName, resultFileName, resultLine, resultCol = i
             self.PrintResult(resultName, resultFileName, resultLine, resultCol)

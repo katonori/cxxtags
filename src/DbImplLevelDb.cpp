@@ -435,7 +435,7 @@ int DbImplLevelDb::insert_decl_value(const string& usr, const string& filename, 
 int DbImplLevelDb::insert_overriden_value(const string& usr, const string& name, const string& filename, int line, int col, const string& usrOverrider, int isDef)
 {
     timerResume(TIMER_INS_OVERRIDEN);
-    //printf("overriden: %s, %s, %s\n", usr.c_str(), filename.c_str(), name.c_str());
+    //printf("overriden: %s, %s, %s, line=%d, col=%d\n", usr.c_str(), filename.c_str(), name.c_str(), line, col);
     FileContext& fctx = s_fileContextMap[filename];
 
     int fileId = fctx.m_fileIdTbl.GetId(filename);
@@ -492,7 +492,7 @@ int DbImplLevelDb::addIdList(leveldb::WriteBatch* db, const SiMap& inMap, const 
         p = encodeVal(p, itr->second);
         *p++ = '\0';
 #else
-        snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%x", tableName.c_str(), itr.second);
+        snprintf(gCharBuff0, sizeof(gCharBuff0), "%s|%x", tableName.c_str(), itr->second);
 #endif
         snprintf(gCharBuff1, sizeof(gCharBuff1), "%s", itr->first.c_str());
         db->Put(gCharBuff0, gCharBuff1);

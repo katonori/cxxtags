@@ -1,3 +1,5 @@
+cmake_minimum_required(VERSION 2.8)
+
 project(cxxtags)
 
 set(LLVM_HOME "" CACHE PATH "")
@@ -20,12 +22,11 @@ target_link_libraries(cxxtags_core clang stdc++ leveldb snappy
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_TIMER_LIBRARY}
 )
-add_custom_command(
-    TARGET cxxtags_core
-    PRE_BUILD
+add_dependencies(cxxtags_core configFile)
+add_custom_target(
+    configFile
     COMMAND ${PROJECT_SOURCE_DIR}/cxxtags_query genconfig ${PROJECT_SOURCE_DIR}/config.h
 )
-
 if(CYGWIN)
     set(EXTENSION ".exe")
 endif(CYGWIN)

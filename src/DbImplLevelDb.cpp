@@ -160,7 +160,7 @@ int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, cons
     string keyFile = s_compileUnit;
     int rv = 0;
     // check if already registered
-    rv = dbRead(value, dbCommon, TABLE_NAME_CU_NAME2ID "|" + s_compileUnit);
+    rv = dbRead(value, dbCommon, TABLE_NAME_CU_NAME_TO_ID "|" + s_compileUnit);
     if(rv < 0) {
         // not found
         // add file
@@ -183,8 +183,8 @@ int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, cons
         else {
             printf("ERROR: db info\n");
         }
-        dbWrite(dbCommon, TABLE_NAME_CU_NAME2ID "|" + s_compileUnit, s_compileUnitId);
-        dbWrite(dbCommon, TABLE_NAME_ID2CU "|" + s_compileUnitId, s_compileUnit);
+        dbWrite(dbCommon, TABLE_NAME_CU_NAME_TO_ID "|" + s_compileUnit, s_compileUnitId);
+        dbWrite(dbCommon, TABLE_NAME_CU_ID_TO_NAME "|" + s_compileUnitId, s_compileUnit);
     }
     else if(rv == 0) {
         // alread exists
@@ -264,7 +264,7 @@ static inline char* encodeVal(char* buff, unsigned int val)
 static inline char* encodePos(char *buff, const string& name, unsigned int fileId, unsigned int line, unsigned col)
 {
     char* p = buff;
-    strncpy(p, TABLE_NAME_POS2USR_ID, 1);
+    strncpy(p, TABLE_NAME_POSITION_TO_LOCAL_USR_ID, 1);
     p++;
     *p++ = '|';
     strncpy(p, name.c_str(), name.size());
@@ -309,7 +309,7 @@ static inline void setKeyValuePos2Usr(char* buffKey, char* buffVal, int buffLen,
         *p++ = '\0';
     }
 #else
-    snprintf(buffKey, buffLen, TABLE_NAME_POS2USR_ID "|%s|%x|%x|%x", name.c_str(), fileId,  line, col);
+    snprintf(buffKey, buffLen, TABLE_NAME_POSITION_TO_LOCAL_USR_ID "|%s|%x|%x|%x", name.c_str(), fileId,  line, col);
     snprintf(buffVal, buffLen, "%x", usrId);
 #endif
 }
@@ -319,14 +319,14 @@ static inline void setKeyValueUsr2Decl(char* buffKey, char* buffVal, int buffLen
 #if (USE_BASE64 != 0)
     {
         char* p = (char*)buffKey;
-        strncpy(p, TABLE_NAME_USR_ID2DECL "|", 2);
+        strncpy(p, TABLE_NAME_LOCAL_USR_ID_TO_DECL "|", 2);
         p+=2;
         p = encodeVal(p, usrId);
         *p++ = '\0';
     }
     encodeDecl(buffVal, nameId, fileId, line, col);
 #else
-    snprintf(buffKey, buffLen, TABLE_NAME_USR_ID2DECL "|%x", usrId); 
+    snprintf(buffKey, buffLen, TABLE_NAME_LOCAL_USR_ID_TO_DECL "|%x", usrId); 
     snprintf(buffVal, buffLen, "%x|%x|%x|%x", nameId, fileId, line, col);
 #endif
 }
@@ -334,7 +334,7 @@ static inline void setKeyValueUsr2Decl(char* buffKey, char* buffVal, int buffLen
 static inline void setKeyValueUsr2Def(char* buffKey, char* buffVal, int buffLen, unsigned int nameId, unsigned int fileId, unsigned int line, unsigned int col, const string& usr)
 {
     char* p = (char*)buffKey;
-    strncpy(p, TABLE_NAME_USR2DEF "|", 2);
+    strncpy(p, TABLE_NAME_USR_TO_DEF "|", 2);
     p+=2;
     strncpy(p, usr.c_str(), usr.size()+1);
 #if (USE_BASE64 != 0)
@@ -544,7 +544,7 @@ int addFilesToFileList(leveldb::DB* db)
             fid = valStr.substr(pos+1, valStr.size()-1);
         }
         s_fileContextMap[fn].m_dbId = fid;
-        dbWrite(db, TABLE_NAME_GLOBAL_FID2CUID "|" + fid, s_compileUnitId);
+        dbWrite(db, TABLE_NAME_GLOBAL_FILE_ID_TO_CU_ID "|" + fid, s_compileUnitId);
     }
     snprintf(buf, sizeof(buf), "%x", id);
     dbWrite(db, keyFileCount, buf);
@@ -693,11 +693,11 @@ int DbImplLevelDb::fin(void)
         }
 
 #ifdef USE_USR2FILE_TABLE2
-        writeUsrDb(s_refUsrMap, refUsrFidMap, dbUsrDb, wb_usrdb, TABLE_NAME_REF_USR2GLOBAL_FILE_ID2);
-        writeUsrDb(s_defUsrMap, defUsrFidMap, dbUsrDb, wb_usrdb, TABLE_NAME_DEF_USR2GLOBAL_FILE_ID2);
+        writeUsrDb(s_refUsrMap, refUsrFidMap, dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_REF);
+        writeUsrDb(s_defUsrMap, defUsrFidMap, dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF2);
 #else
-        writeUsrDb(s_refUsrMap, refUsrFidMap, dbUsrDb, wb_usrdb, TABLE_NAME_REF_USR2GLOBAL_FILE_ID);
-        writeUsrDb(s_defUsrMap, defUsrFidMap, dbUsrDb, wb_usrdb, TABLE_NAME_DEF_USR2GLOBAL_FILE_ID);
+        writeUsrDb(s_refUsrMap, refUsrFidMap, dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_REF);
+        writeUsrDb(s_defUsrMap, defUsrFidMap, dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF);
 #endif
 
         dbFlush(dbUsrDb, &wb_usrdb);
@@ -773,7 +773,7 @@ int DbImplLevelDb::fin(void)
                 for(SsMap::const_iterator itr = fctx.m_overrideeMap.begin();
                         itr != fctx.m_overrideeMap.end();
                         ++itr) {
-                    wb.Put(dbId + TABLE_NAME_USR2OVERRIDEE "|" + itr->first, itr->second);
+                    wb.Put(dbId + TABLE_NAME_USR_TO_OVERRIDEE "|" + itr->first, itr->second);
                 }
                 typedef pair<string, SiMap> PairType;
                 for(map<string, SiMap>::const_iterator itr = fctx.m_overriderMap.begin();
@@ -791,18 +791,18 @@ int DbImplLevelDb::fin(void)
                             val.append(string(",") + itr_usr->first);
                         }
                     }
-                    wb.Put(dbId + TABLE_NAME_USR2OVERRIDER "|" + itr->first, val);
+                    wb.Put(dbId + TABLE_NAME_USR_TO_OVERRIDER "|" + itr->first, val);
                 }
             }
 
             // usr
             const SiMap& mapRef = fctx.m_usrIdTbl.GetTbl();
-            addIdList(&wb, mapRef, dbId + TABLE_NAME_ID2USR);
+            addIdList(&wb, mapRef, dbId + TABLE_NAME_LOCAL_USR_ID_TO_USR);
             {
                 for(SiMap::const_iterator itr = mapRef.begin();
                         itr != mapRef.end();
                         ++itr) {
-                    string key(dbId + TABLE_NAME_USR2ID "|");
+                    string key(dbId + TABLE_NAME_USR_TO_ID "|");
                     key.append(itr->first);
 #if (USE_BASE64 != 0)
                     {
@@ -821,19 +821,19 @@ int DbImplLevelDb::fin(void)
                     ++itr) {
                 const string& usr = itr->first;
                 if(!usr.empty()) {
-                    string key(dbId + TABLE_NAME_USR2REF "|");
+                    string key(dbId + TABLE_NAME_USR_TO_REF "|");
                     //key.append(usr + "|" + s_compileUnitId);
                     key.append(usr);
                     wb.Put(key, itr->second);
                 }
             }
             const SiMap& fileMap = fctx.m_fileIdTbl.GetTbl();
-            addIdList(&wb, fileMap, dbId + TABLE_NAME_GLOBAL_FILE_ID2FILE);
+            addIdList(&wb, fileMap, dbId + TABLE_NAME_GLOBAL_FILE_ID_TO_NAME);
             // lookup map
             for(SiMap::const_iterator itr = fileMap.begin();
                     itr != fileMap.end();
                     ++itr) {
-                string key(dbId + TABLE_NAME_FILE2LOCAL_ID "|");
+                string key(dbId + TABLE_NAME_FILE_NAME_TO_LOCAL_ID "|");
                 key.append(itr->first);
 #if (USE_BASE64 != 0)
                 {
@@ -847,7 +847,7 @@ int DbImplLevelDb::fin(void)
                 wb.Put(key, gCharBuff1);
             }
             const SiMap& nameMap = fctx.m_nameIdTbl.GetTbl();
-            addIdList(&wb, nameMap, dbId + TABLE_NAME_ID2NAME);
+            addIdList(&wb, nameMap, dbId + TABLE_NAME_TOKEN_ID_TO_NAME);
 
             wb.Put(dbId + TABLE_NAME_CUFILES, valFiles);
             wb.Put(dbId + TABLE_NAME_BUILD_INFO, s_buildOpt);

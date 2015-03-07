@@ -1,0 +1,65 @@
+* common db
+(c1) file -> ids
+    "O" + "|" + fileName
+    -> cuId + "," + dbId
+
+(c2) dbId -> cuId
+    "J" + "|" + dbId
+    -> cuId
+
+* usr db
+(u1) usr -> dbId(def)
+    "T" + "|" + USR
+    -> [dbId]+
+
+(u2) usr ->  dbId(ref)
+    "B" + "|" + USR
+    -> [dbId]+
+
+* main db
+(1) position -> localUsrId
+    dbId + "A" + "|" + tokenname + "|" + localFid + "|" + lineNo + "|" + colNo
+    -> localUsrId
+
+(2) localUsrId -> decl
+    dbId + "D" + "|" + localUsrId
+    -> nameId + "|" + localFid + "|" + lineNo + "|" + colNo
+
+(3) dbId -> cuFileList
+    dbId + "S"
+    -> [dbId]+
+
+(4) usr -> def
+    dbId + "E" + "|" + usr
+    -> namId + "," + localFid + "," + lineNo + "," +colNo
+
+(5) localUsrId -> usr
+    dbId + "F" + "|" + localUsrId
+    -> usr
+
+(6) usr -> localUsrId
+    dbId + "R" + "|" + usr
+    -> localUsrId
+
+(7) usr -> ref
+    dbId + "L" + "|" + usr
+    -> [namId + "," + localFid + "," + lineNo + "," +colNo]+
+
+(8) usr -> override
+    dbId + "N" + "|" + usr
+    -> [namId + "," + localFid + "," + lineNo + "," +colNo]+
+
+(9) usr -> overriden
+    dbId + "M" + "|" + usr
+    -> [namId + "," + localFid + "," + lineNo + "," +colNo]+
+
+decl
+   (c1) -> (1) -> (5) -> (3) -> (6) -> (2)
+def
+   (c1) -> (1) -> (5) -> (u1) -> (4)
+ref
+   (c1) -> (1) -> (5) -> (u2) -> (7)
+override
+   (c1) -> (1) -> (5) -> (8)
+overriden
+   (c1) -> (1) -> (5) -> (9)

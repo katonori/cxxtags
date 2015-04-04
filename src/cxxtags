@@ -121,7 +121,12 @@ class CxxTagsCoreWrapper:
         in_file = self.mInFileList[1]
         out_dir = os.path.abspath(out_dir)
         if out_dir != "" and not os.path.exists(out_dir):
-            os.makedirs(out_dir)
+            try:
+                os.makedirs(out_dir)
+            except OSError, e:
+                if e.errno != 17:
+                    raise   
+                pass
         opt = ""
 
         if not os.path.exists(in_file):

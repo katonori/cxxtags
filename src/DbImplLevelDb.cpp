@@ -148,7 +148,6 @@ int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, cons
     //
     // update file list
     //
-    // TODO: add lock
     leveldb::Status status;
     s_commonDbDir = out_dir + "/common";
     if (dbTryOpen(dbCommon, s_commonDbDir) < 0) {
@@ -214,6 +213,9 @@ int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, cons
             }
         }
         dbClose(db_common);
+    }
+    else {
+        m_isRebuild = true;
     }
     return 0;
 }
@@ -501,7 +503,7 @@ int DbImplLevelDb::addIdList(leveldb::WriteBatch* db, const SiMap& inMap, const 
     return 0;
 }
 
-int addFilesToFileList(leveldb::DB* db)
+int DbImplLevelDb::addFilesToFileList(leveldb::DB* db)
 {
     char buf[1024];
     int startId = 0;
@@ -545,6 +547,10 @@ int addFilesToFileList(leveldb::DB* db)
         }
         s_fileContextMap[fn].m_dbId = fid;
         dbWrite(db, TABLE_NAME_GLOBAL_FILE_ID_TO_CU_ID "|" + fid, s_compileUnitId);
+
+        if(fn == s_compileUnit) {
+            m_cuDbId = fid;
+        }
     }
     snprintf(buf, sizeof(buf), "%x", id);
     dbWrite(db, keyFileCount, buf);
@@ -618,6 +624,24 @@ int writeUsrDb(const SiMap& usrMap, map<string, SiMap> usrFidMap, leveldb::DB* d
         }
     }
     return 0;
+}
+
+void deleteOldEntries(leveldb::DB* db, const std::string& dbId)
+{
+    leveldb::Iterator* it = db->NewIterator(leveldb::ReadOptions());
+    std::cout << dbId << std::endl;
+    for (it->SeekToFirst(); it->Valid(); it->Next()) {
+        leveldb::Slice key = it->key();
+        std::string key_str = key.ToString();
+        if(key_str.find(dbId) == 0) {
+            if(key_str.size() > dbId.size() + 1) {
+                if(key_str.at(dbId.size() + 1) == '|') { // delete entries begins with [dbId + ? + '|'].
+                    db->Delete(s_defaultWoptions, key);
+                }
+            }
+        }
+    }
+    assert(it->status().ok()); // Check for any errors found during the scan
 }
 
 int DbImplLevelDb::fin(void)
@@ -739,8 +763,8 @@ int DbImplLevelDb::fin(void)
                 itr != s_fileContextMap.end();
                 ++itr) {
             const string& filename = itr->first;
-            const string& dbId = itr->second.m_dbId;
-            FileContext& fctx = s_fileContextMap[filename];
+            const FileContext& fctx = itr->second;
+            const string& dbId = fctx.m_dbId;
 
             // decide db directory
             char* errp = NULL;
@@ -861,6 +885,9 @@ int DbImplLevelDb::fin(void)
                 if(rv < 0) {
                     printf("ERROR: fin: open: %s\n", s_commonDbDir.c_str());
                     return -1;
+                }
+                if(m_isRebuild) {
+                    deleteOldEntries(db, m_cuDbId);
                 }
                 dbFlush(db, &wbList[i]);
                 dbClose(db);

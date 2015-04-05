@@ -201,8 +201,9 @@ static inline void procCXXMethodDecl(const CXCursor& Cursor, const char* cUsr, s
 }
 
 #ifndef PATH_MAX
-#define PATH_MAX 2048
+#define PATH_MAX (1024*1024)
 #endif
+static char s_filenameBuff[PATH_MAX];
 
 // process c++ references.
 static inline void procRef(const CXCursor& Cursor, std::string name, std::string fileName, int line, int column)
@@ -276,12 +277,11 @@ static inline void procCursor(const CXCursor& Cursor) {
     // file_name
     std::string fileName = getCursorSourceLocation(line, column, Cursor);
     if(fileName != "") {
-        char filenameBuff[PATH_MAX];
-        char* p = realpath(fileName.c_str(), filenameBuff);
-        if(p != filenameBuff) {
+        char* p = realpath(fileName.c_str(), s_filenameBuff);
+        if(p != s_filenameBuff) {
             printf("ERROR: realpath: %s, %p\n", fileName.c_str(), p);
         }
-        fileName = std::string(filenameBuff);
+        fileName = std::string(s_filenameBuff);
     }
     // decide if this Cursor info is to be registered to db.
     if(isInExcludeList(fileName)) {

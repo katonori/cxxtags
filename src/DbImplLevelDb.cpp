@@ -421,19 +421,17 @@ int DbImplLevelDb::addIdList(leveldb::WriteBatch* db, const SiMap& inMap, const 
 {
     string prefix = tableName + "|";
     // lookup map
-    for(SiMap::const_iterator itr = inMap.begin();
-            itr != inMap.end();
-            ++itr) {
+    for(const auto& itr : inMap) {
 #if (USE_BASE64 != 0)
         char* p = m_CharBuff0;
         strncpy(p, prefix.c_str(), prefix.size());
         p += prefix.size();
-        p = encodeVal(p, itr->second);
+        p = encodeVal(p, itr.second);
         *p++ = '\0';
 #else
-        snprintf(m_CharBuff0, sizeof(m_CharBuff0), "%s|%x", tableName.c_str(), itr->second);
+        snprintf(m_CharBuff0, sizeof(m_CharBuff0), "%s|%x", tableName.c_str(), itr.second);
 #endif
-        snprintf(m_CharBuff1, sizeof(m_CharBuff1), "%s", itr->first.c_str());
+        snprintf(m_CharBuff1, sizeof(m_CharBuff1), "%s", itr.first.c_str());
         db->Put(m_CharBuff0, m_CharBuff1);
     }
     return 0;
@@ -461,10 +459,8 @@ int DbImplLevelDb::addFilesToFileList(leveldb::DB* db)
     }
 
     int id = startId;
-    for(FcMap::const_iterator itr = m_fileContextMap.begin();
-            itr != m_fileContextMap.end();
-            ++itr) {
-        string fn = itr->first;
+    for(const auto& itr : m_fileContextMap) {
+        string fn = itr.first;
         string key = TABLE_NAME_FILE_LIST "|" + fn;
         int rv = dbRead(valStr, db, key);
         string fid;
@@ -512,16 +508,12 @@ int DbImplLevelDb::dbClose(leveldb::DB*& db)
 int DbImplLevelDb::writeUsrDb(const SiMap& usrMap, map<string, SiMap> usrFidMap, leveldb::DB* dbUsrDb, leveldb::WriteBatch& wb_usrdb, const string& dbName)
 {
     // lookup map
-    for(SiMap::const_iterator itr = usrMap.begin();
-            itr != usrMap.end();
-            ++itr) {
-        const string& usr = itr->first;
+    for(const auto& itr : usrMap) {
+        const string& usr = itr.first;
         if(usr != "") {
             SiMap& file_list_map = usrFidMap[usr];
 #ifdef USE_USR2FILE_TABLE2
-            for(SiMap::const_iterator itr_str = file_list_map.begin();
-                    itr_str != file_list_map.end();
-                    ++itr_str) {
+            for(const auto& itr_str : file_list_map) {
                 wb_usrdb.Put(dbName + "|" + usr + "|" + itr_str.first, "1");
             }
 #else
@@ -532,17 +524,13 @@ int DbImplLevelDb::writeUsrDb(const SiMap& usrMap, map<string, SiMap> usrFidMap,
                 const string delim = ",";
                 list<string> old_list;
                 boost::split(old_list, value, boost::is_any_of(delim));
-                for(list<string>::const_iterator itr = old_list.begin();
-                        itr != old_list.end();
-                        ++itr) {
-                    file_list_map[*itr] = 0;
+                for(const auto& itr : old_list) {
+                    file_list_map[itr] = 0;
                 }
             }
             string file_list_string = "";
-            for(SiMap::const_iterator itr_str = file_list_map.begin();
-                    itr_str != file_list_map.end();
-                    ++itr_str) {
-                file_list_string.append(itr_str->first+",");
+            for(const auto& itr_str : file_list_map) {
+                file_list_string.append(itr_str.first+",");
             }
             file_list_string = file_list_string.substr(0, file_list_string.size()-1);
             wb_usrdb.Put(dbName + "|" + usr, file_list_string);
@@ -600,31 +588,23 @@ int DbImplLevelDb::fin(void)
         }
 
         map<string, SiMap> refUsrFidMap; // store the file IDs a USR found in
-        for(SiMap::const_iterator itr = m_refUsrMap.begin();
-                itr != m_refUsrMap.end();
-                ++itr) {
-            const string& usr = itr->first;
+        for(const auto& itr : m_refUsrMap) {
+            const string& usr = itr.first;
             if(!usr.empty()) {
                 SiMap& fidMap = refUsrFidMap[usr];
-                for(SiMap::const_iterator itr_file_list = m_usr2fileMap[usr].begin();
-                        itr_file_list != m_usr2fileMap[usr].end();
-                        ++itr_file_list) {
-                    fidMap[m_fileContextMap[itr_file_list->first].m_dbId] = 0;
+                for(const auto& itr_file_list : m_usr2fileMap[usr]) {
+                    fidMap[m_fileContextMap[itr_file_list.first].m_dbId] = 0;
                 }
             }
         }
 
         map<string, SiMap> defUsrFidMap;
-        for(SiMap::const_iterator itr = m_defUsrMap.begin();
-                itr != m_defUsrMap.end();
-                ++itr) {
-            const string& usr = itr->first;
+        for(const auto& itr : m_defUsrMap) {
+            const string& usr = itr.first;
             if(!usr.empty()) {
                 SiMap& fidMap = defUsrFidMap[usr];
-                for(SiMap::const_iterator itr_file_list = m_usr2fileMap[usr].begin();
-                        itr_file_list != m_usr2fileMap[usr].end();
-                        ++itr_file_list) {
-                    fidMap[m_fileContextMap[itr_file_list->first].m_dbId] = 0;
+                for(const auto& itr_file_list : m_usr2fileMap[usr]) {
+                    fidMap[m_fileContextMap[itr_file_list.first].m_dbId] = 0;
                 }
             }
         }
@@ -676,18 +656,14 @@ int DbImplLevelDb::fin(void)
         leveldb::WriteBatch wbList[DB_NUM];
         char dbDirtyFlags[DB_NUM] = {0};
 
-        for(map<string, FileContext>::const_iterator itr = m_fileContextMap.begin();
-                itr != m_fileContextMap.end();
-                ++itr) {
+        for(const auto &itr : m_fileContextMap) {
             //const string& filename = itr->first;
-            const string& dbId = itr->second.m_dbId;
+            const string& dbId = itr.second.m_dbId;
             valFiles += "," + dbId;
         }
-        for(FcMap::const_iterator itr = m_fileContextMap.begin();
-                itr != m_fileContextMap.end();
-                ++itr) {
-            const string& filename = itr->first;
-            const FileContext& fctx = itr->second;
+        for(const auto &itr : m_fileContextMap) {
+            const string& filename = itr.first;
+            const FileContext& fctx = itr.second;
             const string& dbId = fctx.m_dbId;
 
             // decide db directory
@@ -705,40 +681,30 @@ int DbImplLevelDb::fin(void)
             dbDirtyFlags[idRem] = 1;
 
             // ref
-            for(list<SsPair>::const_iterator itr = fctx.m_refList.begin();
-                    itr != fctx.m_refList.end();
-                    ++itr) {
-                wb.Put(dbId + itr->first, itr->second);
+            for(const auto& itr : fctx.m_refList) {
+                wb.Put(dbId + itr.first, itr.second);
             }
             // decl
-            for(list<SsPair>::const_iterator itr = fctx.m_declList.begin();
-                    itr != fctx.m_declList.end();
-                    ++itr) {
-                wb.Put(dbId + itr->first, itr->second);
+            for(const auto& itr : fctx.m_declList) {
+                wb.Put(dbId + itr.first, itr.second);
             }
             // override
             {
-                for(SsMap::const_iterator itr = fctx.m_overrideeMap.begin();
-                        itr != fctx.m_overrideeMap.end();
-                        ++itr) {
-                    wb.Put(dbId + TABLE_NAME_USR_TO_OVERRIDEE "|" + itr->first, itr->second);
+                for(const auto& itr : fctx.m_overrideeMap) {
+                    wb.Put(dbId + TABLE_NAME_USR_TO_OVERRIDEE "|" + itr.first, itr.second);
                 }
-                for(map<string, SiMap>::const_iterator itr = fctx.m_overriderMap.begin();
-                        itr != fctx.m_overriderMap.end();
-                        ++itr) {
-                    const SiMap& usrMap = itr->second;
+                for(const auto& itr : fctx.m_overriderMap) {
+                    const SiMap& usrMap = itr.second;
                     string val = "";
-                    for(SiMap::const_iterator itr_usr = usrMap.begin();
-                            itr_usr != usrMap.end();
-                            ++itr_usr) {
+                    for(const auto& itr_usr : usrMap) {
                         if(val.empty()) {
-                            val = itr_usr->first;
+                            val = itr_usr.first;
                         }
                         else {
-                            val.append(string(",") + itr_usr->first);
+                            val.append(string(",") + itr_usr.first);
                         }
                     }
-                    wb.Put(dbId + TABLE_NAME_USR_TO_OVERRIDER "|" + itr->first, val);
+                    wb.Put(dbId + TABLE_NAME_USR_TO_OVERRIDER "|" + itr.first, val);
                 }
             }
 
@@ -746,50 +712,44 @@ int DbImplLevelDb::fin(void)
             const SiMap& mapRef = fctx.m_usrIdTbl.GetTbl();
             addIdList(&wb, mapRef, dbId + TABLE_NAME_LOCAL_USR_ID_TO_USR);
             {
-                for(SiMap::const_iterator itr = mapRef.begin();
-                        itr != mapRef.end();
-                        ++itr) {
+                for(const auto& itr : mapRef) {
                     string key(dbId + TABLE_NAME_USR_TO_ID "|");
-                    key.append(itr->first);
+                    key.append(itr.first);
 #if (USE_BASE64 != 0)
                     {
                         char* p = m_CharBuff1;
-                        p = encodeVal(p, itr->second);
+                        p = encodeVal(p, itr.second);
                         *p = '\0';
                     }
 #else
-                    snprintf(m_CharBuff1, sizeof(m_CharBuff1), "%x", itr->second);
+                    snprintf(m_CharBuff1, sizeof(m_CharBuff1), "%x", itr.second);
 #endif
                     wb.Put(key, m_CharBuff1);
                 }
             }
-            for(SsMap::const_iterator itr = fctx.m_usr2refMap.begin();
-                    itr != fctx.m_usr2refMap.end();
-                    ++itr) {
-                const string& usr = itr->first;
+            for(const auto& itr : fctx.m_usr2refMap) {
+                const string& usr = itr.first;
                 if(!usr.empty()) {
                     string key(dbId + TABLE_NAME_USR_TO_REF "|");
                     //key.append(usr + "|" + m_compileUnitId);
                     key.append(usr);
-                    wb.Put(key, itr->second);
+                    wb.Put(key, itr.second);
                 }
             }
             const SiMap& fileMap = fctx.m_fileIdTbl.GetTbl();
             addIdList(&wb, fileMap, dbId + TABLE_NAME_GLOBAL_FILE_ID_TO_NAME);
             // lookup map
-            for(SiMap::const_iterator itr = fileMap.begin();
-                    itr != fileMap.end();
-                    ++itr) {
+            for(const auto& itr : fileMap) {
                 string key(dbId + TABLE_NAME_FILE_NAME_TO_LOCAL_ID "|");
-                key.append(itr->first);
+                key.append(itr.first);
 #if (USE_BASE64 != 0)
                 {
                     char* p = m_CharBuff1;
-                    p = encodeVal(p, itr->second);
+                    p = encodeVal(p, itr.second);
                     *p = '\0';
                 }
 #else
-                snprintf(m_CharBuff1, sizeof(m_CharBuff1), "%x", itr->second);
+                snprintf(m_CharBuff1, sizeof(m_CharBuff1), "%x", itr.second);
 #endif
                 wb.Put(key, m_CharBuff1);
             }

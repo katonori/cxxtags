@@ -63,7 +63,7 @@ const char* keywordListWithSpace[] = {
 static inline std::string formatName(std::string name)
 {
     std::string::size_type pos;
-    for(int i = 0; i < sizeof(keywordListWithSpace)/sizeof(keywordListWithSpace[0]); ++i) {
+    for(unsigned i = 0; i < sizeof(keywordListWithSpace)/sizeof(keywordListWithSpace[0]); ++i) {
         std::string kw = keywordListWithSpace[i];
         pos = name.find(kw);
         if(pos == 0) {
@@ -114,54 +114,9 @@ static inline char isCursorTypeAvailable(int val)
 }
 #undef AVAILABLE_TABLE_MAX
 
-static bool isBuiltinType(int typeKind)
-{
-    switch(typeKind) {
-        case CXType_Bool: 
-        case CXType_Char_U:
-        case CXType_UChar:
-        case CXType_Char16:
-        case CXType_Char32:
-        case CXType_UShort:
-        case CXType_UInt:
-        case CXType_ULong:
-        case CXType_ULongLong:
-        case CXType_UInt128:
-        case CXType_Char_S:
-        case CXType_SChar:
-        case CXType_WChar:
-        case CXType_Short:
-        case CXType_Int:
-        case CXType_Long:
-        case CXType_LongLong:
-        case CXType_Int128:
-        case CXType_Float:
-        case CXType_Double:
-        case CXType_LongDouble:
-            return true;
-        default:
-            return false;
-    }
-    return false;
-}
-
-static bool isLocalDecl(CXCursorKind parentKind)
-{
-    switch(parentKind) {
-        case CXCursor_FunctionDecl: 
-        case CXCursor_ParmDecl:
-            return true;
-        default:
-            return false;
-    }
-    return false;
-}
-
 // process declarations other than function declarations.
 static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column)
 {
-    // get type information
-    CXType curTypeOrig = clang_getCursorType(Cursor);
     int isDef = clang_isCursorDefinition(Cursor);
     //
     // if the option '-p' is specified
@@ -209,8 +164,6 @@ static char s_filenameBuff[PATH_MAX];
 static inline void procRef(const CXCursor& Cursor, std::string name, std::string fileName, int line, int column)
 {
     const char* cUsr = "";
-    unsigned int ref_line = 0;
-    unsigned int ref_column = 0;
     CXCursor refCur = clang_getCursorReferenced(Cursor);
     std::string cRefFileName;
     if (!clang_equalCursors(refCur, clang_getNullCursor())) {
@@ -218,31 +171,6 @@ static inline void procRef(const CXCursor& Cursor, std::string name, std::string
         CXString cxRefUSR = clang_getCursorUSR(refCur);
         cUsr = clang_getCString(cxRefUSR);
         assert(cUsr);
-#if 0
-        //printf("ref: %s: %d, %d\n", cUsr, line, column);
-        //
-        // if the option '-p' is specified
-        // 
-        // refered location
-        CXFile ref_file;
-        CXSourceLocation ref_loc = clang_getCursorLocation(refCur);
-        clang_getSpellingLocation(ref_loc, &ref_file, &ref_line, &ref_column, 0);
-        if(ref_file) {
-            CXString cxRefFileName = clang_getFileName(ref_file);
-            cRefFileName = clang_getCString(cxRefFileName);
-            clang_disposeString(cxRefFileName);
-            char filenameBuff[PATH_MAX];
-            char* p = realpath(cRefFileName.c_str(), filenameBuff);
-            if(p != filenameBuff) {
-                printf("ERROR:9: %s, %p\n", cRefFileName.c_str(), p);
-            }
-            //printf("realpath: %s\n", filenameBuff);
-            cRefFileName = std::string(filenameBuff);
-            if(isInExcludeList(cRefFileName)) {
-                return;
-            }
-        }
-#endif
         // insert to database.
         check_rv(gDb->insert_ref_value(cUsr, fileName, name, line, column));
         clang_disposeString(cxRefUSR);
@@ -298,11 +226,11 @@ static inline void procCursor(const CXCursor& Cursor) {
     const char *cUsr = clang_getCString(cxUSR);
     assert(cUsr);
 
-    int val = 0;
+    //int val = 0;
     switch(kind) {
         case CXCursor_EnumConstantDecl:
             // get enum constant value
-            val = clang_getEnumConstantDeclValue(Cursor);
+            //val = clang_getEnumConstantDeclValue(Cursor);
             // fall through
         case CXCursor_TypedefDecl:
         case CXCursor_TemplateTypeParameter:

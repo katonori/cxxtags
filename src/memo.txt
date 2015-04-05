@@ -54,7 +54,7 @@
     -> [namId + "," + localFid + "," + lineNo + "," +colNo]+
 (10) position -> localUsrId
     dbId + "A" + "|" + filename
-    -> localFileId
+    -> localFid
 
 decl
    (c1) -> (10) -> (1) -> (5) -> (3) -> (6) -> (2)

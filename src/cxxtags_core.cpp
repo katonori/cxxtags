@@ -311,7 +311,7 @@ static int PrintDiagnostic(const CXDiagnostic& Diagnostic) {
   }
 
   Msg = clang_formatDiagnostic(Diagnostic, display_opts);
-  //fprintf(stderr, "%s\n", clang_getCString(Msg));
+  fprintf(stderr, "%s\n", clang_getCString(Msg));
   clang_disposeString(Msg);
 
   return rv;

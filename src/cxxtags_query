@@ -43,6 +43,10 @@ TABLE_NAME_CUFILES = "S"
 TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF = "T"
 TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF2 = "U"
 
+RV_ERROR = -1
+RV_SUCCESS = 0
+RV_NOT_FOUND = 1
+
 gDebugMode = 0
 gVerboseMode = 0
 gPartialCompare = 0
@@ -446,9 +450,9 @@ class QueryHandlerDecl(HandlerBase):
             if result:
                 name, fileName, line, col = result
                 self.PrintResult(name, fileName, line, col)
-                return True
+                return RV_SUCCESS
         # search def table in this compile unit
-        return False
+        return RV_NOT_FOUND
 
     def QueryDeclInfo(self, usrId):
         mainDb = self.GetMainDb()
@@ -762,10 +766,13 @@ class QueryHandlerRebuild(HandlerBase):
         if excludes != "":
             excludes = " -e " + excludes
         cmd = "cxxtags -f " + excludes + " " + self.mDbDir + " " + self.m_srcFileName + " -- " + opt
+        DEBUG_PRINT("cmd: " + cmd)
         self.CloseDb()
         (rv, out) = commands.getstatusoutput(cmd)
         print out
-        return 
+        if rv != 0:
+            return RV_ERROR
+        return 0
 
     def parseArg(self, argv):
         if len(argv) != 1:
@@ -791,6 +798,7 @@ def main():
         print "ERROR: getopt: ", e.args[0]
         sys.exit(1)
 
+    funcResult = 0
     queryType = argv[0]
     dbDir = argv[1]
     if queryType == 'genconfig':
@@ -806,7 +814,7 @@ def main():
         handler.parseArg(argv[2:])
         rv = handler.DoQuery()
         handler.CloseDb()
-        if False == rv:
+        if rv == RV_NOT_FOUND:
             DEBUG_PRINT("def start")
             handler = QueryHandlerDef(dbDir)
             handler.parseArg(argv[2:])
@@ -840,7 +848,7 @@ def main():
     elif queryType == 'rebuild': # 
         handler = QueryHandlerRebuild(dbDir)
         handler.parseArg(argv[2:])
-        handler.DoQuery()
+        funcResult = handler.DoQuery()
         handler.CloseDb()
     elif queryType == 'dryrun': #
         with open(os.devnull,"w") as f:
@@ -867,7 +875,8 @@ def main():
                     db.close()
     else:
         print "ERROR: query type must be ref, decl, def, override, overriden, name or dump"
-        sys.exit(1)
+        return 1
+    return funcResult
 
 #######
-main()
+sys.exit(main())

@@ -138,13 +138,11 @@ class CxxTagsCoreWrapper:
             self.mExcludeList = "-e " + self.mExcludeList
         self.mBuildOpt += " " + " ".join(argv)
         cmd = "%s/cxxtags_core %s %s %s %s %s "%(os.path.abspath(exe_dir), self.mOptCore, self.mExcludeList, cur_dir, out_dir, in_file)+self.mBuildOpt
+        #print cmd
         cmdList = re.split("\s+", cmd)
-        #self.mTimeList.append(time.time())
-        #rv = os.system(cmd)
         p = subprocess.Popen(cmdList, shell=False)
-        sts = os.waitpid(p.pid, 0)[1]
-        #self.mTimeList.append(time.time())
+        return p.wait()
 
 if __name__ == "__main__":
     cxxtags = CxxTagsCoreWrapper()
-    cxxtags.run()
+    sys.exit(cxxtags.run())

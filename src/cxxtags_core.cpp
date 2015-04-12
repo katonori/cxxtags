@@ -118,9 +118,6 @@ static inline char isCursorTypeAvailable(int val)
 static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column)
 {
     int isDef = clang_isCursorDefinition(Cursor);
-    //
-    // if the option '-p' is specified
-    // 
     // insert to database
     check_rv(gDb->insert_decl_value(cUsr, fileName, name, line, column, isDef));
 }
@@ -295,35 +292,49 @@ static inline void procCursor(const CXCursor& Cursor) {
 
 typedef void (*PostVisitTU)(CXTranslationUnit);
 
-static void PrintDiagnostic(const CXDiagnostic& Diagnostic) {
+static int PrintDiagnostic(const CXDiagnostic& Diagnostic) {
+  int rv = 0;
   CXString Msg;
   unsigned display_opts = CXDiagnostic_DisplaySourceLocation
     | CXDiagnostic_DisplayColumn | CXDiagnostic_DisplaySourceRanges
     | CXDiagnostic_DisplayOption;
 
-  if (clang_getDiagnosticSeverity(Diagnostic) == CXDiagnostic_Ignored)
-    return;
+  int severity = clang_getDiagnosticSeverity(Diagnostic);
+  if (severity == CXDiagnostic_Ignored) {
+    return 0;
+  }
+  if (severity == CXDiagnostic_Error || severity == CXDiagnostic_Fatal) {
+    rv = 1;
+  }
 
   Msg = clang_formatDiagnostic(Diagnostic, display_opts);
-  fprintf(stderr, "%s\n", clang_getCString(Msg));
+  //fprintf(stderr, "%s\n", clang_getCString(Msg));
   clang_disposeString(Msg);
+
+  return rv;
 }
 
-static void PrintDiagnosticSet(const CXDiagnosticSet& Set) {
+static int PrintDiagnosticSet(const CXDiagnosticSet& Set) {
+  int rv = 0;
   int i = 0, n = clang_getNumDiagnosticsInSet(Set);
   for ( ; i != n ; ++i) {
     CXDiagnostic Diag = clang_getDiagnosticInSet(Set, i);
     CXDiagnosticSet ChildDiags = clang_getChildDiagnostics(Diag);
-    PrintDiagnostic(Diag);
-    if (ChildDiags)
+    if(PrintDiagnostic(Diag)) {
+        rv = 1;
+    }
+    if (ChildDiags) {
       PrintDiagnosticSet(ChildDiags);
+    }
   }  
+  return rv;
 }
 
-static void PrintDiagnostics(CXTranslationUnit TU) {
+static int PrintDiagnostics(CXTranslationUnit TU) {
   CXDiagnosticSet TUSet = clang_getDiagnosticSetFromTU(TU);
-  PrintDiagnosticSet(TUSet);
+  int rv = PrintDiagnosticSet(TUSet);
   clang_disposeDiagnosticSet(TUSet);
+  return rv;
 }
 
 /******************************************************************************/
@@ -366,9 +377,9 @@ static int perform_test_load(CXIndex Idx, CXTranslationUnit TU,
   if (PV)
     PV(TU);
 
-  PrintDiagnostics(TU);
+  int rv = PrintDiagnostics(TU);
   clang_disposeTranslationUnit(TU);
-  return 0;
+  return rv;
 }
 
 static int perform_test_load_source(int argc, const char **argv,

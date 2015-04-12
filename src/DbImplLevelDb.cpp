@@ -545,7 +545,6 @@ int DbImplLevelDb::writeUsrDb(const SiMap& usrMap, map<string, SiMap> usrFidMap,
 void DbImplLevelDb::deleteOldEntries(leveldb::DB* db, const std::string& dbId)
 {
     leveldb::Iterator* it = db->NewIterator(leveldb::ReadOptions());
-    std::cout << dbId << std::endl;
     for (it->SeekToFirst(); it->Valid(); it->Next()) {
         leveldb::Slice key = it->key();
         std::string key_str = key.ToString();

@@ -44,7 +44,7 @@ How to build
             $ make
             $ make install
             # build the tag database
-            $ ../../bin/cxxtags_run_proj compile_commands.json
+            $ ../../bin/cxxtags_run_proj \_db compile_commands.json
 
 * Install
     * copy the contents of ${CXXTAGS\_REPOSITORY\_ROOT}/bin directory to your installation path

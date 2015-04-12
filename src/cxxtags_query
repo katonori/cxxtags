@@ -24,6 +24,7 @@ import commands
 
 TABLE_NAME_POSITION_TO_LOCAL_USR_ID = "A"
 TABLE_NAME_USR_TO_GLOBAL_FILE_ID_REF = "B"
+TABLE_NAME_USR_TO_GLOBAL_FILE_ID_OVERRIDER = "V"
 TABLE_NAME_TOKEN_ID_TO_NAME = "C"
 TABLE_NAME_LOCAL_USR_ID_TO_DECL = "D"
 TABLE_NAME_USR_TO_DEF = "E"
@@ -34,8 +35,8 @@ TABLE_NAME_CU_ID_TO_NAME = "I"
 TABLE_NAME_GLOBAL_FILE_ID_TO_CU_ID = "J"
 TABLE_NAME_FILE_NAME_TO_LOCAL_ID = "K"
 TABLE_NAME_USR_TO_REF = "L"
-TABLE_NAME_USR_TO_OVERRIDEE = "M"
-TABLE_NAME_USR_TO_OVERRIDER = "N"
+TABLE_NAME_USR_TO_OVERRIDER = "M"
+TABLE_NAME_USR_TO_OVERRIDEE = "N"
 TABLE_NAME_FILE_LIST = "O"
 TABLE_NAME_BUILD_INFO = "Q"
 TABLE_NAME_USR_TO_ID = "R"
@@ -76,6 +77,7 @@ def genCConfig(filename):
         f.write('#define DB_NUM %d\n'%(DB_NUM))
         f.write('#define TABLE_NAME_POSITION_TO_LOCAL_USR_ID "%s"\n'%(TABLE_NAME_POSITION_TO_LOCAL_USR_ID))
         f.write('#define TABLE_NAME_USR_TO_GLOBAL_FILE_ID_REF "%s"\n'%(TABLE_NAME_USR_TO_GLOBAL_FILE_ID_REF))
+        f.write('#define TABLE_NAME_USR_TO_GLOBAL_FILE_ID_OVERRIDER "%s"\n'%(TABLE_NAME_USR_TO_GLOBAL_FILE_ID_OVERRIDER))
         f.write('#define TABLE_NAME_TOKEN_ID_TO_NAME "%s"\n'%(TABLE_NAME_TOKEN_ID_TO_NAME))
         f.write('#define TABLE_NAME_LOCAL_USR_ID_TO_DECL "%s"\n'%(TABLE_NAME_LOCAL_USR_ID_TO_DECL))
         f.write('#define TABLE_NAME_USR_TO_DEF "%s"\n'%(TABLE_NAME_USR_TO_DEF))
@@ -86,8 +88,8 @@ def genCConfig(filename):
         f.write('#define TABLE_NAME_GLOBAL_FILE_ID_TO_CU_ID "%s"\n'%(TABLE_NAME_GLOBAL_FILE_ID_TO_CU_ID))
         f.write('#define TABLE_NAME_FILE_NAME_TO_LOCAL_ID "%s"\n'%(TABLE_NAME_FILE_NAME_TO_LOCAL_ID))
         f.write('#define TABLE_NAME_USR_TO_REF "%s"\n'%(TABLE_NAME_USR_TO_REF))
-        f.write('#define TABLE_NAME_USR_TO_OVERRIDEE "%s"\n'%(TABLE_NAME_USR_TO_OVERRIDEE))
         f.write('#define TABLE_NAME_USR_TO_OVERRIDER "%s"\n'%(TABLE_NAME_USR_TO_OVERRIDER))
+        f.write('#define TABLE_NAME_USR_TO_OVERRIDEE "%s"\n'%(TABLE_NAME_USR_TO_OVERRIDEE))
         f.write('#define TABLE_NAME_FILE_LIST "%s"\n'%(TABLE_NAME_FILE_LIST))
         f.write('#define TABLE_NAME_BUILD_INFO "%s"\n'%(TABLE_NAME_BUILD_INFO))
         f.write('#define TABLE_NAME_USR_TO_ID "%s"\n'%(TABLE_NAME_USR_TO_ID))
@@ -306,6 +308,15 @@ class HandlerBase:
                         dbIdList.append(fid)
         if dbIdList == []:
             dbIdList.append(self.m_dbId)
+        return list(set(dbIdList))
+
+    def GetDbIdListByOverriderUsr(self, usr):
+        dbIdList = []
+        for db in self.mUsrDbList:
+            res = db.get(TABLE_NAME_USR_TO_GLOBAL_FILE_ID_OVERRIDER + "|" + usr)
+            if res:
+                for fid in res.split(","):
+                    dbIdList.append(fid)
         return list(set(dbIdList))
 
     def GetDbIdListByRefUsr(self, usr):
@@ -597,10 +608,10 @@ class QueryHandlerOverride(QueryHandlerDecl):
     def GetAllOverrides(self, usr):
         resultList = []
         mainDb = self.GetMainDb()
-        q = self.m_dbId + TABLE_NAME_USR_TO_OVERRIDER + "|" + str(usr)
+        q = self.m_dbId + TABLE_NAME_USR_TO_OVERRIDEE + "|" + str(usr)
         rv = mainDb.get(q)
         DEBUG_PRINT("q: " + str(q))
-        DEBUG_PRINT("usr2overriden: usrId=" + str(rv))
+        DEBUG_PRINT("usr2overridee: usrId=" + str(rv))
 
         if rv:
             rvList = rv.split(",")
@@ -628,7 +639,7 @@ class QueryHandlerOverrideN(HandlerBase):
             self.GetAllOverriders(usr)
 
     def GetAllOverriders(self, usr):
-        dbIdList = self.GetDbIdListByDefUsr(usr)
+        dbIdList = self.GetDbIdListByOverriderUsr(usr)
         DEBUG_PRINT("dbIdList: " + str(dbIdList))
         resultList = []
         for dbId in dbIdList:
@@ -639,10 +650,10 @@ class QueryHandlerOverrideN(HandlerBase):
             DEBUG_PRINT("cuname: " + filename)
             cuDbId = self.GetDbIdByFilename(filename)
             DEBUG_PRINT("cuDbId: " + cuDbId)
-            q = cuDbId + TABLE_NAME_USR_TO_OVERRIDEE + "|" + str(usr)
+            q = cuDbId + TABLE_NAME_USR_TO_OVERRIDER + "|" + str(usr)
             DEBUG_PRINT("q: " + q)
             rv = db.get(q)
-            DEBUG_PRINT("usr2overrirden: " + str(rv))
+            DEBUG_PRINT("usr2overrirder: " + str(rv))
             if rv:
                 rvList = rv.split(",")
                 for rv in rvList:

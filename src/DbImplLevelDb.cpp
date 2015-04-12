@@ -381,6 +381,7 @@ int DbImplLevelDb::insert_overriden_value(const string& usr, const string& name,
     int nameId = fctx.m_nameIdTbl.GetId(name);
     int usrId = fctx.m_usrIdTbl.GetId(usr);
     int usrIdOverrider = fctx.m_usrIdTbl.GetId(usrOverrider);
+    m_overriderUsrMap[usr] = 1;
     // usrId -> decl info
     encItemInfo(m_CharBuff1, sizeof(m_CharBuff1), nameId, fileId, line, col);
     if(!fctx.m_overrideeMap[usr].empty()) {
@@ -586,7 +587,7 @@ int DbImplLevelDb::fin(void)
             }
         }
 
-        map<string, SiMap> refUsrFidMap; // store the file IDs a USR found in
+        map<string, SiMap> refUsrFidMap; // store the file IDs a USR found
         for(const auto& itr : m_refUsrMap) {
             const string& usr = itr.first;
             if(!usr.empty()) {
@@ -602,6 +603,17 @@ int DbImplLevelDb::fin(void)
             const string& usr = itr.first;
             if(!usr.empty()) {
                 SiMap& fidMap = defUsrFidMap[usr];
+                for(const auto& itr_file_list : m_usr2fileMap[usr]) {
+                    fidMap[m_fileContextMap[itr_file_list.first].m_dbId] = 0;
+                }
+            }
+        }
+
+        map<string, SiMap> overriderUsrFidMap;
+        for(const auto& itr : m_overriderUsrMap) {
+            const string& usr = itr.first;
+            if(!usr.empty()) {
+                SiMap& fidMap = overriderUsrFidMap[usr];
                 for(const auto& itr_file_list : m_usr2fileMap[usr]) {
                     fidMap[m_fileContextMap[itr_file_list.first].m_dbId] = 0;
                 }
@@ -624,11 +636,13 @@ int DbImplLevelDb::fin(void)
         }
 
 #ifdef USE_USR2FILE_TABLE2
-        writeUsrDb(m_refUsrMap, refUsrFidMap, dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_REF);
-        writeUsrDb(m_defUsrMap, defUsrFidMap, dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF2);
+        writeUsrDb(m_refUsrMap, refUsrFidMap,                   dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_REF);
+        writeUsrDb(m_defUsrMap, defUsrFidMap,                   dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF2);
+        writeUsrDb(m_overriderUsrMap, overriderUsrFidMap,       dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_OVERRIDER);
 #else
-        writeUsrDb(m_refUsrMap, refUsrFidMap, dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_REF);
-        writeUsrDb(m_defUsrMap, defUsrFidMap, dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF);
+        writeUsrDb(m_refUsrMap, refUsrFidMap,                   dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_REF);
+        writeUsrDb(m_defUsrMap, defUsrFidMap,                   dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF);
+        writeUsrDb(m_overriderUsrMap, overriderUsrFidMap,       dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_OVERRIDER);
 #endif
 
         dbFlush(dbUsrDb, &wb_usrdb);
@@ -690,7 +704,8 @@ int DbImplLevelDb::fin(void)
             // override
             {
                 for(const auto& itr : fctx.m_overrideeMap) {
-                    wb.Put(dbId + TABLE_NAME_USR_TO_OVERRIDEE "|" + itr.first, itr.second);
+                    // overridee -> overrider
+                    wb.Put(dbId + TABLE_NAME_USR_TO_OVERRIDER "|" + itr.first, itr.second);
                 }
                 for(const auto& itr : fctx.m_overriderMap) {
                     const SiMap& usrMap = itr.second;
@@ -703,7 +718,8 @@ int DbImplLevelDb::fin(void)
                             val.append(string(",") + itr_usr.first);
                         }
                     }
-                    wb.Put(dbId + TABLE_NAME_USR_TO_OVERRIDER "|" + itr.first, val);
+                    // overrider -> overridee
+                    wb.Put(dbId + TABLE_NAME_USR_TO_OVERRIDEE "|" + itr.first, val);
                 }
             }
 

@@ -16,6 +16,10 @@
     "B" + "|" + USR
     -> [dbId]+
 
+(u3) usr ->  dbId(overrider)
+    "V" + "|" + USR
+    -> [dbId]+
+
 * main db
 (1) position -> localUsrId
     dbId + "A" + "|" + tokenname + "|" + localFid + "|" + lineNo + "|" + colNo

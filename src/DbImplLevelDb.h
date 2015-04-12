@@ -140,6 +140,7 @@ private:
     FcMap m_fileContextMap;
     SiMap m_refUsrMap;
     SiMap m_defUsrMap;
+    SiMap m_overriderUsrMap;
     const int k_timerNum = 128;
 #ifdef TIMER
     boost::timer::cpu_timer* m_timers;

@@ -11,6 +11,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <getopt.h>
+#include <stdlib.h>
 #include <boost/filesystem/path.hpp>
 
 namespace cxxtags {
@@ -78,21 +79,35 @@ static inline std::string formatName(std::string name)
     return name;
 }
 
+#ifndef PATH_MAX
+#define PATH_MAX (1024*1024)
+#endif
+static char s_filenameBuff[PATH_MAX];
+
 // get source file name
 static std::string getCursorSourceLocation(unsigned int& line, unsigned int& column, const CXCursor& Cursor) {
-  CXSourceLocation Loc = clang_getCursorLocation(Cursor);
-  CXFile file;
-  clang_getSpellingLocation(Loc, &file, &line, &column, 0);
-  CXString filename = clang_getFileName(file);
-  if (!clang_getCString(filename)) {
-    clang_disposeString(filename);
-    return std::string("");
-  }
-  else {
-    std::string b = std::string(clang_getCString(filename));
-    clang_disposeString(filename);
-    return b;
-  }
+    std::string filename = "";
+    CXSourceLocation Loc = clang_getCursorLocation(Cursor);
+    CXFile file;
+    clang_getSpellingLocation(Loc, &file, &line, &column, 0);
+    CXString fn = clang_getFileName(file);
+    if (!clang_getCString(fn)) {
+        clang_disposeString(fn);
+    }
+    else {
+        std::string str = std::string(clang_getCString(fn));
+        clang_disposeString(fn);
+        filename = str;
+    }
+    // convert to absolute path
+    if(filename != "") {
+        char* p = realpath(filename.c_str(), s_filenameBuff);
+        if(p != s_filenameBuff) {
+            printf("ERROR: realpath: %s, %p\n", filename.c_str(), p);
+        }
+        filename = std::string(s_filenameBuff);
+    }
+    return filename;
 }
 
 typedef struct {
@@ -152,11 +167,6 @@ static inline void procCXXMethodDecl(const CXCursor& Cursor, const char* cUsr, s
     procFuncDecl(Cursor, cUsr, name, fileName, line, column);
 }
 
-#ifndef PATH_MAX
-#define PATH_MAX (1024*1024)
-#endif
-static char s_filenameBuff[PATH_MAX];
-
 // process c++ references.
 static inline void procRef(const CXCursor& Cursor, std::string name, std::string fileName, int line, int column)
 {
@@ -201,13 +211,6 @@ static inline void procCursor(const CXCursor& Cursor) {
 
     // file_name
     std::string fileName = getCursorSourceLocation(line, column, Cursor);
-    if(fileName != "") {
-        char* p = realpath(fileName.c_str(), s_filenameBuff);
-        if(p != s_filenameBuff) {
-            printf("ERROR: realpath: %s, %p\n", fileName.c_str(), p);
-        }
-        fileName = std::string(s_filenameBuff);
-    }
     // decide if this Cursor info is to be registered to db.
     if(isInExcludeList(fileName)) {
         return;

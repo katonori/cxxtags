@@ -4,7 +4,7 @@ project(cxxtags)
 
 set(LLVM_HOME "" CACHE PATH "")
 set(LEVELDB_HOME "" CACHE PATH "")
-set(CMAKE_CXX_FLAGS "-g -O3 -Wall -std=c++11")
+set(CMAKE_CXX_FLAGS "-g -O3 -Wall -std=gnu++11")
 set(CMAKE_EXE_LINKER_FLAGS "" CACHE STRING "")
 
 FIND_PACKAGE(Boost COMPONENTS filesystem system timer REQUIRED)

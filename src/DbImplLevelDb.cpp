@@ -199,7 +199,7 @@ static inline char* encodeVal(char* buff, unsigned int val)
     return buff;
 }
 
-static inline char* encodePos(char *buff, const string& name, unsigned int fileId, unsigned int line, unsigned col)
+static inline char* encodePos(char *buff, const string& name, unsigned int line, unsigned col)
 {
     char* p = buff;
     strncpy(p, TABLE_NAME_POSITION_TO_LOCAL_USR_ID, 1);
@@ -208,8 +208,6 @@ static inline char* encodePos(char *buff, const string& name, unsigned int fileI
     strncpy(p, name.c_str(), name.size());
     p += name.size();
     *p++ = '|';
-    p = encodeVal(p, fileId);
-    *p++ = '|';
     p = encodeVal(p, line);
     *p++ = '|';
     p = encodeVal(p, col);
@@ -217,13 +215,11 @@ static inline char* encodePos(char *buff, const string& name, unsigned int fileI
     return p;
 }
 
-static inline char* encodeRef(char *buff, unsigned int nameId, unsigned int fileId, unsigned int line, unsigned col)
+static inline char* encodeRef(char *buff, unsigned int nameId, unsigned int line, unsigned col)
 {
     char* p = (char*)buff;
     p = encodeVal(p, nameId);
     *p++ = '|';
-    p = encodeVal(p, fileId);
-    *p++ = '|';
     p = encodeVal(p, line);
     *p++ = '|';
     p = encodeVal(p, col);
@@ -231,28 +227,28 @@ static inline char* encodeRef(char *buff, unsigned int nameId, unsigned int file
     return p;
 }
 
-static inline char* encodeDecl(char *buff, unsigned int nameId, unsigned int fileId, unsigned int line, unsigned col)
+static inline char* encodeDecl(char *buff, unsigned int nameId, unsigned int line, unsigned col)
 {
-    return encodeRef(buff, nameId, fileId, line, col);
+    return encodeRef(buff, nameId, line, col);
 }
 #endif
 
-static inline void setKeyValuePos2Usr(char* buffKey, char* buffVal, int buffLen, const string& name, unsigned int fileId, unsigned int line, unsigned int col, unsigned int usrId)
+static inline void setKeyValuePos2Usr(char* buffKey, char* buffVal, int buffLen, const string& name, unsigned int line, unsigned int col, unsigned int usrId)
 {
 #if (USE_BASE64 != 0)
-    encodePos(buffKey, name, fileId, line, col);
+    encodePos(buffKey, name, line, col);
     {
         char* p = (char*)buffVal;
         p = encodeVal(p, usrId);
         *p++ = '\0';
     }
 #else
-    snprintf(buffKey, buffLen, TABLE_NAME_POSITION_TO_LOCAL_USR_ID "|%s|%x|%x|%x", name.c_str(), fileId,  line, col);
+    snprintf(buffKey, buffLen, TABLE_NAME_POSITION_TO_LOCAL_USR_ID "|%s|%x|%x", name.c_str(), line, col);
     snprintf(buffVal, buffLen, "%x", usrId);
 #endif
 }
 
-static inline void setKeyValueUsr2Decl(char* buffKey, char* buffVal, int buffLen, unsigned int nameId, unsigned int fileId, unsigned int line, unsigned int col, unsigned int usrId)
+static inline void setKeyValueUsr2Decl(char* buffKey, char* buffVal, int buffLen, unsigned int nameId, unsigned int line, unsigned int col, unsigned int usrId)
 {
 #if (USE_BASE64 != 0)
     {
@@ -262,33 +258,33 @@ static inline void setKeyValueUsr2Decl(char* buffKey, char* buffVal, int buffLen
         p = encodeVal(p, usrId);
         *p++ = '\0';
     }
-    encodeDecl(buffVal, nameId, fileId, line, col);
+    encodeDecl(buffVal, nameId, line, col);
 #else
     snprintf(buffKey, buffLen, TABLE_NAME_LOCAL_USR_ID_TO_DECL "|%x", usrId); 
-    snprintf(buffVal, buffLen, "%x|%x|%x|%x", nameId, fileId, line, col);
+    snprintf(buffVal, buffLen, "%x|%x|%x", nameId, line, col);
 #endif
 }
 
-static inline void setKeyValueUsr2Def(char* buffKey, char* buffVal, int buffLen, unsigned int nameId, unsigned int fileId, unsigned int line, unsigned int col, const string& usr)
+static inline void setKeyValueUsr2Def(char* buffKey, char* buffVal, int buffLen, unsigned int nameId, unsigned int line, unsigned int col, const string& usr)
 {
     char* p = (char*)buffKey;
     strncpy(p, TABLE_NAME_USR_TO_DEF "|", 2);
     p+=2;
     strncpy(p, usr.c_str(), usr.size()+1);
 #if (USE_BASE64 != 0)
-    encodeDecl(buffVal, nameId, fileId, line, col);
+    encodeDecl(buffVal, nameId, line, col);
 #else
     // usrId -> def info
-    snprintf(buffVal, buffLen, "%x|%x|%x|%x", nameId, fileId, line, col);
+    snprintf(buffVal, buffLen, "%x|%x|%x", nameId, line, col);
 #endif
 }
 
-static inline void encItemInfo(char* buff, int buffLen, unsigned int nameId, unsigned int fileId, unsigned int line, unsigned int col)
+static inline void encItemInfo(char* buff, int buffLen, unsigned int nameId, unsigned int line, unsigned int col)
 {
 #if (USE_BASE64 != 0)
-    encodeRef(buff, nameId, fileId, line, col);
+    encodeRef(buff, nameId, line, col);
 #else
-    snprintf(buff, buffLen, "%x|%x|%x|%x", nameId, fileId, line, col);
+    snprintf(buff, buffLen, "%x|%x|%x", nameId, line, col);
 #endif
 }
 
@@ -305,11 +301,10 @@ int DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, c
     timerResume(TIMER_INS_REF);
 
     //s_timers[TIMER_INS_REF_1].resume();
-    int fileId = fctx.m_fileIdTbl.GetId(filename);
     int nameId = fctx.m_nameIdTbl.GetId(name);
     m_refUsrMap[usr] = 1;
     int usrId = fctx.m_usrIdTbl.GetId(usr);
-    encItemInfo(m_CharBuff0, sizeof(m_CharBuff0), nameId, fileId, line, col);
+    encItemInfo(m_CharBuff0, sizeof(m_CharBuff0), nameId, line, col);
     {
         SsMap& mapRef = fctx.m_usr2refMap;
         SsMap::iterator itr = mapRef.find(usr);
@@ -328,7 +323,7 @@ int DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, c
 
     // pos -> usr
     timerResume(TIMER_INS_REF_2);
-    setKeyValuePos2Usr(m_CharBuff0, m_CharBuff1, sizeof(m_CharBuff0), name, fileId, line, col, usrId);
+    setKeyValuePos2Usr(m_CharBuff0, m_CharBuff1, sizeof(m_CharBuff0), name, line, col, usrId);
     fctx.m_refList.push_back(SsPair(m_CharBuff0, m_CharBuff1));
     timerStop(TIMER_INS_REF_2);
     timerStop(TIMER_INS_REF);
@@ -345,18 +340,17 @@ int DbImplLevelDb::insert_decl_value(const string& usr, const string& filename, 
         return 0;
     }
     timerResume(TIMER_INS_DECL);
-    int fileId = fctx.m_fileIdTbl.GetId(filename);
     int nameId = fctx.m_nameIdTbl.GetId(name);
     int usrId = fctx.m_usrIdTbl.GetId(usr);
     if(isDef) {
         m_defUsrMap[usr] = 1;
         // usrId -> def info
-        setKeyValueUsr2Def(m_CharBuff0, m_CharBuff1, sizeof(m_CharBuff0), nameId, fileId, line, col, usr);
+        setKeyValueUsr2Def(m_CharBuff0, m_CharBuff1, sizeof(m_CharBuff0), nameId, line, col, usr);
         fctx.m_declList.push_back(SsPair(m_CharBuff0, m_CharBuff1));
     }
     else {
         // usrId -> decl info
-        setKeyValueUsr2Decl(m_CharBuff0, m_CharBuff1, sizeof(m_CharBuff0), nameId, fileId, line, col, usrId);
+        setKeyValueUsr2Decl(m_CharBuff0, m_CharBuff1, sizeof(m_CharBuff0), nameId, line, col, usrId);
         fctx.m_declList.push_back(SsPair(m_CharBuff0, m_CharBuff1));
     }
 
@@ -365,7 +359,7 @@ int DbImplLevelDb::insert_decl_value(const string& usr, const string& filename, 
     }
 
     // pos -> usr
-    setKeyValuePos2Usr(m_CharBuff0, m_CharBuff1, sizeof(m_CharBuff0), name, fileId, line, col, usrId);
+    setKeyValuePos2Usr(m_CharBuff0, m_CharBuff1, sizeof(m_CharBuff0), name, line, col, usrId);
     fctx.m_declList.push_back(SsPair(m_CharBuff0, m_CharBuff1));
     timerStop(TIMER_INS_DECL);
     return 0;
@@ -377,13 +371,12 @@ int DbImplLevelDb::insert_overriden_value(const string& usr, const string& name,
     //printf("overriden: %s, %s, %s, line=%d, col=%d\n", usr.c_str(), filename.c_str(), name.c_str(), line, col);
     FileContext& fctx = m_fileContextMap[filename];
 
-    int fileId = fctx.m_fileIdTbl.GetId(filename);
     int nameId = fctx.m_nameIdTbl.GetId(name);
     int usrId = fctx.m_usrIdTbl.GetId(usr);
     int usrIdOverrider = fctx.m_usrIdTbl.GetId(usrOverrider);
     m_overriderUsrMap[usr] = 1;
     // usrId -> decl info
-    encItemInfo(m_CharBuff1, sizeof(m_CharBuff1), nameId, fileId, line, col);
+    encItemInfo(m_CharBuff1, sizeof(m_CharBuff1), nameId, line, col);
     if(!fctx.m_overrideeMap[usr].empty()) {
         fctx.m_overrideeMap[usr].append(string(",") + string(m_CharBuff1));
     }
@@ -406,7 +399,7 @@ int DbImplLevelDb::insert_overriden_value(const string& usr, const string& name,
         m_usr2fileMap[usr][filename] = 0;
     }
     // pos -> usr
-    setKeyValuePos2Usr(m_CharBuff0, m_CharBuff1, sizeof(m_CharBuff0), name, fileId, line, col, usrIdOverrider);
+    setKeyValuePos2Usr(m_CharBuff0, m_CharBuff1, sizeof(m_CharBuff0), name, line, col, usrIdOverrider);
     fctx.m_wb.Put(m_CharBuff0, m_CharBuff1);
 
     timerStop(TIMER_INS_OVERRIDEN);
@@ -751,28 +744,11 @@ int DbImplLevelDb::fin(void)
                     wb.Put(key, itr.second);
                 }
             }
-            const SiMap& fileMap = fctx.m_fileIdTbl.GetTbl();
-            addIdList(&wb, fileMap, dbId + TABLE_NAME_GLOBAL_FILE_ID_TO_NAME);
-            // lookup map
-            for(const auto& itr : fileMap) {
-                string key(dbId + TABLE_NAME_FILE_NAME_TO_LOCAL_ID "|");
-                key.append(itr.first);
-#if (USE_BASE64 != 0)
-                {
-                    char* p = m_CharBuff1;
-                    p = encodeVal(p, itr.second);
-                    *p = '\0';
-                }
-#else
-                snprintf(m_CharBuff1, sizeof(m_CharBuff1), "%x", itr.second);
-#endif
-                wb.Put(key, m_CharBuff1);
-            }
             const SiMap& nameMap = fctx.m_nameIdTbl.GetTbl();
             addIdList(&wb, nameMap, dbId + TABLE_NAME_TOKEN_ID_TO_NAME);
 
             wb.Put(dbId + TABLE_NAME_CUFILES, valFiles);
-            wb.Put(dbId + TABLE_NAME_BUILD_INFO, m_buildOpt);
+            wb.Put(dbId + TABLE_NAME_BUILD_INFO, filename + "|" + m_buildOpt);
         }
         for(int i = 0; i < DB_NUM; i++) {
             if(dbDirtyFlags[i]) {

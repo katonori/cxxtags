@@ -33,7 +33,6 @@ TABLE_NAME_GLOBAL_FILE_ID_TO_NAME = "G"
 TABLE_NAME_CU_NAME_TO_ID = "H"
 TABLE_NAME_CU_ID_TO_NAME = "I"
 TABLE_NAME_GLOBAL_FILE_ID_TO_CU_ID = "J"
-TABLE_NAME_FILE_NAME_TO_LOCAL_ID = "K"
 TABLE_NAME_USR_TO_REF = "L"
 TABLE_NAME_USR_TO_OVERRIDER = "M"
 TABLE_NAME_USR_TO_OVERRIDEE = "N"
@@ -86,7 +85,6 @@ def genCConfig(filename):
         f.write('#define TABLE_NAME_CU_NAME_TO_ID "%s"\n'%(TABLE_NAME_CU_NAME_TO_ID))
         f.write('#define TABLE_NAME_CU_ID_TO_NAME "%s"\n'%(TABLE_NAME_CU_ID_TO_NAME))
         f.write('#define TABLE_NAME_GLOBAL_FILE_ID_TO_CU_ID "%s"\n'%(TABLE_NAME_GLOBAL_FILE_ID_TO_CU_ID))
-        f.write('#define TABLE_NAME_FILE_NAME_TO_LOCAL_ID "%s"\n'%(TABLE_NAME_FILE_NAME_TO_LOCAL_ID))
         f.write('#define TABLE_NAME_USR_TO_REF "%s"\n'%(TABLE_NAME_USR_TO_REF))
         f.write('#define TABLE_NAME_USR_TO_OVERRIDER "%s"\n'%(TABLE_NAME_USR_TO_OVERRIDER))
         f.write('#define TABLE_NAME_USR_TO_OVERRIDEE "%s"\n'%(TABLE_NAME_USR_TO_OVERRIDEE))
@@ -277,9 +275,8 @@ class HandlerBase:
             print "ERROR: specify file name"
             sys.exit(1)
         mainDb = self.GetMainDb()
-        fid = file2id(mainDb, self.m_dbId, fileName)
-        DEBUG_PRINT("fid: " + str(fid) + "," + fileName)
-        q = self.m_dbId + TABLE_NAME_POSITION_TO_LOCAL_USR_ID + "|%s|%s|%s|%s"%(self.m_tokenName, fid, lineNo, colNo)
+        DEBUG_PRINT("file: " + fileName)
+        q = self.m_dbId + TABLE_NAME_POSITION_TO_LOCAL_USR_ID + "|%s|%s|%s"%(self.m_tokenName, lineNo, colNo)
         DEBUG_PRINT("q: " + q)
         usr = mainDb.get(q)
         DEBUG_PRINT("usrId: " + str(usr))
@@ -426,23 +423,23 @@ def usr2id(db, dbId, usr):
 def id2name(db, dbId, id):
     result = db.get(dbId + TABLE_NAME_TOKEN_ID_TO_NAME + "|%s"%(str(id)))
     return result
-def id2file(db, dbId, id):
-    result = db.get(dbId + TABLE_NAME_GLOBAL_FILE_ID_TO_NAME + "|%s"%(str(id)))
-    return result
-def file2id(db, dbId, filename):
-    result = db.get(dbId + TABLE_NAME_FILE_NAME_TO_LOCAL_ID + "|%s"%(filename))
-    return result
-def GetResultString(db, dbId, nameId, fileId):
+def getFilename(db, dbId):
+    rv = db.get(dbId + TABLE_NAME_BUILD_INFO)
+    if rv == None:
+        return None
+    filename, workDir, excludes, opt = rv.split("|")
+    return filename
+def GetResultString(db, dbId, nameId):
     name = id2name(db, dbId, nameId)
     if name == None:
         print("ERRRO: name lookup failed: " + str(nameId) + ": " + dbId)
         return None
     DEBUG_PRINT("name: " + str(nameId) + "," + str(name))
-    fn = id2file(db, dbId, fileId)
+    fn = getFilename(db, dbId)
     if fn == None:
-        print("ERRRO: file name lookup failed: " + str(fileId) + ": " + dbId)
+        print("ERRRO: file name lookup failed: " + dbId)
         return None
-    DEBUG_PRINT("filename: " + str(fileId) + "," + str(fn))
+    DEBUG_PRINT("filename: " + str(fn))
     return name, fn
 
 class QueryHandlerDecl(HandlerBase):
@@ -485,8 +482,8 @@ class QueryHandlerDecl(HandlerBase):
             decl = db.get(q)
             DEBUG_PRINT("decl: " + str(decl))
             if decl:
-                nameId, fileId, line, col = decl.split("|")
-                name, fileName = GetResultString(db, dbId, nameId, fileId)
+                nameId, line, col = decl.split("|")
+                name, fileName = GetResultString(db, dbId, nameId)
                 if fileName != None and name != None:
                     return name, fileName, line, col
         return None
@@ -532,8 +529,8 @@ class QueryHandlerDef(HandlerBase):
             DEBUG_PRINT("def: " + str(resDef))
             if resDef:
                 defList = resDef.split("|")
-                nameId, fileId, line, col = tuple(defList)
-                name, fileName = GetResultString(db, dbId, nameId, fileId)
+                nameId, line, col = tuple(defList)
+                name, fileName = GetResultString(db, dbId, nameId)
                 if fileName != None and name != None:
                     result.append((name, fileName, line, col))
         return result
@@ -581,8 +578,8 @@ class QueryHandlerRef(HandlerBase):
             if rv:
                 rvList = rv.split(",")
                 for rv in rvList:
-                    nameId, fileId, line, col = rv.split("|")
-                    name, fn = GetResultString(db, dbId, nameId, fileId)
+                    nameId, line, col = rv.split("|")
+                    name, fn = GetResultString(db, dbId, nameId)
                     if fn != None and name != None:
                         resultList.append((name, fn, line, col))
             for i in set(resultList):
@@ -657,8 +654,8 @@ class QueryHandlerOverrideN(HandlerBase):
             if rv:
                 rvList = rv.split(",")
                 for rv in rvList:
-                    nameId, fileId, line, col = rv.split("|")
-                    name, fn = GetResultString(db, cuDbId, nameId, fileId)
+                    nameId, line, col = rv.split("|")
+                    name, fn = GetResultString(db, cuDbId, nameId)
                     if name != None and fn != None:
                         resultList.append((name, fn, line, col))
         for i in set(resultList):
@@ -683,8 +680,8 @@ class QueryHandlerName(HandlerBase):
                 val = db.get(q)
                 if val != None:
                     for v in val.split(","):
-                        nameId, fileId, line, col = v.split("|")
-                        name, fn = GetResultString(db, dbId, nameId, fileId)
+                        nameId, line, col = v.split("|")
+                        name, fn = GetResultString(db, dbId, nameId)
                         if name != None and fn != None and (self.mName in name):
                             resultList.append((name, fn, line, col))
         return resultList
@@ -773,7 +770,8 @@ class QueryHandlerRebuild(HandlerBase):
         if rv == None:
             print "ERROR: cannot obtain build options from the database."
             sys.exit(1)
-        workDir, excludes, opt = rv.split("|")
+        src_file_name, workDir, excludes, opt = rv.split("|")
+        assert src_file_name == self.m_srcFileName
         if excludes != "":
             excludes = " -e " + excludes
         cmd = "cxxtags -f " + excludes + " " + self.mDbDir + " " + self.m_srcFileName + " -- " + opt

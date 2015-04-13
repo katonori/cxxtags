@@ -1,5 +1,4 @@
-#ifndef _IINDEX_DB_H_
-#define _IINDEX_DB_H_
+#pragma once
 #include <string>
 
 namespace cxxtags {
@@ -13,5 +12,3 @@ public:
     virtual int insert_base_class_value(const std::string& classUsr, const std::string& baseClassUsr, int line, int col, int accessibility) = 0;
 };
 };
-
-#endif // _IINDEX_DB_H_

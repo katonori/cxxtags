@@ -46,7 +46,6 @@ typedef std::map<std::string, int> SiMap;
 typedef std::pair<std::string, int> SiPair;
 struct FileContext
 {
-    IdTbl m_fileIdTbl;
     IdTbl m_nameIdTbl;
     IdTbl m_usrIdTbl;
     std::list<SsPair> m_refList;

@@ -22,12 +22,12 @@
 
 * main db
 (1) position -> localUsrId
-    dbId + "A" + "|" + tokenname + "|" + localFid + "|" + lineNo + "|" + colNo
+    dbId + "A" + "|" + tokenname + "|" + lineNo + "|" + colNo
     -> localUsrId
 
 (2) localUsrId -> decl
     dbId + "D" + "|" + localUsrId
-    -> nameId + "|" + localFid + "|" + lineNo + "|" + colNo
+    -> nameId + "|" + lineNo + "|" + colNo
 
 (3) dbId -> cuFileList
     dbId + "S"
@@ -35,7 +35,7 @@
 
 (4) usr -> def
     dbId + "E" + "|" + usr
-    -> namId + "," + localFid + "," + lineNo + "," +colNo
+    -> namId + "," + lineNo + "," +colNo
 
 (5) localUsrId -> usr
     dbId + "F" + "|" + localUsrId
@@ -47,18 +47,15 @@
 
 (7) usr -> ref
     dbId + "L" + "|" + usr
-    -> [namId + "," + localFid + "," + lineNo + "," +colNo]+
+    -> [namId + "," + lineNo + "," +colNo]+
 
 (8) usr -> override
     dbId + "N" + "|" + usr
-    -> [namId + "," + localFid + "," + lineNo + "," +colNo]+
+    -> [namId + "," + lineNo + "," +colNo]+
 
 (9) usr -> overriden
     dbId + "M" + "|" + usr
-    -> [namId + "," + localFid + "," + lineNo + "," +colNo]+
-(10) position -> localUsrId
-    dbId + "A" + "|" + filename
-    -> localFid
+    -> [namId + "," + lineNo + "," +colNo]+
 
 decl
    (c1) -> (10) -> (1) -> (5) -> (3) -> (6) -> (2)

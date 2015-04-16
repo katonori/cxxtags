@@ -8,6 +8,7 @@ OUTPUT_DELIMITER = '|'
 USE_BASE64 = 1
 USE_USR2FILE_TABLE2 = False
 USE_PLYVEL = False
+USE_TOKEN_NAME = 0
 DB_NUM = 1
 
 import sys
@@ -32,7 +33,6 @@ TABLE_NAME_LOCAL_USR_ID_TO_USR = "F"
 TABLE_NAME_GLOBAL_FILE_ID_TO_NAME = "G"
 TABLE_NAME_CU_NAME_TO_ID = "H"
 TABLE_NAME_CU_ID_TO_NAME = "I"
-TABLE_NAME_GLOBAL_FILE_ID_TO_CU_ID = "J"
 TABLE_NAME_USR_TO_REF = "L"
 TABLE_NAME_USR_TO_OVERRIDER = "M"
 TABLE_NAME_USR_TO_OVERRIDEE = "N"
@@ -84,7 +84,6 @@ def genCConfig(filename):
         f.write('#define TABLE_NAME_GLOBAL_FILE_ID_TO_NAME "%s"\n'%(TABLE_NAME_GLOBAL_FILE_ID_TO_NAME))
         f.write('#define TABLE_NAME_CU_NAME_TO_ID "%s"\n'%(TABLE_NAME_CU_NAME_TO_ID))
         f.write('#define TABLE_NAME_CU_ID_TO_NAME "%s"\n'%(TABLE_NAME_CU_ID_TO_NAME))
-        f.write('#define TABLE_NAME_GLOBAL_FILE_ID_TO_CU_ID "%s"\n'%(TABLE_NAME_GLOBAL_FILE_ID_TO_CU_ID))
         f.write('#define TABLE_NAME_USR_TO_REF "%s"\n'%(TABLE_NAME_USR_TO_REF))
         f.write('#define TABLE_NAME_USR_TO_OVERRIDER "%s"\n'%(TABLE_NAME_USR_TO_OVERRIDER))
         f.write('#define TABLE_NAME_USR_TO_OVERRIDEE "%s"\n'%(TABLE_NAME_USR_TO_OVERRIDEE))
@@ -94,6 +93,7 @@ def genCConfig(filename):
         f.write('#define TABLE_NAME_CUFILES "%s"\n'%(TABLE_NAME_CUFILES))
         f.write('#define TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF "%s"\n'%(TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF))
         f.write('#define TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF2 "%s"\n'%(TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF2))
+        f.write('#define USE_TOKEN_NAME (%d)\n'%(USE_TOKEN_NAME))
 
 def DEBUG_PRINT(str):
     global gVerboseMode
@@ -276,7 +276,10 @@ class HandlerBase:
             sys.exit(1)
         mainDb = self.GetMainDb()
         DEBUG_PRINT("file: " + fileName)
-        q = self.m_dbId + TABLE_NAME_POSITION_TO_LOCAL_USR_ID + "|%s|%s|%s"%(self.m_tokenName, lineNo, colNo)
+        if USE_TOKEN_NAME == 1:
+            q = self.m_dbId + TABLE_NAME_POSITION_TO_LOCAL_USR_ID + "|%s|%s|%s"%(self.m_tokenName, lineNo, colNo)
+        else:
+            q = self.m_dbId + TABLE_NAME_POSITION_TO_LOCAL_USR_ID + "|%s|%s"%(lineNo, colNo)
         DEBUG_PRINT("q: " + q)
         usr = mainDb.get(q)
         DEBUG_PRINT("usrId: " + str(usr))
@@ -336,17 +339,6 @@ class HandlerBase:
                     for fid in res.split(","):
                         dbIdList.append(fid)
         return list(set(dbIdList))
-
-    def GetDbCuIdByDbId(self, dbId):
-        idx = int(dbId, 16)%DB_NUM
-        db = self.m_dbList[idx]
-        if db == None:
-            db = self.OpenDbById(dbId)
-            self.m_dbList[idx] = db
-        q = TABLE_NAME_GLOBAL_FILE_ID_TO_CU_ID + "|" + dbId
-        DEBUG_PRINT("GetDbByDbId: " + q)
-        res = self.mFileListDb.get(TABLE_NAME_GLOBAL_FILE_ID_TO_CU_ID + "|" + dbId)
-        return res
 
     def GetDbByDbId(self, dbId):
         idx = int(dbId, 16)%DB_NUM
@@ -641,13 +633,7 @@ class QueryHandlerOverrideN(HandlerBase):
         resultList = []
         for dbId in dbIdList:
             db = self.GetDbByDbId(dbId)
-            count = 0
-            cuId = self.GetDbCuIdByDbId(dbId)
-            filename = self.Id2Cu(cuId)
-            DEBUG_PRINT("cuname: " + filename)
-            cuDbId = self.GetDbIdByFilename(filename)
-            DEBUG_PRINT("cuDbId: " + cuDbId)
-            q = cuDbId + TABLE_NAME_USR_TO_OVERRIDER + "|" + str(usr)
+            q = dbId + TABLE_NAME_USR_TO_OVERRIDER + "|" + str(usr)
             DEBUG_PRINT("q: " + q)
             rv = db.get(q)
             DEBUG_PRINT("usr2overrirder: " + str(rv))
@@ -655,7 +641,7 @@ class QueryHandlerOverrideN(HandlerBase):
                 rvList = rv.split(",")
                 for rv in rvList:
                     nameId, line, col = rv.split("|")
-                    name, fn = GetResultString(db, cuDbId, nameId)
+                    name, fn = GetResultString(db, dbId, nameId)
                     if name != None and fn != None:
                         resultList.append((name, fn, line, col))
         for i in set(resultList):

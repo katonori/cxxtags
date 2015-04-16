@@ -204,9 +204,13 @@ static inline char* encodePos(char *buff, const string& name, unsigned int line,
     char* p = buff;
     strncpy(p, TABLE_NAME_POSITION_TO_LOCAL_USR_ID, 1);
     p++;
+#if USE_TOKEN_NAME != 0
     *p++ = '|';
     strncpy(p, name.c_str(), name.size());
     p += name.size();
+#else
+    (void)name;
+#endif
     *p++ = '|';
     p = encodeVal(p, line);
     *p++ = '|';
@@ -243,7 +247,12 @@ static inline void setKeyValuePos2Usr(char* buffKey, char* buffVal, int buffLen,
         *p++ = '\0';
     }
 #else
+#if USE_TOKEN_NAME != 0
     snprintf(buffKey, buffLen, TABLE_NAME_POSITION_TO_LOCAL_USR_ID "|%s|%x|%x", name.c_str(), line, col);
+#else
+    (void)name;
+    snprintf(buffKey, buffLen, TABLE_NAME_POSITION_TO_LOCAL_USR_ID "|%x|%x", line, col);
+#endif
     snprintf(buffVal, buffLen, "%x", usrId);
 #endif
 }
@@ -471,7 +480,6 @@ int DbImplLevelDb::addFilesToFileList(leveldb::DB* db)
             fid = valStr.substr(pos+1, valStr.size()-1);
         }
         m_fileContextMap[fn].m_dbId = fid;
-        dbWrite(db, TABLE_NAME_GLOBAL_FILE_ID_TO_CU_ID "|" + fid, m_compileUnitId);
 
         if(fn == m_compileUnit) {
             m_cuDbId = fid;

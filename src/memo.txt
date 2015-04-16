@@ -3,10 +3,6 @@
     "O" + "|" + fileName
     -> cuId + "," + dbId
 
-(c2) dbId -> cuId
-    "J" + "|" + dbId
-    -> cuId
-
 * usr db
 (u1) usr -> dbId(def)
     "T" + "|" + USR
@@ -22,7 +18,7 @@
 
 * main db
 (1) position -> localUsrId
-    dbId + "A" + "|" + tokenname + "|" + lineNo + "|" + colNo
+    dbId + "A" + "|" + lineNo + "|" + colNo
     -> localUsrId
 
 (2) localUsrId -> decl
@@ -35,7 +31,7 @@
 
 (4) usr -> def
     dbId + "E" + "|" + usr
-    -> namId + "," + lineNo + "," +colNo
+    -> nameId + "," + lineNo + "," +colNo
 
 (5) localUsrId -> usr
     dbId + "F" + "|" + localUsrId
@@ -57,13 +53,17 @@
     dbId + "M" + "|" + usr
     -> [namId + "," + lineNo + "," +colNo]+
 
+(10) usr -> overriden
+    dbId + "K" + "|" + usr
+    -> filename + "," + workDir + "," + exclude + "," + opt
+
 decl
-   (c1) -> (10) -> (1) -> (5) -> (3) -> (6) -> (2)
+   (c1) -> (10) -> (1) -> (5) -> (3) -> (6) -> (2) -> (10)
 def
-   (c1) -> (10) -> (1) -> (5) -> (u1) -> (4)
+   (c1) -> (10) -> (1) -> (5) -> (u1) -> (4) -> (10)
 ref
-   (c1) -> (10) -> (1) -> (5) -> (u2) -> (7)
+   (c1) -> (10) -> (1) -> (5) -> (u2) -> (7) -> (10)
 override
-   (c1) -> (10) -> (1) -> (5) -> (8)
+   (c1) -> (10) -> (1) -> (5) -> (8) -> (10)
 overriden
-   (c1) -> (10) -> (1) -> (5) -> (9)
+   (c1) -> (10) -> (1) -> (5) -> (9) -> (10)

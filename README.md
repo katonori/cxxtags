@@ -25,7 +25,7 @@ Requirement
     * Thread-safe Python bindings for LevelDB. 
     * https://code.google.com/p/py-leveldb/
 
-**cxxtags** is developped and tested on Mac OS X 10.9.3, python-2.7.5 and clang(LLVM)-3.2.
+**cxxtags** is developped and tested on Ubuntu 14.04, python-2.7.6 and clang(LLVM)-3.4.
 But it is expected to be able to run on other Unix-like systems inluding cygwin.
 
 How to build
@@ -37,17 +37,19 @@ How to build
         $ git clone https://github.com/katonori/cxxtags.git
 
 * Build the project using cmake
-    * run cmake specifying LLVM\_HOME and LEVELDB\_HOME and run build
+    * Run cmake and run build. Make sure that llvm-config is in your PATH.
+    * You must specify a variable LEVELDB\_HOME when you execute cmake if libleveldb is not under
+      default linker search path.
 
             $ mkdir -p build && cd build
-            $ cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -DLLVM_HOME=/pkg/llvm-3.2/ -DLEVELDB_HOME=/pkg/leveldb-1.15.0/ ../
+            $ cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ../
             $ make
             $ make install
             # build the tag database
-            $ ../../bin/cxxtags_run_proj \_db compile_commands.json
+            $ ../../bin/cxxtags_run_proj _db compile_commands.json
 
 * Install
-    * copy the contents of ${CXXTAGS\_REPOSITORY\_ROOT}/bin directory to your installation path
+    * Copy the contents of ${CXXTAGS\_REPOSITORY\_ROOT}/bin directory to your installation path
 
 * See [README.cygwin.md](README.cygwin.md "") for more information for cygwin.
 

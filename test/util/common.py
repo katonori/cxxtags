@@ -123,8 +123,8 @@ def test_one(q, ans):
             if outList[i] != ans[i]:
                 print q
                 print "DIFFER:"
-                print("ref   : " + outList[i])
-                print("result: " + ans[i])
+                print("ref   : " + ans[i])
+                print("result: " + outList[i])
                 result += 1
             i += 1
     return result

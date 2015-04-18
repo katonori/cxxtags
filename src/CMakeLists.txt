@@ -24,6 +24,7 @@ execute_process(
         OUTPUT_VARIABLE LLVM_LDFLAGS
         )
 set(CMAKE_CXX_FLAGS "-g -O3 -Wall -std=gnu++11 ${LLVM_CXXFLAGS} -fexceptions")
+add_definitions(-UNDEBUG)
 set(CMAKE_EXE_LINKER_FLAGS "${LLVM_LDFLAGS}")
 
 FIND_PACKAGE(Boost COMPONENTS filesystem system timer REQUIRED)

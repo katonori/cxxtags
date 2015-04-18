@@ -1,5 +1,5 @@
 #TESTS = enum ns inheritance arg_test template_type_param db_update enum_query inheritance_query type_info rebuild
-TESTS = keyword_with_space enum ns inheritance rebuild cxxtags_run_proj/dir_hir macro
+TESTS = keyword_with_space enum ns inheritance rebuild cxxtags_run_proj/dir_hir macro multiple_override
 
 test: $(TESTS)
 	rm -f log

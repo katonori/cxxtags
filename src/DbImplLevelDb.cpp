@@ -529,8 +529,6 @@ int DbImplLevelDb::writeUsrDb(const SiMap& usrMap, map<string, SiMap> usrFidMap,
             file_list_string = file_list_string.substr(0, file_list_string.size()-1);
             wb_usrdb.Put(dbName + "|" + usr, file_list_string);
 #endif
-
-            m_usrCount++;
         }
     }
     return 0;
@@ -650,7 +648,6 @@ int DbImplLevelDb::fin(void)
         //printf("time: TIMER_INS_REF_1: %s", m_timers[TIMER_INS_REF_1].format().c_str());
         printf("time: TIMER_INS_REF_2: %s", m_timers[TIMER_INS_REF_2].format().c_str());
         printf("time: TIMER_INS_DECL: %s", m_timers[TIMER_INS_DECL].format().c_str());
-        printf("time: usr count: %d\n", m_usrCount);
 #endif
     }
 

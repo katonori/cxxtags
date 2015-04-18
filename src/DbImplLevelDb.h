@@ -71,23 +71,23 @@ struct Token {
     int usrId;
 };
 
-typedef std::map<std::string, std::string> SsMap;
-typedef std::pair<std::string, std::string> SsPair;
-typedef std::map<std::string, int> SiMap;
-typedef std::pair<std::string, int> SiPair;
+typedef std::map<std::string, std::string>      SsMap;
+typedef std::pair<std::string, std::string>     SsPair;
+typedef std::map<std::string, int>              SiMap;
+typedef std::pair<std::string, int>             SiPair;
 struct FileContext
 {
-    IdTbl m_nameIdTbl;
-    IdTbl m_usrIdTbl;
-    std::map<Position, std::map<Token, int>> m_positition2usrList;
-    std::list<SsPair> m_declList;
-    SsMap m_overrideeMap;
-    std::map<std::string, SiMap> m_overriderMap;
-    SsMap m_usr2refMap;
-    std::string m_dbId;
+    IdTbl                                       m_nameIdTbl;
+    IdTbl                                       m_usrIdTbl;
+    std::map<Position, std::map<Token, int>>    m_positition2usrList;
+    std::list<SsPair>                           m_declList;
+    SsMap                                       m_overrideeMap;
+    std::map<std::string, SiMap>                m_overriderMap;
+    SsMap                                       m_usr2refMap;
+    std::string                                 m_dbId;
 };
-typedef std::map<std::string, FileContext> FcMap;
-typedef std::pair<std::string, FileContext> FcPair;
+typedef std::map<std::string, FileContext>      FcMap;
+typedef std::pair<std::string, FileContext>     FcPair;
 
 class DbImplLevelDb : public IIndexDb {
 public:
@@ -150,33 +150,31 @@ private:
 #endif
     }
 
-    bool        m_isRebuild;
-    std::string m_cuDbId;
+    bool                            m_isRebuild;
+    std::string                     m_cuDbId;
+    std::string                     m_compileUnit;
+    std::string                     m_commonDbDir;
+    std::string                     m_dbDir;
+    char                            m_CharBuff0[8192];
+    char                            m_CharBuff1[8192];
+    leveldb::ReadOptions            m_defaultRoptions;
+    leveldb::WriteOptions           m_defaultWoptions;
+    leveldb::Options                m_defaultOptions;
 
-    std::string m_compileUnit;
-    std::string m_commonDbDir;
-    std::string m_dbDir;
-    char m_CharBuff0[8192];
-    char m_CharBuff1[8192];
-    leveldb::ReadOptions m_defaultRoptions;
-    leveldb::WriteOptions m_defaultWoptions;
-    leveldb::Options m_defaultOptions;
+    const int                       k_usrDbDirNum = 1;
 
-    const int k_usrDbDirNum = 1;
-
-    std::string m_compileUnitId;
-    FcMap m_fileContextMap;
-    SiMap m_refUsrMap;
-    SiMap m_defUsrMap;
-    SiMap m_overriderUsrMap;
+    std::string                     m_compileUnitId;
+    FcMap                           m_fileContextMap;
+    SiMap                           m_refUsrMap;
+    SiMap                           m_defUsrMap;
+    SiMap                           m_overriderUsrMap;
 #ifdef TIMER
-    const int k_timerNum = 128;
-    boost::timer::cpu_timer* m_timers;
+    const int                       k_timerNum = 128;
+    boost::timer::cpu_timer*        m_timers;
 #endif
-    SsMap m_finishedFiles;
-    std::map<std::string, SiMap > m_usr2fileMap;
-    std::string m_buildOpt;
-    int m_usrCount = 0;
+    SsMap                           m_finishedFiles;
+    std::map<std::string, SiMap >   m_usr2fileMap;
+    std::string                     m_buildOpt;
 };
 
 

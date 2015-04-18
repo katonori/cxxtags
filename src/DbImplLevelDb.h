@@ -64,6 +64,9 @@ struct Token {
         : name(name)
         , usrId(usrId)
     {};
+    bool operator<(const Token& r) const {
+        return usrId < r.usrId;
+    }
     std::string name;
     int usrId;
 };
@@ -76,7 +79,7 @@ struct FileContext
 {
     IdTbl m_nameIdTbl;
     IdTbl m_usrIdTbl;
-    std::map<Position, std::list<Token>> m_positition2usrList;
+    std::map<Position, std::map<Token, int>> m_positition2usrList;
     std::list<SsPair> m_declList;
     SsMap m_overrideeMap;
     std::map<std::string, SiMap> m_overriderMap;

@@ -230,7 +230,7 @@ static inline char* encodeDecl(char *buff, unsigned int nameId, unsigned int lin
 }
 #endif
 
-static inline void setKeyValuePos2Usr(char* buffKey, char* buffVal, int buffLen, const Position& pos, std::list<Token> tokenList)
+static inline void setKeyValuePos2Usr(char* buffKey, char* buffVal, int buffLen, const Position& pos, std::map<Token, int> tokenList)
 {
 #if (USE_BASE64 != 0)
     encodePos(buffKey, pos);
@@ -241,7 +241,7 @@ static inline void setKeyValuePos2Usr(char* buffKey, char* buffVal, int buffLen,
             if(!first) {
                 *p++ = ',';
             }
-            p = encodeVal(p, itr.usrId);
+            p = encodeVal(p, itr.first.usrId);
             first = false;
         }
         *p++ = '\0';
@@ -327,7 +327,7 @@ int DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, c
 
     // pos -> usr
     timerResume(TIMER_INS_REF_2);
-    fctx.m_positition2usrList[Position(line, col)].push_back(Token(name, usrId));
+    fctx.m_positition2usrList[Position(line, col)][Token(name, usrId)] = 1;
     timerStop(TIMER_INS_REF_2);
     timerStop(TIMER_INS_REF);
     return 0;
@@ -362,7 +362,7 @@ int DbImplLevelDb::insert_decl_value(const string& usr, const string& filename, 
     }
 
     // pos -> usr
-    fctx.m_positition2usrList[Position(line, col)].push_back(Token(name, usrId));
+    fctx.m_positition2usrList[Position(line, col)][Token(name, usrId)] = 1;
     timerStop(TIMER_INS_DECL);
     return 0;
 }
@@ -401,7 +401,7 @@ int DbImplLevelDb::insert_overriden_value(const string& usr, const string& name,
         m_usr2fileMap[usr][filename] = 0;
     }
     // pos -> usr
-    fctx.m_positition2usrList[Position(line, col)].push_back(Token(name, usrIdOverrider));
+    fctx.m_positition2usrList[Position(line, col)][Token(name, usrIdOverrider)] = 1;
 
     timerStop(TIMER_INS_OVERRIDEN);
     return 0;

@@ -38,8 +38,8 @@ How to build
 
 * Build the project using cmake
     * Run cmake and run build. Make sure that llvm-config is in your PATH.
-    * You must specify a variable LEVELDB\_HOME when you execute cmake if libleveldb is not under
-      default linker search path.
+    * You need to specify a variable LEVELDB\_HOME when you execute cmake if libleveldb.so is not under
+      the default linker search path.
 
             $ mkdir -p build && cd build
             $ cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ../

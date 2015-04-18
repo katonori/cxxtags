@@ -2,19 +2,38 @@ cmake_minimum_required(VERSION 2.8)
 
 project(cxxtags)
 
-set(LLVM_HOME "" CACHE PATH "")
-set(LEVELDB_HOME "" CACHE PATH "")
-set(CMAKE_CXX_FLAGS "-g -O3 -Wall -std=gnu++11")
-set(CMAKE_EXE_LINKER_FLAGS "" CACHE STRING "")
+if(NOT LLVM_CONFIG)
+    set(LLVM_CONFIG "llvm-config")
+endif()
+if(NOT LEVELDB_HOME)
+    set(LEVELDB_HOME "/usr")
+endif()
+
+execute_process(
+        COMMAND ${LLVM_CONFIG} --cxxflags
+        COMMAND tr -d '\n'
+        OUTPUT_VARIABLE LLVM_CXXFLAGS
+        ERROR_VARIABLE ERROR_MSG
+        )
+if(LLVM_CXXFLAGS STREQUAL "")
+    message(FATAL_ERROR "ERROR: command execution faild: \"${LLVM_CONFIG}\". Set variable LLVM_CONFIG correctly.")
+endif()
+execute_process(
+        COMMAND ${LLVM_CONFIG} --ldflags
+        COMMAND tr -d '\n'
+        OUTPUT_VARIABLE LLVM_LDFLAGS
+        )
+set(CMAKE_CXX_FLAGS "-g -O3 -Wall -std=gnu++11 ${LLVM_CXXFLAGS} -fexceptions")
+set(CMAKE_EXE_LINKER_FLAGS "${LLVM_LDFLAGS}")
+message(STATUS "LLVM_CXXFLAGS: ${LLVM_CXXFLAGS}")
 
 FIND_PACKAGE(Boost COMPONENTS filesystem system timer REQUIRED)
 
 include_directories(
-    ${LLVM_HOME}/include
     ${LEVELDB_HOME}/include
     ${Boost_INCLUDE_DIRS}
 )
-link_directories(${LLVM_HOME}/lib ${LEVELDB_HOME}/lib)
+link_directories(${LEVELDB_HOME}/lib)
 
 add_executable(cxxtags_core cxxtags_core.cpp DbImplLevelDb.cpp)
 target_link_libraries(cxxtags_core clang stdc++ leveldb snappy

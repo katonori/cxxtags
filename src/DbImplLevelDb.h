@@ -40,6 +40,34 @@ public:
     }
 };
 
+struct Position {
+    Position()
+    {};
+    Position(int line, int column)
+        : line(line)
+        , column(column)
+    {};
+    bool operator<(const Position& r) const {
+        if(line == r.line) {
+            return column < r.column;
+        }
+        return line < r.line;
+    }
+    int line;
+    int column;
+};
+
+struct Token {
+    Token()
+    {};
+    Token(std::string name, int usrId)
+        : name(name)
+        , usrId(usrId)
+    {};
+    std::string name;
+    int usrId;
+};
+
 typedef std::map<std::string, std::string> SsMap;
 typedef std::pair<std::string, std::string> SsPair;
 typedef std::map<std::string, int> SiMap;
@@ -48,14 +76,12 @@ struct FileContext
 {
     IdTbl m_nameIdTbl;
     IdTbl m_usrIdTbl;
-    std::list<SsPair> m_refList;
+    std::map<Position, std::list<Token>> m_positition2usrList;
     std::list<SsPair> m_declList;
     SsMap m_overrideeMap;
     std::map<std::string, SiMap> m_overriderMap;
     SsMap m_usr2refMap;
     std::string m_dbId;
-    leveldb::WriteBatch m_wb;
-    leveldb::DB* m_db;
 };
 typedef std::map<std::string, FileContext> FcMap;
 typedef std::pair<std::string, FileContext> FcPair;
@@ -140,8 +166,8 @@ private:
     SiMap m_refUsrMap;
     SiMap m_defUsrMap;
     SiMap m_overriderUsrMap;
-    const int k_timerNum = 128;
 #ifdef TIMER
+    const int k_timerNum = 128;
     boost::timer::cpu_timer* m_timers;
 #endif
     SsMap m_finishedFiles;

@@ -61,8 +61,8 @@ def DoDeclTest(test_data_list_decl, test_data_list_ref):
         for row in cmdResult:
             if row != resultList[i]:
                 print("DIFFER: ")
-                print(row)
-                print(resultList[i])
+                print("ref   : " + resultList[i])
+                print("result: " + row)
                 err += 1
             i+=1
     return err
@@ -96,13 +96,13 @@ def DoRefTest(test_data_list_ref, test_data_list_decl):
         for row in cmdResult:
             if row != resultList[i]:
                 print "DIFFER: " 
-                print row
-                print resultList[i]
+                print("ref   : " + resultList[i])
+                print("result: " + row)
                 err += 1
             i+=1
     return err
 
-def test_one(q, a):
+def test_one(q, ans):
     result = 0
     (rv, out) = commands.getstatusoutput(CXXTAGS_QUERY + " " + q)
     #print out
@@ -113,18 +113,18 @@ def test_one(q, a):
     else:
         outList = list(set(out.split("\n")))
         outList.sort()
-        a.sort()
-        if len(outList) != len(a):
-            print "ERROR: len out=%d, ref=%d"%(len(outList), len(a))
+        ans.sort()
+        if len(outList) != len(ans):
+            print "ERROR: len out=%d, ref=%d"%(len(outList), len(ans))
             print "ERROR: q: " + q
             result += 1
         i = 0
         while i < len(outList):
-            if outList[i] != a[i]:
+            if outList[i] != ans[i]:
                 print q
                 print "DIFFER:"
-                print "    ", outList[i]
-                print "    ", a[i]
+                print("ref   : " + outList[i])
+                print("result: " + ans[i])
                 result += 1
             i += 1
     return result

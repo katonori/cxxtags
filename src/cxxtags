@@ -17,6 +17,7 @@ class CxxTagsCoreWrapper:
     mOutFile = ""
     mTimeList = []
     mIsVerbose = 0
+    mIsPartial = 0
     mBuildOpt = ""
     mConfigFile = ".cxxtags/config.json"
     mHomeDir = ""
@@ -42,9 +43,11 @@ class CxxTagsCoreWrapper:
         jd = json.load(f)
         if jd.has_key("build_opt"):
             self.mBuildOpt = jd["build_opt"]
+        if jd.has_key("command_opt"):
+            self.mOptCore = jd["command_opt"]
 
     def printUsage(self):
-        print "usage: cxxtags [-e,--exclude exclude_list] out_dir input_file -- [compiler_arguments]"
+        print "usage: cxxtags [-e,-p,--exclude exclude_list] out_dir input_file -- [compiler_arguments]"
 
     # parse arguments.
     def parseArgs(self, argv):
@@ -61,6 +64,9 @@ class CxxTagsCoreWrapper:
                 i += 2
             elif arg == "-v":
                 self.mIsVerbose = 1
+                i += 1
+            elif arg == "-p":
+                self.mOptCore += " -p"
                 i += 1
             elif arg == "-f":
                 self.mOptCore += " -f"

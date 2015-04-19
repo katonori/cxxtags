@@ -16,6 +16,7 @@
 
 namespace cxxtags {
 static bool gIsRebuild = false;
+static bool gIsOmitLocal = false;
 static std::string gLastClassUsr = "";
 cxxtags::IIndexDb* gDb;
 
@@ -137,6 +138,17 @@ static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::strin
     check_rv(gDb->insert_decl_value(cUsr, fileName, name, line, column, isDef));
 }
 
+static inline void procValDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column)
+{
+    std::string usr = cUsr;
+    if(!gIsOmitLocal
+        || (usr.find("c:@") == 0 || usr.find("c:macro") == 0)) {
+        int isDef = clang_isCursorDefinition(Cursor);
+        // insert to database
+        check_rv(gDb->insert_decl_value(cUsr, fileName, name, line, column, isDef));
+    }
+}
+
 // process declarations
 static inline void procFuncDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column)
 {
@@ -170,7 +182,7 @@ static inline void procCXXMethodDecl(const CXCursor& Cursor, const char* cUsr, s
 // process c++ references.
 static inline void procRef(const CXCursor& Cursor, std::string name, std::string fileName, int line, int column)
 {
-    const char* cUsr = "";
+    const char* cUsr = nullptr;
     CXCursor refCur = clang_getCursorReferenced(Cursor);
     std::string cRefFileName;
     if (!clang_equalCursors(refCur, clang_getNullCursor())) {
@@ -238,11 +250,14 @@ static inline void procCursor(const CXCursor& Cursor) {
         case CXCursor_ClassTemplate:
         case CXCursor_Namespace:
         case CXCursor_UnionDecl:
-        case CXCursor_VarDecl:
-        case CXCursor_ParmDecl:
         case CXCursor_FieldDecl:
         case CXCursor_MacroDefinition: {
             procDecl(Cursor, cUsr, name, fileName, line, column);
+            break;
+        }
+        case CXCursor_VarDecl:
+        case CXCursor_ParmDecl: {
+            procValDecl(Cursor, cUsr, name, fileName, line, column);
             break;
         }
         case CXCursor_StructDecl:
@@ -492,6 +507,11 @@ static int indexSource(int argc, const char **argv) {
                 gExcludeList = splitString(gExcludeListStr);
                 argv+=2;
                 argc-=2;
+            }
+            else if(strncmp(*argv, "-p", 2) == 0) {
+                gIsOmitLocal = true;
+                argv++;
+                argc--;
             }
             else if(strncmp(*argv, "-f", 2) == 0) {
                 gIsRebuild = true;

@@ -29,8 +29,8 @@
     dbId + "S"
     -> [dbId]+
 
-(4) usr -> def
-    dbId + "E" + "|" + usr
+(4) localUsrId -> def
+    dbId + "E" + "|" + localUsrId
     -> nameId + "," + lineNo + "," +colNo
 
 (5) localUsrId -> usr
@@ -41,29 +41,29 @@
     dbId + "R" + "|" + usr
     -> localUsrId
 
-(7) usr -> ref
-    dbId + "L" + "|" + usr
+(7) localusrid -> ref
+    dbId + "L" + "|" + localUsrId
     -> [namId + "," + lineNo + "," +colNo]+
 
-(8) usr -> override
-    dbId + "N" + "|" + usr
+(8) localUsrId -> override
+    dbId + "N" + "|" + localUsrId
+    -> [usrId]+
+
+(9) localUsrId -> overriden
+    dbId + "M" + "|" + localUsrId
     -> [namId + "," + lineNo + "," +colNo]+
 
-(9) usr -> overriden
-    dbId + "M" + "|" + usr
-    -> [namId + "," + lineNo + "," +colNo]+
-
-(10) usr -> overriden
-    dbId + "K" + "|" + usr
-    -> filename + "," + workDir + "," + exclude + "," + opt
+(10) nameId -> name
+    dbId + "C" + "|" + id
+    -> name
 
 decl
-   (c1) -> (1) -> (5) -> (3) -> (6) -> (2) -> (10)
+   (c1) -> (1) -> (5) -> (3) -> (5) -> (6) -> (2) -> (10)
 def
-   (c1) -> (1) -> (5) -> (u1) -> (4) -> (10)
+   (c1) -> (1) -> (5) -> (u1) -> (6) -> (4) -> (10)
 ref
-   (c1) -> (1) -> (5) -> (u2) -> (7) -> (10)
+   (c1) -> (1) -> (5) -> (u2) -> (6) -> (7) -> (10)
 override
-   (c1) -> (1) -> (5) -> (8) -> (10)
+   (c1) -> (1) -> (6) -> (8) -> (5) -> (6) -> (2) -> (10)
 overriden
-   (c1) -> (1) -> (5) -> (u3) -> (9) -> (10)
+   (c1) -> (1) -> (5) -> (u3) -> (6) -> (9) -> (10)

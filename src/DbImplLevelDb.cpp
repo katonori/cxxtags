@@ -114,7 +114,6 @@ int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, cons
             printf("ERROR: db info\n");
         }
         dbWrite(dbCommon, TABLE_NAME_CU_NAME_TO_ID "|" + m_compileUnit, m_compileUnitId);
-        dbWrite(dbCommon, TABLE_NAME_CU_ID_TO_NAME "|" + m_compileUnitId, m_compileUnit);
     }
     else if(rv == 0) {
         // alread exists
@@ -263,16 +262,18 @@ static inline void setKeyValueUsr2Decl(char* buffKey, char* buffVal, int buffLen
 #endif
 }
 
-static inline void setKeyValueUsr2Def(char* buffKey, char* buffVal, int buffLen, unsigned int nameId, unsigned int line, unsigned int col, const string& usr)
+static inline void setKeyValueUsr2Def(char* buffKey, char* buffVal, int buffLen, unsigned int nameId, unsigned int line, unsigned int col, int usrId)
 {
-    char* p = (char*)buffKey;
-    strncpy(p, TABLE_NAME_USR_TO_DEF "|", 2);
-    p+=2;
-    strncpy(p, usr.c_str(), usr.size()+1);
 #if (USE_BASE64 != 0)
+    char* p = (char*)buffKey;
+    strncpy(p, TABLE_NAME_LOCAL_USR_ID_TO_DEF "|", 2);
+    p+=2;
+    p = encodeVal(p, usrId);
+    *p++ = '\0';
     encodeDecl(buffVal, nameId, line, col);
 #else
     // usrId -> def info
+    snprintf(buffKey, buffLen, TABLE_NAME_LOCAL_USR_ID_TO_DEF "|%x", usrId); 
     snprintf(buffVal, buffLen, "%x|%x|%x", nameId, line, col);
 #endif
 }
@@ -306,10 +307,10 @@ int DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, c
     int usrId = fctx.m_usrIdTbl.GetId(usr);
     encItemInfo(m_CharBuff0, sizeof(m_CharBuff0), nameId, line, col);
     {
-        SsMap& mapRef = fctx.m_usr2refMap;
-        SsMap::iterator itr = mapRef.find(usr);
+        IsMap& mapRef = fctx.m_usrId2refMap;
+        auto itr = mapRef.find(usrId);
         if(itr == mapRef.end()){ 
-            mapRef[usr] = string(m_CharBuff0);
+            mapRef[usrId] = string(m_CharBuff0);
         }
         else {
             itr->second.append(string(",") + m_CharBuff0);
@@ -346,7 +347,7 @@ int DbImplLevelDb::insert_decl_value(const string& usr, const string& filename, 
     if(isDef) {
         m_defUsrMap[usr] = 1;
         // usrId -> def info
-        setKeyValueUsr2Def(m_CharBuff0, m_CharBuff1, sizeof(m_CharBuff0), nameId, line, col, usr);
+        setKeyValueUsr2Def(m_CharBuff0, m_CharBuff1, sizeof(m_CharBuff0), nameId, line, col, usrId);
         fctx.m_declList.push_back(SsPair(m_CharBuff0, m_CharBuff1));
     }
     else {
@@ -377,23 +378,14 @@ int DbImplLevelDb::insert_overriden_value(const string& usr, const string& name,
     m_overriderUsrMap[usr] = 1;
     // usrId -> decl info
     encItemInfo(m_CharBuff1, sizeof(m_CharBuff1), nameId, line, col);
-    if(!fctx.m_overrideeMap[usr].empty()) {
-        fctx.m_overrideeMap[usr].append(string(",") + string(m_CharBuff1));
+    if(!fctx.m_usrId2overrideeMap[usrId].empty()) {
+        fctx.m_usrId2overrideeMap[usrId].append(string(",") + string(m_CharBuff1));
     }
     else {
-        fctx.m_overrideeMap[usr] = string(m_CharBuff1);
+        fctx.m_usrId2overrideeMap[usrId] = string(m_CharBuff1);
     }
 
-#if (USE_BASE64 != 0)
-    {
-        char* p = m_CharBuff1;
-        p = encodeVal(p, usrId);
-        *p = '\0';
-    }
-#else
-    snprintf(m_CharBuff1, sizeof(m_CharBuff1), "%x", usrId);
-#endif
-    fctx.m_overriderMap[usrOverrider][m_CharBuff1] = 0;
+    fctx.m_usrId2overriderMap[usrIdOverrider][usrId] = 0;
 
     if(!usr.empty()) {
         m_usr2fileMap[usr][filename] = 0;
@@ -692,54 +684,75 @@ int DbImplLevelDb::fin(void)
                 wb.Put(dbId + itr.first, itr.second);
             }
             // override
-            {
-                for(const auto& itr : fctx.m_overrideeMap) {
-                    // overridee -> overrider
-                    wb.Put(dbId + TABLE_NAME_USR_TO_OVERRIDER "|" + itr.first, itr.second);
-                }
-                for(const auto& itr : fctx.m_overriderMap) {
-                    const SiMap& usrMap = itr.second;
-                    string val = "";
-                    for(const auto& itr_usr : usrMap) {
-                        if(val.empty()) {
-                            val = itr_usr.first;
-                        }
-                        else {
-                            val.append(string(",") + itr_usr.first);
-                        }
+            for(const auto& itr : fctx.m_usrId2overrideeMap) {
+#if (USE_BASE64 != 0)
+                char* p = m_CharBuff0;
+                p = encodeVal(p, itr.first);
+                *p = '\0';
+#else
+                snprintf(m_CharBuff0, sizeof(m_CharBuff0), "%x", itr.first);
+#endif
+                // overridee -> overrider
+                wb.Put(dbId + TABLE_NAME_LOCAL_USR_ID_TO_OVERRIDER "|" + m_CharBuff0, itr.second);
+            }
+            for(const auto& itr : fctx.m_usrId2overriderMap) {
+                const IiMap& usrMap = itr.second;
+#if (USE_BASE64 != 0)
+                char* p = m_CharBuff0;
+                p = encodeVal(p, itr.first);
+                *p = '\0';
+#else
+                snprintf(m_CharBuff0, sizeof(m_CharBuff0), "%x", itr.first);
+#endif
+                string val = "";
+                for(const auto& itr_usr : usrMap) {
+#if (USE_BASE64 != 0)
+                    char* p = m_CharBuff1;
+                    p = encodeVal(p, itr_usr.first);
+                    *p = '\0';
+#else
+                    snprintf(m_CharBuff1, sizeof(m_CharBuff1), "%x", itr_usr.first);
+#endif
+                    if(val.empty()) {
+                        val = m_CharBuff1;
                     }
-                    // overrider -> overridee
-                    wb.Put(dbId + TABLE_NAME_USR_TO_OVERRIDEE "|" + itr.first, val);
+                    else {
+                        val.append(string(",") + m_CharBuff1);
+                    }
                 }
+                // overrider -> overridee
+                wb.Put(dbId + TABLE_NAME_LOCAL_USR_ID_TO_OVERRIDEE "|" + m_CharBuff0, val);
             }
 
             // usr
             const SiMap& mapRef = fctx.m_usrIdTbl.GetTbl();
             addIdList(&wb, mapRef, dbId + TABLE_NAME_LOCAL_USR_ID_TO_USR);
-            {
-                for(const auto& itr : mapRef) {
-                    string key(dbId + TABLE_NAME_USR_TO_ID "|");
-                    key.append(itr.first);
+            for(const auto& itr : mapRef) {
+                string key(dbId + TABLE_NAME_USR_TO_LOCAL_ID "|");
+                key.append(itr.first);
 #if (USE_BASE64 != 0)
-                    {
-                        char* p = m_CharBuff1;
-                        p = encodeVal(p, itr.second);
-                        *p = '\0';
-                    }
+                char* p = m_CharBuff1;
+                p = encodeVal(p, itr.second);
+                *p = '\0';
 #else
-                    snprintf(m_CharBuff1, sizeof(m_CharBuff1), "%x", itr.second);
+                snprintf(m_CharBuff1, sizeof(m_CharBuff1), "%x", itr.second);
 #endif
-                    wb.Put(key, m_CharBuff1);
-                }
+                wb.Put(key, m_CharBuff1);
             }
-            for(const auto& itr : fctx.m_usr2refMap) {
-                const string& usr = itr.first;
-                if(!usr.empty()) {
-                    string key(dbId + TABLE_NAME_USR_TO_REF "|");
-                    //key.append(usr + "|" + m_compileUnitId);
-                    key.append(usr);
-                    wb.Put(key, itr.second);
-                }
+
+            for(auto& itr : fctx.m_usrId2refMap) {
+                int usrId = itr.first;
+#if (USE_BASE64 != 0)
+                string key(dbId + TABLE_NAME_LOCAL_USR_ID_TO_REF "|");
+                char* p = m_CharBuff0;
+                p = encodeVal(p, usrId);
+                *p = '\0';
+                key.append(m_CharBuff0);
+#else
+                snprintf(m_CharBuff0, sizeof(m_CharBuff0), "%x", usrId);
+                string key(dbId + TABLE_NAME_LOCAL_USR_ID_TO_REF "|" + m_CharBuff0);
+#endif
+                wb.Put(key, itr.second);
             }
             const SiMap& nameMap = fctx.m_nameIdTbl.GetTbl();
             addIdList(&wb, nameMap, dbId + TABLE_NAME_TOKEN_ID_TO_NAME);
@@ -747,6 +760,7 @@ int DbImplLevelDb::fin(void)
             wb.Put(dbId + TABLE_NAME_CUFILES, valFiles);
             wb.Put(dbId + TABLE_NAME_BUILD_INFO, m_compileUnit + "|" + filename + "|" + m_buildOpt);
         }
+
         for(int i = 0; i < DB_NUM; i++) {
             if(dbDirtyFlags[i]) {
                 leveldb::DB* db;

@@ -14,6 +14,13 @@
 
 namespace cxxtags {
 
+typedef std::map<std::string, std::string>      SsMap;
+typedef std::pair<std::string, std::string>     SsPair;
+typedef std::map<std::string, int>              SiMap;
+typedef std::map<int, std::string>              IsMap;
+typedef std::map<int, int>                      IiMap;
+typedef std::pair<std::string, int>             SiPair;
+
 // tables that keep allocated IDs.
 class IdTbl
 {
@@ -23,7 +30,7 @@ public:
     {
         mMap[""] = 0;
     }
-    std::map<std::string, int > mMap;
+    SiMap mMap;
     int mCurId;
     int GetId(const std::string& str)
     {
@@ -37,7 +44,7 @@ public:
         mCurId++;
         return rv;
     }
-    const std::map<std::string, int >& GetTbl(void) const
+    const SiMap& GetTbl(void) const
     {
         return mMap;
     }
@@ -74,19 +81,15 @@ struct Token {
     int usrId;
 };
 
-typedef std::map<std::string, std::string>      SsMap;
-typedef std::pair<std::string, std::string>     SsPair;
-typedef std::map<std::string, int>              SiMap;
-typedef std::pair<std::string, int>             SiPair;
 struct FileContext
 {
     IdTbl                                       m_nameIdTbl;
     IdTbl                                       m_usrIdTbl;
     std::map<Position, std::map<Token, int>>    m_positition2usrList;
     std::list<SsPair>                           m_declList;
-    SsMap                                       m_overrideeMap;
-    std::map<std::string, SiMap>                m_overriderMap;
-    SsMap                                       m_usr2refMap;
+    IsMap                                       m_usrId2overrideeMap;
+    std::map<int, IiMap>                        m_usrId2overriderMap;
+    IsMap                                       m_usrId2refMap;
     std::string                                 m_dbId;
 };
 typedef std::map<std::string, FileContext>      FcMap;
@@ -106,7 +109,7 @@ public:
     int insert_overriden_value(const std::string& usr, const std::string& name, const std::string& filename, int line, int col, const std::string& overriderUsr, int isDef);
     int insert_base_class_value(const std::string& classUsr, const std::string& baseClassUsr, int line, int col, int accessibility);
 
-    int addIdList(leveldb::WriteBatch* db, const std::map<std::string, int >& inMap, const std::string& tableName);
+    int addIdList(leveldb::WriteBatch* db, const SiMap& inMap, const std::string& tableName);
 
     enum {
         TIMER_INS_REF = 64,

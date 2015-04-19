@@ -21,6 +21,7 @@ import re
 import os
 import time
 import commands
+import inspect
 
 TABLE_NAME_POSITION_TO_LOCAL_USR_ID = "A"
 TABLE_NAME_USR_TO_GLOBAL_FILE_ID_REF = "B"
@@ -29,7 +30,6 @@ TABLE_NAME_TOKEN_ID_TO_NAME = "C"
 TABLE_NAME_LOCAL_USR_ID_TO_DECL = "D"
 TABLE_NAME_USR_TO_DEF = "E"
 TABLE_NAME_LOCAL_USR_ID_TO_USR = "F"
-TABLE_NAME_GLOBAL_FILE_ID_TO_NAME = "G"
 TABLE_NAME_CU_NAME_TO_ID = "H"
 TABLE_NAME_CU_ID_TO_NAME = "I"
 TABLE_NAME_USR_TO_REF = "L"
@@ -80,7 +80,6 @@ def genCConfig(filename):
         f.write('#define TABLE_NAME_LOCAL_USR_ID_TO_DECL "%s"\n'%(TABLE_NAME_LOCAL_USR_ID_TO_DECL))
         f.write('#define TABLE_NAME_USR_TO_DEF "%s"\n'%(TABLE_NAME_USR_TO_DEF))
         f.write('#define TABLE_NAME_LOCAL_USR_ID_TO_USR "%s"\n'%(TABLE_NAME_LOCAL_USR_ID_TO_USR))
-        f.write('#define TABLE_NAME_GLOBAL_FILE_ID_TO_NAME "%s"\n'%(TABLE_NAME_GLOBAL_FILE_ID_TO_NAME))
         f.write('#define TABLE_NAME_CU_NAME_TO_ID "%s"\n'%(TABLE_NAME_CU_NAME_TO_ID))
         f.write('#define TABLE_NAME_CU_ID_TO_NAME "%s"\n'%(TABLE_NAME_CU_ID_TO_NAME))
         f.write('#define TABLE_NAME_USR_TO_REF "%s"\n'%(TABLE_NAME_USR_TO_REF))
@@ -96,7 +95,36 @@ def genCConfig(filename):
 def DEBUG_PRINT(str):
     global gVerboseMode
     if gVerboseMode != 0:
-        print str
+        funcName = inspect.currentframe().f_back.f_code.co_name
+        print(funcName + ": " + str)
+
+def id2usr(db, dbId, id):
+    result = db.get(dbId + TABLE_NAME_LOCAL_USR_ID_TO_USR + "|%s"%(str(id)))
+    return result
+def usr2id(db, dbId, usr):
+    result = db.get(dbId + TABLE_NAME_USR_TO_ID + "|%s"%(str(usr)))
+    return result
+def id2name(db, dbId, id):
+    result = db.get(dbId + TABLE_NAME_TOKEN_ID_TO_NAME + "|%s"%(str(id)))
+    return result
+def getFilename(db, dbId):
+    rv = db.get(dbId + TABLE_NAME_BUILD_INFO)
+    if rv == None:
+        return None
+    filename, workDir, excludes, opt = rv.split("|")
+    return filename
+def GetResultString(db, dbId, nameId):
+    name = id2name(db, dbId, nameId)
+    if name == None:
+        print("ERRRO: name lookup failed: " + str(nameId) + ": " + dbId)
+        return None
+    DEBUG_PRINT("name: " + str(nameId) + "," + str(name))
+    fn = getFilename(db, dbId)
+    if fn == None:
+        print("ERRRO: file name lookup failed: " + dbId)
+        return None
+    DEBUG_PRINT("filename: " + str(fn))
+    return name, fn
 
 class Db:
     m_instance = None
@@ -401,34 +429,6 @@ class HandlerBase:
         # get token name from the file
         self.m_tokenName = self.getToken(self.m_srcFileName, int(lineNo), int(colNo))
         DEBUG_PRINT("token: " + self.m_tokenName)
-
-def id2usr(db, dbId, id):
-    result = db.get(dbId + TABLE_NAME_LOCAL_USR_ID_TO_USR + "|%s"%(str(id)))
-    return result
-def usr2id(db, dbId, usr):
-    result = db.get(dbId + TABLE_NAME_USR_TO_ID + "|%s"%(str(usr)))
-    return result
-def id2name(db, dbId, id):
-    result = db.get(dbId + TABLE_NAME_TOKEN_ID_TO_NAME + "|%s"%(str(id)))
-    return result
-def getFilename(db, dbId):
-    rv = db.get(dbId + TABLE_NAME_BUILD_INFO)
-    if rv == None:
-        return None
-    filename, workDir, excludes, opt = rv.split("|")
-    return filename
-def GetResultString(db, dbId, nameId):
-    name = id2name(db, dbId, nameId)
-    if name == None:
-        print("ERRRO: name lookup failed: " + str(nameId) + ": " + dbId)
-        return None
-    DEBUG_PRINT("name: " + str(nameId) + "," + str(name))
-    fn = getFilename(db, dbId)
-    if fn == None:
-        print("ERRRO: file name lookup failed: " + dbId)
-        return None
-    DEBUG_PRINT("filename: " + str(fn))
-    return name, fn
 
 class QueryHandlerDecl(HandlerBase):
     #

@@ -3,7 +3,6 @@
 #include <leveldb/write_batch.h>
 #include <leveldb/cache.h>
 #include <leveldb/filter_policy.h>
-#include <vector>
 #include <map>
 #include <time.h>
 #include <stdio.h>
@@ -232,15 +231,14 @@ static inline void setKeyValuePos2Usr(char* buffKey, char* buffVal, int buffLen,
     encodePos(buffKey, pos);
     {
         char* p = (char*)buffVal;
-        bool first = true;
         for(const auto& itr : tokenList) {
-            if(!first) {
-                *p++ = ',';
-            }
             p = encodeVal(p, itr.first.usrId);
-            first = false;
+            *p++ = ',';
         }
-        *p++ = '\0';
+        if(p != buffKey) {
+            --p; // remvoe the last ','
+        }
+        *p = '\0';
     }
 #else
     snprintf(buffKey, buffLen, TABLE_NAME_POSITION_TO_LOCAL_USR_ID "|%x|%x", line, col);

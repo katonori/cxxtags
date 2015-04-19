@@ -8,6 +8,9 @@
 #include <leveldb/db.h>
 #include <leveldb/write_batch.h>
 #include "IIndexDb.h"
+#ifdef TIMER
+#include <boost/timer/timer.hpp>
+#endif
 
 namespace cxxtags {
 
@@ -129,21 +132,21 @@ private:
     void deleteOldEntries(leveldb::DB* db, const std::string& dbId);
     int writeUsrDb(const SiMap& usrMap, std::map<std::string, SiMap> usrFidMap, leveldb::DB* dbUsrDb, leveldb::WriteBatch& wb_usrdb, const std::string& dbName);
 
-    static inline void timerStart(int idx)
+    inline void timerStart(int idx)
     {
 #ifdef TIMER
         m_timers[idx].start();
 #endif
     }
 
-    static inline void timerResume(int idx)
+    inline void timerResume(int idx)
     {
 #ifdef TIMER
         m_timers[idx].resume();
 #endif
     }
 
-    static inline void timerStop(int idx)
+    inline void timerStop(int idx)
     {
 #ifdef TIMER
         m_timers[idx].stop();

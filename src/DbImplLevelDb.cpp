@@ -16,10 +16,6 @@
 
 #include "config.h"
 
-#ifdef TIMER
-#include <boost/timer/timer.hpp>
-#endif
-
 namespace cxxtags {
 
 using namespace std;
@@ -71,9 +67,9 @@ int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, cons
     m_compileUnit = src_file_name;
 
 #ifdef TIMER
-    s_timers = new boost::timer::cpu_timer[k_timerNum];
+    m_timers = new boost::timer::cpu_timer[k_timerNum];
     for(int i = 0; i < k_timerNum; i++) {
-        s_timers[i].stop();
+        m_timers[i].stop();
     }
 #endif
 
@@ -304,7 +300,7 @@ int DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, c
     }
     timerResume(TIMER_INS_REF);
 
-    //s_timers[TIMER_INS_REF_1].resume();
+    m_timers[TIMER_INS_REF_1].resume();
     int nameId = fctx.m_nameIdTbl.GetId(name);
     m_refUsrMap[usr] = 1;
     int usrId = fctx.m_usrIdTbl.GetId(usr);
@@ -323,7 +319,7 @@ int DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, c
     if(!usr.empty()) {
         m_usr2fileMap[usr][filename] = 0;
     }
-    //s_timers[TIMER_INS_REF_1].stop();
+    m_timers[TIMER_INS_REF_1].stop();
 
     // pos -> usr
     timerResume(TIMER_INS_REF_2);
@@ -642,10 +638,11 @@ int DbImplLevelDb::fin(void)
         // close db
         //////
 #ifdef TIMER
+        printf("---- Statistics ----\n");
         printf("time: TIMER_USR_DB0: %s", m_timers[TIMER_USR_DB0].format().c_str());
         printf("time: TIMER_USR_DB3: %s", m_timers[TIMER_USR_DB3].format().c_str());
         printf("time: TIMER_INS_REF: %s", m_timers[TIMER_INS_REF].format().c_str());
-        //printf("time: TIMER_INS_REF_1: %s", m_timers[TIMER_INS_REF_1].format().c_str());
+        printf("time: TIMER_INS_REF_1: %s", m_timers[TIMER_INS_REF_1].format().c_str());
         printf("time: TIMER_INS_REF_2: %s", m_timers[TIMER_INS_REF_2].format().c_str());
         printf("time: TIMER_INS_DECL: %s", m_timers[TIMER_INS_DECL].format().c_str());
 #endif

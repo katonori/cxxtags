@@ -1,4 +1,3 @@
-#include "DbImplLevelDb.h"
 #include <leveldb/db.h>
 #include <leveldb/write_batch.h>
 #include <leveldb/cache.h>
@@ -13,6 +12,7 @@
 #include <boost/filesystem/operations.hpp>
 #include <boost/algorithm/string.hpp>
 
+#include "DbImplLevelDb.h"
 #include "config.h"
 
 namespace cxxtags {
@@ -298,7 +298,9 @@ int DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, c
     }
     timerResume(TIMER_INS_REF);
 
+#ifdef TIMER
     m_timers[TIMER_INS_REF_1].resume();
+#endif
     int nameId = fctx.m_nameIdTbl.GetId(name);
     m_refUsrMap[usr] = 1;
     int usrId = fctx.m_usrIdTbl.GetId(usr);
@@ -317,7 +319,9 @@ int DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, c
     if(!usr.empty()) {
         m_usr2fileMap[usr][filename] = 0;
     }
+#ifdef TIMER
     m_timers[TIMER_INS_REF_1].stop();
+#endif
 
     // pos -> usr
     timerResume(TIMER_INS_REF_2);
@@ -741,7 +745,7 @@ int DbImplLevelDb::fin(void)
             addIdList(&wb, nameMap, dbId + TABLE_NAME_TOKEN_ID_TO_NAME);
 
             wb.Put(dbId + TABLE_NAME_CUFILES, valFiles);
-            wb.Put(dbId + TABLE_NAME_BUILD_INFO, filename + "|" + m_buildOpt);
+            wb.Put(dbId + TABLE_NAME_BUILD_INFO, m_compileUnit + "|" + filename + "|" + m_buildOpt);
         }
         for(int i = 0; i < DB_NUM; i++) {
             if(dbDirtyFlags[i]) {
@@ -752,9 +756,6 @@ int DbImplLevelDb::fin(void)
                 if(rv < 0) {
                     printf("ERROR: fin: open: %s\n", m_commonDbDir.c_str());
                     return -1;
-                }
-                if(m_isRebuild) {
-                    deleteOldEntries(db, m_cuDbId);
                 }
                 dbFlush(db, &wbList[i]);
                 dbClose(db);

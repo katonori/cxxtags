@@ -101,18 +101,22 @@ def DEBUG_PRINT(str):
 def id2usr(db, dbId, id):
     result = db.get(dbId + TABLE_NAME_LOCAL_USR_ID_TO_USR + "|%s"%(str(id)))
     return result
+
 def usr2id(db, dbId, usr):
     result = db.get(dbId + TABLE_NAME_USR_TO_ID + "|%s"%(str(usr)))
     return result
+
 def id2name(db, dbId, id):
     result = db.get(dbId + TABLE_NAME_TOKEN_ID_TO_NAME + "|%s"%(str(id)))
     return result
+
 def getFilename(db, dbId):
     rv = db.get(dbId + TABLE_NAME_BUILD_INFO)
     if rv == None:
         return None
-    filename, workDir, excludes, opt = rv.split("|")
+    cuFileName, filename, workDir, excludes, opt = rv.split("|")
     return filename
+
 def GetResultString(db, dbId, nameId):
     name = id2name(db, dbId, nameId)
     if name == None:
@@ -151,6 +155,24 @@ class Db:
             return self.m_instance.close()
         else:
             del self.m_instance
+    def flushBatch(self, batch):
+        self.m_instance.Write(batch, sync = True)
+
+class DbBatch:
+    m_batch = None
+    m_db = None
+    def __init__(self, db):
+        if USE_PLYVEL:
+            print("ERROR: rebuild by plyvel is not supported yet")
+            assert False
+        else:
+            self.m_db = db
+            self.m_batch = leveldb.WriteBatch()
+    def delete(self, key):
+        self.m_batch.Delete(key)
+        
+    def flush(self):
+        self.m_db.flushBatch(self.m_batch)
 
 class HandlerBase:
     #
@@ -190,20 +212,25 @@ class HandlerBase:
         assert count != None
         self.m_fileCount = count
 
-    def GetDbIdByFilename(self, filename):
+    def GetIdByFilename(self, filename):
         q = TABLE_NAME_FILE_LIST + "|" + filename
         rv = self.mFileListDb.get(q)
         if rv == None:
             return None
-        cuId, dbId = rv.split(",")
+        return rv.split(",")
+
+    def GetDbIdByFilename(self, filename):
+        rv= self.GetIdByFilename(filename)
+        if rv == None:
+            return None
+        cuId, dbId = rv
         return dbId
 
     def InitDbByFilename(self, filename):
-        q = TABLE_NAME_FILE_LIST + "|" + filename
-        rv = self.mFileListDb.get(q)
+        rv = self.GetIdByFilename(filename)
         if rv == None:
             return None
-        cuId, dbId = rv.split(",")
+        cuId, dbId = rv
         self.m_dbId = dbId
         DEBUG_PRINT("InitDbByFilename: " + dbId)
         dbDirNo = self.GetDbDirNo()
@@ -237,6 +264,9 @@ class HandlerBase:
     def CalcDbDirNo(self, dbId):
         return int(dbId, 16)%DB_NUM
 
+    def GetDb(self, dbId):
+        return self.m_dbList[int(dbId, 16)%DB_NUM]
+
     def GetMainDb(self):
         return self.m_dbList[int(self.m_dbId, 16)%DB_NUM]
 
@@ -256,17 +286,18 @@ class HandlerBase:
     def OpenAllDb(self):
         i = 0
         while i < DB_NUM:
-            cmd = self.mDbDir + format(i, 'x')
-            timeS = time.time()
-            db = Db(cmd)
-            if db == None:
-                print("ERROR:1: db_dir: "  + i)
-                return None
-            timeE = time.time()
-            DEBUG_PRINT("OpenAllDb: " + str((timeE-timeS)*1000.0) + " ms")
-            self.m_dbList[i] = db
+            if self.m_dbList[i] == None:
+                cmd = self.mDbDir + format(i, 'x')
+                timeS = time.time()
+                db = Db(cmd)
+                if db == None:
+                    print("ERROR:1: db_dir: "  + i)
+                    return None
+                timeE = time.time()
+                DEBUG_PRINT("OpenAllDb: " + str((timeE-timeS)*1000.0) + " ms")
+                self.m_dbList[i] = db
             i += 1
-        return None
+        return self.m_dbList
 
     def GetAllDbFiles(self):
         if self.mAllDbFileList == None:
@@ -415,7 +446,7 @@ class HandlerBase:
         if name == tokenName:
             print str(name) + OUTPUT_DELIMITER + str(fileName) + OUTPUT_DELIMITER + str(lineInt) + OUTPUT_DELIMITER + str(colInt) + OUTPUT_DELIMITER + str(cxxtags_util.get_line_from_file(fileName, lineInt))
 
-    def parseArg(self, argv):
+    def ParseArg(self, argv):
         if len(argv) != 3:
             usage()
             sys.exit(1)
@@ -742,7 +773,7 @@ class QueryHandlerName(HandlerBase):
                     name, fn, line, col = i
                     self.PrintResult(name, fn, line, col)
 
-    def parseArg(self, argv):
+    def ParseArg(self, argv):
         global gPartialCompare
         try:
             optlist, args = getopt.gnu_getopt(argv, 'f:dp', ['debug', 'partial'])
@@ -793,7 +824,7 @@ class QueryHandlerTable(HandlerBase):
                 print i
             db.close()
 
-    def parseArg(self, argv):
+    def ParseArg(self, argv):
         if len(argv) != 1:
             usage()
             sys.exit(1)
@@ -804,15 +835,19 @@ class QueryHandlerRebuild(HandlerBase):
         if self.InitDbByFilename(self.m_srcFileName) == None:
             print "ERROR: cannot open database of '%s'"%(self.m_srcFileName)
             sys.exit(1)
-        rv = self.GetMainDb().get(self.m_dbId + TABLE_NAME_BUILD_INFO)
+        rv = self.GetDb(self.m_dbId).get(self.m_dbId + TABLE_NAME_BUILD_INFO)
         if rv == None:
             print "ERROR: cannot obtain build options from the database."
             sys.exit(1)
-        src_file_name, workDir, excludes, opt = rv.split("|")
+        cuFileName, src_file_name, workDir, excludes, opt = rv.split("|")
         assert src_file_name == self.m_srcFileName
         if excludes != "":
             excludes = " -e " + excludes
-        cmd = "cxxtags -f " + excludes + " " + self.mDbDir + " " + self.m_srcFileName + " -- " + opt
+
+        self.DeleteOldEntries(self.m_dbId)
+
+        # rebuild
+        cmd = "cxxtags -f " + excludes + " " + self.mDbDir + " " + cuFileName + " -- " + opt
         DEBUG_PRINT("cmd: " + cmd)
         self.CloseDb()
         (rv, out) = commands.getstatusoutput(cmd)
@@ -821,11 +856,23 @@ class QueryHandlerRebuild(HandlerBase):
             return RV_ERROR
         return 0
 
-    def parseArg(self, argv):
+    def ParseArg(self, argv):
         if len(argv) != 1:
             usage()
             sys.exit(1)
         self.m_srcFileName = os.path.abspath(argv[0])
+
+    def DeleteOldEntries(self, dbId):
+        dbList = self.OpenAllDb()
+        for db in dbList:
+            batch = DbBatch(db)
+            for d in db.getItr():
+                key = d[0]
+                keyLen = len(key)
+                dbIdLen = len(dbId)
+                if key.startswith(dbId) and (keyLen >= dbIdLen + 2) and key[len(dbId) + 1] == '|':
+                    batch.delete(key)
+            batch.flush()
 
 def main():
     global gVerboseMode
@@ -853,13 +900,13 @@ def main():
     elif queryType == 'decl': # get a declaration or definition
         DEBUG_PRINT("decl start")
         handler = QueryHandlerDecl(dbDir)
-        handler.parseArg(argv[2:])
+        handler.ParseArg(argv[2:])
         rv = handler.DoQuery()
         handler.CloseDb()
         if rv == RV_NOT_FOUND:
             DEBUG_PRINT("def start")
             handler = QueryHandlerDef(dbDir)
-            handler.parseArg(argv[2:])
+            handler.ParseArg(argv[2:])
             handler.DoQuery(True)
             handler.CloseDb()
     elif queryType == 'dryrun': #
@@ -903,7 +950,7 @@ def main():
         else:
             print "ERROR: query type must be ref, decl, def, override, overriden, name or dump"
             return 1
-        handler.parseArg(argv[2:])
+        handler.ParseArg(argv[2:])
         rv = handler.DoQuery()
         if rv == RV_ERROR:
             funcResult = 1

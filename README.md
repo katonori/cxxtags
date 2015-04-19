@@ -15,7 +15,6 @@ Old **cxxtags** version based on sqlite3 is moved to [https://github.com/katonor
 
 Requirement
 ------------------------
-**cxxtags** is written in C/C++ and python and based on the software listed below.
 
 * clang libs and headers
     * http://llvm.org/

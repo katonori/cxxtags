@@ -24,10 +24,8 @@ test: clean
         # check if db/file_index.db is not changed.
 	diff file_index0.txt file_index1.txt
 
-html: $(MERGER_OUT)
-	$(DUMPER) $(MERGER_OUT)
 prog: main.cpp
 	$(CXX) main.cpp -o prog
 clean:
-	rm -rf html $(MERGER_OUT) $(DB_FILES) test.c file_index0.txt file_index1.txt
+	rm -rf $(MERGER_OUT) $(DB_FILES) test.c file_index0.txt file_index1.txt
 include ../util/common_rule.mk

@@ -3,7 +3,6 @@
 import sys
 import commands
 sys.path.append("../../src/")
-import cxxtags_util
 
 gDebug = 0
 CXXTAGS_QUERY = "../../bin/cxxtags_query"
@@ -16,6 +15,19 @@ def DbgPrint(msg):
     global gDebug
     if gDebug != 0:
         print msg
+
+def GetLineFromFile(fn, line_no):
+    line_no = int(line_no)
+    fi = open(fn, 'r')
+    all_lines = fi.readlines()
+    str_line = ""
+    if len(all_lines) < line_no:
+        my_exit(1, "ERROR: GetLineFromFile: %s, %d\n"%(fn, line_no))
+    else:
+        str_line = all_lines[line_no-1]
+    str_line = str_line.rstrip('\r\n')
+    fi.close()
+    return str_line
 
 def QueryTestExecCommand(mode, fileName, line, col):
     cmd = CXXTAGS_QUERY + " %s db %s %d %d"%(mode, fileName, line, col)
@@ -42,7 +54,7 @@ def DoDeclTest(test_data_list_decl, test_data_list_ref):
         # search references
         for i in test_data_list_ref:
             refUsr, refName, refFileName, refLine, refCol, dummy, dummy, dummy = i
-            lineStr = cxxtags_util.get_line_from_file(refFileName, refLine)
+            lineStr = GetLineFromFile(refFileName, refLine)
             if refUsr == usr:
                 resultList.append((refName, refLine, refCol, refFileName, lineStr))
 
@@ -77,7 +89,7 @@ def DoRefTest(test_data_list_ref, test_data_list_decl):
         # search declarations
         for i in test_data_list_decl:
             declUsr, declName, declFileName, declLine, declCol, dummy, dummy, dummy = i
-            lineStr = cxxtags_util.get_line_from_file(declFileName, declLine)
+            lineStr = GetLineFromFile(declFileName, declLine)
             if declUsr == usr:
                 resultList.append((declName, declLine, declCol, declFileName, lineStr))
 

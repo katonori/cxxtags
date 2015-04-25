@@ -15,7 +15,6 @@ if USE_PLYVEL:
     import plyvel
 else:
     import leveldb
-import cxxtags_util
 import getopt
 import re
 import os
@@ -129,6 +128,19 @@ def GetResultString(db, dbId, nameId):
         return None
     DEBUG_PRINT("filename: " + str(fn))
     return name, fn
+
+def GetLineFromFile(fn, line_no):
+    line_no = int(line_no)
+    fi = open(fn, 'r')
+    all_lines = fi.readlines()
+    str_line = ""
+    if len(all_lines) < line_no:
+        my_exit(1, "ERROR: GetLineFromFile: %s, %d\n"%(fn, line_no))
+    else:
+        str_line = all_lines[line_no-1]
+    str_line = str_line.rstrip('\r\n')
+    fi.close()
+    return str_line
 
 class Db:
     m_instance = None
@@ -299,11 +311,6 @@ class HandlerBase:
             i += 1
         return self.m_dbList
 
-    def GetAllDbFiles(self):
-        if self.mAllDbFileList == None:
-            self.mAllDbFileList = cxxtags_util.get_db_file_list(self.mDbDir)
-        return self.mAllDbFileList
-
     def EncVal(self, val):
         str = ""
         val = int(val, 16)
@@ -444,7 +451,7 @@ class HandlerBase:
         # get token from filenam
         tokenName = self.getToken(fileName, lineInt, colInt)
         if name == tokenName:
-            print str(name) + OUTPUT_DELIMITER + str(fileName) + OUTPUT_DELIMITER + str(lineInt) + OUTPUT_DELIMITER + str(colInt) + OUTPUT_DELIMITER + str(cxxtags_util.get_line_from_file(fileName, lineInt))
+            print str(name) + OUTPUT_DELIMITER + str(fileName) + OUTPUT_DELIMITER + str(lineInt) + OUTPUT_DELIMITER + str(colInt) + OUTPUT_DELIMITER + str(GetLineFromFile(fileName, lineInt))
 
     def ParseArg(self, argv):
         if len(argv) != 3:

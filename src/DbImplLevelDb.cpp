@@ -524,23 +524,6 @@ int DbImplLevelDb::writeUsrDb(const SiMap& usrMap, map<string, SiMap> usrFidMap,
     return 0;
 }
 
-void DbImplLevelDb::deleteOldEntries(leveldb::DB* db, const std::string& dbId)
-{
-    leveldb::Iterator* it = db->NewIterator(leveldb::ReadOptions());
-    for (it->SeekToFirst(); it->Valid(); it->Next()) {
-        leveldb::Slice key = it->key();
-        std::string key_str = key.ToString();
-        if(key_str.find(dbId) == 0) {
-            if(key_str.size() > dbId.size() + 1) {
-                if(key_str.at(dbId.size() + 1) == '|') { // delete entries begins with [dbId + ? + '|'].
-                    db->Delete(m_defaultWoptions, key);
-                }
-            }
-        }
-    }
-    assert(it->status().ok()); // Check for any errors found during the scan
-}
-
 int DbImplLevelDb::fin(void)
 {
     {

@@ -132,7 +132,6 @@ private:
     inline int dbRead(std::string& value, leveldb::DB* db, const std::string& key);
     inline int dbFlush(leveldb::DB* db, leveldb::WriteBatch* wb);
     inline int dbClose(leveldb::DB*& db);
-    void deleteOldEntries(leveldb::DB* db, const std::string& dbId);
     int writeUsrDb(const SiMap& usrMap, std::map<std::string, SiMap> usrFidMap, leveldb::DB* dbUsrDb, leveldb::WriteBatch& wb_usrdb, const std::string& dbName);
 
     inline void timerStart(int idx)

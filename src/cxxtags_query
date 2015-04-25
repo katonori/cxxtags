@@ -730,104 +730,35 @@ class QueryHandlerOverrideN(HandlerBase):
             name, fn, line, col = i
             self.PrintResult(name, fn, line, col)
 
-class QueryHandlerName(HandlerBase):
-    #
-    # Handle Rquest for infomation about name
-    #
-    mName = 0
-    def CheckUsr(self, cre, table, l):
-        resultList = []
-        if cre.search(l[0]):
-            (tbl, usr) = l[0].split("|")
-            DEBUG_PRINT("usr: " + usr)
-            dbIdList = self.GetDbIdListByRefUsr(usr)
-            DEBUG_PRINT("dbIdList: " + str(dbIdList))
-            for dbId in dbIdList:
-                db = self.GetDbByDbId(dbId)
-                q = dbId + table + "|" + usr
-                val = db.get(q)
-                if val != None:
-                    for v in val.split(","):
-                        nameId, line, col = v.split("|")
-                        name, fn = GetResultString(db, dbId, nameId)
-                        if name != None and fn != None and (self.mName in name):
-                            resultList.append((name, fn, line, col))
-        return resultList
-
-    def DoQuery(self):
-        # get compileunit
-        if None == self.InitUsrDb():
-            print "ERROR: DB oopen"
-            return None
-        for usrDb in self.mUsrDbList:
-            for l in usrDb.getItr():
-                cre = re.compile(TABLE_NAME_USR_TO_GLOBAL_FILE_ID_REF + r'\\|.*' + self.mName)
-                resultList = self.CheckUsr(cre, TABLE_NAME_LOCAL_USR_ID_TO_REF, l)
-                for i in resultList:
-                    name, fn, line, col = i
-                    self.PrintResult(name, fn, line, col)
-                cre = re.compile(TABLE_NAME_DEF_USR2GLOBAL_FILE_ID + r'\\|.*' + self.mName)
-                resultList = self.CheckUsr(cre, TABLE_NAME_LOCAL_USR_ID_TO_DEF, l)
-                for i in resultList:
-                    name, fn, line, col = i
-                    self.PrintResult(name, fn, line, col)
-
-    def ParseArg(self, argv):
-        global gPartialCompare
-        try:
-            optlist, args = getopt.gnu_getopt(argv, 'f:dp', ['debug', 'partial'])
-        except getopt.GetoptError, e:
-            print "ERROR: getopt: ", e.args[0]
-            sys.exit(1)
-        if len(args) != 1:
-            usage()
-            sys.exit(1)
-        name = args[0]
-        fileName = ""
-        for opt, val in optlist:
-            if opt == "-f":
-                fileName = val
-            elif opt in ("-p", "--partial"):
-                gPartialCompare = 1
-        self.mName = name
-        self.m_srcFileName = fileName
-
-class QueryHandlerTable(HandlerBase):
+class QueryHandlerDump(HandlerBase):
     #
     # Handle Rquest for dumping the contents of a table
     #
 
     mTableName = ""
     def DoQuery(self):
-        dbList = self.GetAllDbFiles()
-        tableQueryStr = ""
-        tableQueryCondStr = ""
-        if self.mTableName == "decl":
-            tableQueryStr = cxxtags_util.QUERY_JOINED_TABLE_DECL
-        elif self.mTableName == "def":
-            tableQueryStr = cxxtags_util.QUERY_JOINED_TABLE_DECL
-            tableQueryCondStr = "WHERE decl.is_def=1"
-        elif self.mTableName == "ref":
-            tableQueryStr = cxxtags_util.QUERY_JOINED_TABLE_REF
-        elif self.mTableName == "base_class":
-            tableQueryStr = cxxtags_util.QUERY_JOINED_TABLE_BASE_CLASS
-        else:
-            print "ERROR: not such table: " + self.mTableName
-            return
-        for fn in dbList:
-            db = cxxtags_util.db_connect(fn)
-            cur = db.cursor()
-            cur.execute('SELECT * FROM ' + tableQueryStr + ' ' + tableQueryCondStr)
-            result = cur.fetchall()
-            for i in result:
-                print i
+        for i in os.listdir(self.mDbDir + "/usr_db"):
+            name = self.mDbDir + "/usr_db/" + i
+            print "============ "+ name 
+            db = Db(name)
+            tmp = None
+            for d in db.getItr():
+                print(str(d))
             db.close()
+        for i in os.listdir(self.mDbDir):
+            if re.match("^[0-9a-f]+", i):
+                name = self.mDbDir + "/" + i
+                print "============ "+ name 
+                db = Db(name)
+                tmp = None
+                for d in db.getItr():
+                    print(str(d))
+                db.close()
 
     def ParseArg(self, argv):
-        if len(argv) != 1:
+        if len(argv) != 0:
             usage()
             sys.exit(1)
-        self.mTableName = argv[0]
 
 class QueryHandlerRebuild(HandlerBase):
     def DoQuery(self):
@@ -940,10 +871,8 @@ def main():
             handler = QueryHandlerOverride(dbDir)
         elif queryType == 'overriden': # get overriden items
             handler = QueryHandlerOverrideN(dbDir)
-        elif queryType == 'name': # search a name
-            handler = QueryHandlerName(dbDir)
         elif queryType == 'dump': # dump the contents of a table
-            handler = QueryHandlerTable(dbDir)
+            handler = QueryHandlerDump(dbDir)
         elif queryType == 'rebuild': # 
             handler = QueryHandlerRebuild(dbDir)
         else:

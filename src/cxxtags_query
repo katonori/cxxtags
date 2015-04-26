@@ -191,31 +191,21 @@ class HandlerBase:
     # Base class of *Handler classes
     #
 
-    mAllDbFileList = None
     mDbDir = ""
-    mCuDbDir = ""
     #mDb = None
     mFileListDb = None
-    mUsrDbName = None
     m_srcFileName = ""
-    m_cuName = ""
     m_dbId = None
-    m_cuGlobalFid = None
     m_lineNo = None
     m_colNo = None
     m_fileCount = None
-    m_tokenName = ""
     m_dbList = [None]*DB_NUM
 
     def __init__(self, dbDir):
         self.mUsrDbList = []
         self.mDbDir = dbDir + "/"
         self.mFileListDb = Db(dbDir + "/common")
-        self.mAllDbFileList = None
-        self.mCuDbDir = ""
-        self.mUsrDbName = None
         self.m_srcFileName = ""
-        self.m_cuName = ""
         self.m_dbId = 0
         self.m_lineNo = 0
         self.m_colNo = 0
@@ -230,13 +220,6 @@ class HandlerBase:
         if rv == None:
             return None
         return rv.split(",")
-
-    def GetDbIdByFilename(self, filename):
-        rv= self.GetIdByFilename(filename)
-        if rv == None:
-            return None
-        cuId, dbId = rv
-        return dbId
 
     def InitDbByFilename(self, filename):
         rv = self.GetIdByFilename(filename)
@@ -263,12 +246,6 @@ class HandlerBase:
         self.mUsrDbList = list(set(self.mUsrDbList))
         DEBUG_PRINT("usrDbList: " + str(self.mUsrDbList))
         return self.mUsrDbList
-
-    def Cu2Id(self, cuName):
-        return self.mFileListDb.get(TABLE_NAME_CU_NAME_TO_ID + "|" + cuName)
-
-    #def Id2Cu(self, cuId):
-    #    return self.mFileListDb.get(TABLE_NAME_CU_ID_TO_NAME + "|" + cuId)
 
     def GetDbDirNo(self):
         return self.CalcDbDirNo(self.m_dbId)
@@ -465,8 +442,6 @@ class HandlerBase:
             self.m_lineNo = self.EncVal(self.m_lineNo)
             self.m_colNo = self.EncVal(self.m_colNo)
         # get token name from the file
-        self.m_tokenName = self.getToken(self.m_srcFileName, int(lineNo), int(colNo))
-        DEBUG_PRINT("token: " + self.m_tokenName)
 
 class QueryHandlerDecl(HandlerBase):
     #
@@ -894,6 +869,7 @@ def main():
     rv = 0
     queryType = argv[0]
     dbDir = argv[1]
+    funcResult = 0
     if queryType == 'genconfig':
         genCConfig(argv[1])
     else:
@@ -901,8 +877,9 @@ def main():
         for db in dbDirList:
             rv = procOneDb(queryType, db, argv[2:])
             if rv != 0:
-                break
-    return rv
+                print("ERROR: " + db)
+                funcResult = 1
+    return funcResult
 
 #######
 sys.exit(main())

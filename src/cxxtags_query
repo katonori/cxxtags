@@ -684,7 +684,7 @@ class QueryHandlerOverride(QueryHandlerDecl):
             for rvUsrId in rvList:
                 name, fn, line, col = self.QueryDeclInfo(rvUsrId)
                 resultList.append((name, fn, line, col))
-        for i in resultList:
+        for i in set(resultList):
             resultName, resultFileName, resultLine, resultCol = i
             self.PrintResult(resultName, resultFileName, resultLine, resultCol)
 
@@ -811,41 +811,22 @@ class QueryHandlerRebuild(HandlerBase):
                     batch.delete(key)
             batch.flush()
 
-def main():
-    global gVerboseMode
-    result = []
-    if len(sys.argv) <= 2:
-        usage()
-        sys.exit(1)
-
-    # get global options
-    gVerboseMode = 0
-    try:
-        optlist, argv = getopt.getopt(sys.argv[1:], 'v', [])
-        for opt, val in optlist:
-            if opt == "-v":
-                gVerboseMode = 1
-    except getopt.GetoptError, e:
-        print "ERROR: getopt: ", e.args[0]
-        sys.exit(1)
-
+def procOneDb(queryType, dbDir, argv):
     funcResult = 0
-    queryType = argv[0]
-    dbDir = argv[1]
-    if queryType == 'genconfig':
-        genCConfig(argv[1])
-    elif queryType == 'decl': # get a declaration or definition
+    if queryType == 'decl': # get a declaration or definition
         DEBUG_PRINT("decl start")
         handler = QueryHandlerDecl(dbDir)
-        handler.ParseArg(argv[2:])
+        handler.ParseArg(argv)
         rv = handler.DoQuery()
         handler.CloseDb()
         if rv == RV_NOT_FOUND:
             DEBUG_PRINT("def start")
             handler = QueryHandlerDef(dbDir)
-            handler.ParseArg(argv[2:])
-            handler.DoQuery(True)
+            handler.ParseArg(argv)
+            rv = handler.DoQuery(True)
             handler.CloseDb()
+        if rv == RV_ERROR:
+            funcResult = 1
     elif queryType == 'dryrun': #
         with open(os.devnull,"w") as f:
             for i in os.listdir(dbDir + "/usr_db"):
@@ -885,12 +866,43 @@ def main():
         else:
             print "ERROR: query type must be ref, decl, def, override, overriden, name or dump"
             return 1
-        handler.ParseArg(argv[2:])
+        handler.ParseArg(argv)
         rv = handler.DoQuery()
         if rv == RV_ERROR:
             funcResult = 1
         handler.CloseDb()
     return funcResult
+
+def main():
+    global gVerboseMode
+    result = []
+    if len(sys.argv) <= 2:
+        usage()
+        sys.exit(1)
+
+    # get global options
+    gVerboseMode = 0
+    try:
+        optlist, argv = getopt.getopt(sys.argv[1:], 'v', [])
+        for opt, val in optlist:
+            if opt == "-v":
+                gVerboseMode = 1
+    except getopt.GetoptError, e:
+        print "ERROR: getopt: ", e.args[0]
+        sys.exit(1)
+
+    rv = 0
+    queryType = argv[0]
+    dbDir = argv[1]
+    if queryType == 'genconfig':
+        genCConfig(argv[1])
+    else:
+        dbDirList = dbDir.split(",")
+        for db in dbDirList:
+            rv = procOneDb(queryType, db, argv[2:])
+            if rv != 0:
+                break
+    return rv
 
 #######
 sys.exit(main())

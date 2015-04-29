@@ -192,7 +192,6 @@ class HandlerBase:
     #
 
     mDbDir = ""
-    #mDb = None
     mFileListDb = None
     m_srcFileName = ""
     m_dbId = None
@@ -618,7 +617,7 @@ class QueryHandlerRef(HandlerBase):
                     name, fn = GetResultString(db, dbId, nameId)
                     if fn != None and name != None:
                         resultList.append((name, fn, line, col))
-            for i in set(resultList):
+            for i in sorted(set(resultList)):
                 resultName, resultFileName, resultLine, resultCol = i
                 self.PrintResult(resultName, resultFileName, resultLine, resultCol)
 
@@ -659,7 +658,7 @@ class QueryHandlerOverride(QueryHandlerDecl):
             for rvUsrId in rvList:
                 name, fn, line, col = self.QueryDeclInfo(rvUsrId)
                 resultList.append((name, fn, line, col))
-        for i in set(resultList):
+        for i in sorted(set(resultList)):
             resultName, resultFileName, resultLine, resultCol = i
             self.PrintResult(resultName, resultFileName, resultLine, resultCol)
 
@@ -708,7 +707,7 @@ class QueryHandlerOverrideN(HandlerBase):
                     name, fn = GetResultString(db, dbId, nameId)
                     if name != None and fn != None:
                         resultList.append((name, fn, line, col))
-        for i in set(resultList):
+        for i in sorted(set(resultList)):
             name, fn, line, col = i
             self.PrintResult(name, fn, line, col)
 

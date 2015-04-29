@@ -1,16 +1,18 @@
+#include <map>
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <unistd.h>
+
+#include <boost/filesystem/path.hpp>
+#include <boost/filesystem/operations.hpp>
+#include <boost/algorithm/string.hpp>
+
 #include <leveldb/db.h>
 #include <leveldb/write_batch.h>
 #include <leveldb/cache.h>
 #include <leveldb/filter_policy.h>
-#include <map>
-#include <time.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <assert.h>
-#include <unistd.h>
-#include <boost/filesystem/path.hpp>
-#include <boost/filesystem/operations.hpp>
-#include <boost/algorithm/string.hpp>
 
 #include "DbImplLevelDb.h"
 #include "config.h"
@@ -638,9 +640,9 @@ int DbImplLevelDb::fin(void)
             const string& dbId = itr.second.m_dbId;
             valFiles += "," + dbId;
         }
-        for(const auto &itr : m_fileContextMap) {
-            const string& filename = itr.first;
-            const FileContext& fctx = itr.second;
+        for(const auto &fctxItr : m_fileContextMap) {
+            const string& filename = fctxItr.first;
+            const FileContext& fctx = fctxItr.second;
             const string& dbId = fctx.m_dbId;
 
             // decide db directory

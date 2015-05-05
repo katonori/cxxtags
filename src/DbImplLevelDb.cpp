@@ -2,11 +2,10 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 
-#include <boost/filesystem/path.hpp>
-#include <boost/filesystem/operations.hpp>
 #include <boost/algorithm/string.hpp>
 
 #include <leveldb/db.h>
@@ -49,6 +48,26 @@ int DbImplLevelDb::dbTryOpen(leveldb::DB*& db, string dir)
     return 0;
 }
 
+static int makeDirectory(const char* name)
+{
+    // make database directory
+    struct stat statBuf;
+    if(stat(name, &statBuf) == 0) {
+        if((statBuf.st_mode & S_IFDIR) == 0) {
+            fprintf(stderr, "ERROR: Could not make directory \"%s\". The file \"%s\" exists.\n", name, name);
+            return -1;
+        }
+        else {
+            // Use the directory already exists.
+        }
+    }
+    else {
+        // does not exists
+        mkdir(name, 0775);
+    }
+    return 0;
+}
+
 int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, const string& excludeList, bool isRebuild, const char* curDir, int argc, const char** argv)
 {
     leveldb::DB* dbCommon = NULL;
@@ -74,8 +93,8 @@ int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, cons
     }
 #endif
 
-    if(!boost::filesystem::exists(m_dbDir)) {
-        boost::filesystem::create_directory(m_dbDir);
+    if(makeDirectory(m_dbDir.c_str())) {
+        return -1; 
     }
 
     //
@@ -546,11 +565,8 @@ int DbImplLevelDb::fin(void)
         leveldb::DB* dbUsrDb = NULL;
         leveldb::WriteBatch wb_usrdb;
         string curDir = m_dbDir + "/usr_db";
-        if(!boost::filesystem::exists(curDir)) {
-            if(!boost::filesystem::create_directory(curDir)) {
-                printf("ERROR: create directory: %s\n", curDir.c_str());
-                return -1;
-            }
+        if(makeDirectory(curDir.c_str())) {
+            return -1; 
         }
 
         map<string, SiMap> refUsrFidMap; // store the file IDs a USR found
@@ -651,7 +667,6 @@ int DbImplLevelDb::fin(void)
             int idRem = id % DB_NUM;
 
             // check if already exists
-            //if(boost::filesystem::exists(m_dbDir + "/" + dbDir)) {
             if(m_finishedFiles.find(filename) != m_finishedFiles.end()) {
                 continue;
             }

@@ -28,7 +28,7 @@ add_definitions(-UNDEBUG)
 #add_definitions(-DTIMER)
 set(CMAKE_EXE_LINKER_FLAGS "${LLVM_LDFLAGS}")
 
-FIND_PACKAGE(Boost COMPONENTS filesystem system timer REQUIRED)
+FIND_PACKAGE(Boost COMPONENTS system timer REQUIRED)
 
 include_directories(
     ${LEVELDB_HOME}/include
@@ -38,7 +38,6 @@ link_directories(${LEVELDB_HOME}/lib)
 
 add_executable(cxxtags_core cxxtags_core.cpp DbImplLevelDb.cpp)
 target_link_libraries(cxxtags_core clang stdc++ leveldb snappy
-    ${Boost_FILESYSTEM_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_TIMER_LIBRARY}
 )

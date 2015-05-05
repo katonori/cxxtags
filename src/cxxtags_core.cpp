@@ -1,24 +1,44 @@
-#include "clang-c/Index.h"
-#include "IIndexDb.h"
-#include "DbImplLevelDb.h"
+#include <map>
 #include <string>
 #include <vector>
-#include <map>
+
+#include <assert.h>
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #include <time.h>
 #include <unistd.h>
-#include <getopt.h>
-#include <stdlib.h>
+
 #include <boost/filesystem/path.hpp>
+#include <clang-c/Index.h>
+
+#include "DbImplLevelDb.h"
+#include "IIndexDb.h"
 
 namespace cxxtags {
 static bool gIsRebuild = false;
 static bool gIsOmitLocal = false;
 static std::string gLastClassUsr = "";
 cxxtags::IIndexDb* gDb;
+
+const char* keywordListWithSpace[] = {
+    "class ",
+    "enum ",
+    "struct ",
+    "union ",
+};
+
+#ifndef PATH_MAX
+#define PATH_MAX (1024*1024)
+#endif
+static char s_filenameBuff[PATH_MAX];
+static std::vector<std::string > gExcludeList;
+static std::string gExcludeListStr;
+// Table to keep which cursor types are to be tagged.
+#define AVAILABLE_TABLE_MAX 1024
+static char isCursorTypeAvailableTable[AVAILABLE_TABLE_MAX];
 
 static inline void check_rv(int a) {
     assert(a == 0);
@@ -30,8 +50,6 @@ static inline unsigned getDefaultParsingOptions() {
   return options;
 }
 
-static std::vector<std::string > gExcludeList;
-static std::string gExcludeListStr;
 static inline int isInExcludeList(std::string fileName)
 {
     std::vector<std::string >::iterator itrEnd = gExcludeList.end();
@@ -55,12 +73,6 @@ static inline std::string getName(const CXCursor& C)
     return name;
 }
 
-const char* keywordListWithSpace[] = {
-    "class ",
-    "enum ",
-    "struct ",
-    "union ",
-};
 
 static inline std::string formatName(std::string name)
 {
@@ -79,11 +91,6 @@ static inline std::string formatName(std::string name)
     }
     return name;
 }
-
-#ifndef PATH_MAX
-#define PATH_MAX (1024*1024)
-#endif
-static char s_filenameBuff[PATH_MAX];
 
 // get source file name
 static std::string getCursorSourceLocation(unsigned int& line, unsigned int& column, const CXCursor& Cursor) {
@@ -111,13 +118,6 @@ static std::string getCursorSourceLocation(unsigned int& line, unsigned int& col
     return filename;
 }
 
-typedef struct {
-  const char *CommentSchemaFile;
-} CommentXMLValidationData;
-
-// Table to keep which cursor types are to be tagged.
-#define AVAILABLE_TABLE_MAX 1024
-static char isCursorTypeAvailableTable[AVAILABLE_TABLE_MAX];
 static inline void setCursorTypeAvailable(int val)
 {
     assert(val < AVAILABLE_TABLE_MAX); 
@@ -128,7 +128,6 @@ static inline char isCursorTypeAvailable(int val)
     assert(val < AVAILABLE_TABLE_MAX); 
     return isCursorTypeAvailableTable[val];
 }
-#undef AVAILABLE_TABLE_MAX
 
 // process declarations other than function declarations.
 static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column)
@@ -213,261 +212,221 @@ static inline void procCXXBaseClassInfo(const CXCursor& Cursor, std::string name
 }
 
 static inline void procCursor(const CXCursor& Cursor) {
-  CXCursorKind kind = Cursor.kind;
-  if (!clang_isInvalid(kind)) {
-    if(isCursorTypeAvailable(kind) == 0) {
-        return;
-    }
-    unsigned int line = 0;
-    unsigned int column = 0;
+    CXCursorKind kind = Cursor.kind;
+    if (!clang_isInvalid(kind)) {
+        if(isCursorTypeAvailable(kind) == 0) {
+            return;
+        }
+        unsigned int line = 0;
+        unsigned int column = 0;
 
-    // file_name
-    std::string fileName = getCursorSourceLocation(line, column, Cursor);
-    // decide if this Cursor info is to be registered to db.
-    if(isInExcludeList(fileName)) {
-        return;
-    }
-    // name
-    std::string name = getName(Cursor);
-    if(name == "") {
-        return;
-    }
-    name = formatName(name);
-    // usr
-    CXString cxUSR = clang_getCursorUSR(Cursor);
-    const char *cUsr = clang_getCString(cxUSR);
-    assert(cUsr);
+        // file_name
+        std::string fileName = getCursorSourceLocation(line, column, Cursor);
+        // decide if this Cursor info is to be registered to db.
+        if(isInExcludeList(fileName)) {
+            return;
+        }
+        // name
+        std::string name = getName(Cursor);
+        if(name == "") {
+            return;
+        }
+        name = formatName(name);
+        // usr
+        CXString cxUSR = clang_getCursorUSR(Cursor);
+        const char *cUsr = clang_getCString(cxUSR);
+        assert(cUsr);
 
-    //int val = 0;
-    switch(kind) {
-        case CXCursor_EnumConstantDecl:
-            // get enum constant value
-            //val = clang_getEnumConstantDeclValue(Cursor);
-            // fall through
-        case CXCursor_TypedefDecl:
-        case CXCursor_TemplateTypeParameter:
-        case CXCursor_FunctionTemplate:
-        case CXCursor_ClassTemplate:
-        case CXCursor_Namespace:
-        case CXCursor_UnionDecl:
-        case CXCursor_FieldDecl:
-        case CXCursor_MacroDefinition: {
-            procDecl(Cursor, cUsr, name, fileName, line, column);
-            break;
+        //int val = 0;
+        switch(kind) {
+            case CXCursor_EnumConstantDecl:
+                // get enum constant value
+                //val = clang_getEnumConstantDeclValue(Cursor);
+                // fall through
+            case CXCursor_TypedefDecl:
+            case CXCursor_TemplateTypeParameter:
+            case CXCursor_FunctionTemplate:
+            case CXCursor_ClassTemplate:
+            case CXCursor_Namespace:
+            case CXCursor_UnionDecl:
+            case CXCursor_FieldDecl:
+            case CXCursor_MacroDefinition: {
+                procDecl(Cursor, cUsr, name, fileName, line, column);
+                break;
+            }
+            case CXCursor_VarDecl:
+            case CXCursor_ParmDecl: {
+                procValDecl(Cursor, cUsr, name, fileName, line, column);
+                break;
+            }
+            case CXCursor_StructDecl:
+            case CXCursor_ClassDecl:
+            case CXCursor_EnumDecl: {
+                gLastClassUsr = cUsr;
+                procDecl(Cursor, cUsr, name, fileName, line, column);
+                break;
+            }
+            case CXCursor_CXXMethod: {
+                procCXXMethodDecl(Cursor, cUsr, name, fileName, line, column);
+                break;
+            }
+            case CXCursor_FunctionDecl:
+            case CXCursor_Constructor:
+            case CXCursor_Destructor: {
+                procFuncDecl(Cursor, cUsr, name, fileName, line, column);
+                break;
+            }
+            case CXCursor_CXXBaseSpecifier: {
+                procCXXBaseClassInfo(Cursor, name, fileName, line, column);
+                break;
+            }
+            case CXCursor_DeclRefExpr:
+            case CXCursor_MemberRefExpr:
+            case CXCursor_TypeRef:
+            case CXCursor_MemberRef:
+            case CXCursor_NamespaceRef:
+            case CXCursor_TemplateRef:
+            case CXCursor_OverloadedDeclRef:
+            case CXCursor_MacroExpansion: {
+                procRef(Cursor, name, fileName, line, column);
+                break;
+            }
+            // TODO:
+            case CXCursor_InclusionDirective:
+                break;
+            default:
+                assert(0);
+                break;
         }
-        case CXCursor_VarDecl:
-        case CXCursor_ParmDecl: {
-            procValDecl(Cursor, cUsr, name, fileName, line, column);
-            break;
-        }
-        case CXCursor_StructDecl:
-        case CXCursor_ClassDecl:
-        case CXCursor_EnumDecl: {
-            gLastClassUsr = cUsr;
-            procDecl(Cursor, cUsr, name, fileName, line, column);
-            break;
-        }
-        case CXCursor_CXXMethod: {
-            procCXXMethodDecl(Cursor, cUsr, name, fileName, line, column);
-            break;
-        }
-        case CXCursor_FunctionDecl:
-        case CXCursor_Constructor:
-        case CXCursor_Destructor: {
-            procFuncDecl(Cursor, cUsr, name, fileName, line, column);
-            break;
-        }
-        case CXCursor_CXXBaseSpecifier: {
-            procCXXBaseClassInfo(Cursor, name, fileName, line, column);
-            break;
-        }
-        case CXCursor_DeclRefExpr:
-        case CXCursor_MemberRefExpr:
-        case CXCursor_TypeRef:
-        case CXCursor_MemberRef:
-        case CXCursor_NamespaceRef:
-        case CXCursor_TemplateRef:
-        case CXCursor_OverloadedDeclRef:
-        case CXCursor_MacroExpansion: {
-            procRef(Cursor, name, fileName, line, column);
-            break;
-        }
-        // TODO:
-        case CXCursor_InclusionDirective:
-            break;
-        default:
-            assert(0);
-            break;
+        clang_disposeString(cxUSR);
     }
-    clang_disposeString(cxUSR);
-  }
-  return;
+    return;
 }
 
 /******************************************************************************/
 /* Callbacks.                                                                 */
 /******************************************************************************/
 
-typedef void (*PostVisitTU)(CXTranslationUnit);
+static int printDiagnostic(const CXDiagnostic& Diagnostic) {
+    int rv = 0;
+    CXString Msg;
+    unsigned display_opts = CXDiagnostic_DisplaySourceLocation
+        | CXDiagnostic_DisplayColumn | CXDiagnostic_DisplaySourceRanges
+        | CXDiagnostic_DisplayOption;
 
-static int PrintDiagnostic(const CXDiagnostic& Diagnostic) {
-  int rv = 0;
-  CXString Msg;
-  unsigned display_opts = CXDiagnostic_DisplaySourceLocation
-    | CXDiagnostic_DisplayColumn | CXDiagnostic_DisplaySourceRanges
-    | CXDiagnostic_DisplayOption;
-
-  int severity = clang_getDiagnosticSeverity(Diagnostic);
-  if (severity == CXDiagnostic_Ignored) {
-    return 0;
-  }
-  if (severity == CXDiagnostic_Error || severity == CXDiagnostic_Fatal) {
-    rv = 1;
-  }
-
-  Msg = clang_formatDiagnostic(Diagnostic, display_opts);
-  fprintf(stderr, "%s\n", clang_getCString(Msg));
-  clang_disposeString(Msg);
-
-  return rv;
-}
-
-static int PrintDiagnosticSet(const CXDiagnosticSet& Set) {
-  int rv = 0;
-  int i = 0, n = clang_getNumDiagnosticsInSet(Set);
-  for ( ; i != n ; ++i) {
-    CXDiagnostic Diag = clang_getDiagnosticInSet(Set, i);
-    CXDiagnosticSet ChildDiags = clang_getChildDiagnostics(Diag);
-    if(PrintDiagnostic(Diag)) {
+    int severity = clang_getDiagnosticSeverity(Diagnostic);
+    if (severity == CXDiagnostic_Ignored) {
+        return 0;
+    }
+    if (severity == CXDiagnostic_Error || severity == CXDiagnostic_Fatal) {
         rv = 1;
     }
-    if (ChildDiags) {
-      PrintDiagnosticSet(ChildDiags);
-    }
-  }  
-  return rv;
+
+    Msg = clang_formatDiagnostic(Diagnostic, display_opts);
+    fprintf(stderr, "%s\n", clang_getCString(Msg));
+    clang_disposeString(Msg);
+
+    return rv;
 }
 
-static int PrintDiagnostics(CXTranslationUnit TU) {
-  CXDiagnosticSet TUSet = clang_getDiagnosticSetFromTU(TU);
-  int rv = PrintDiagnosticSet(TUSet);
-  clang_disposeDiagnosticSet(TUSet);
-  return rv;
+static int printDiagnosticSet(const CXDiagnosticSet& Set) {
+    int rv = 0;
+    int n = clang_getNumDiagnosticsInSet(Set);
+    for (int i = 0; i < n ; ++i) {
+        CXDiagnostic Diag = clang_getDiagnosticInSet(Set, i);
+        CXDiagnosticSet ChildDiags = clang_getChildDiagnostics(Diag);
+        if(printDiagnostic(Diag)) {
+            rv = 1;
+        }
+        if (ChildDiags) {
+            printDiagnosticSet(ChildDiags);
+        }
+    }  
+    return rv;
+}
+
+static int printDiagnostics(CXTranslationUnit TU) {
+    CXDiagnosticSet TUSet = clang_getDiagnosticSetFromTU(TU);
+    int rv = printDiagnosticSet(TUSet);
+    clang_disposeDiagnosticSet(TUSet);
+    return rv;
 }
 
 /******************************************************************************/
 /* Logic for testing traversal.                                               */
 /******************************************************************************/
 
-/* Data used by the visitors. */
-typedef struct {
-  CXTranslationUnit TU;
-  enum CXCursorKind *Filter;
-  CommentXMLValidationData ValidationData;
-} VisitorData;
-
-static enum CXChildVisitResult printingVisitor(CXCursor Cursor,
-                                                CXCursor Parent,
-                                                CXClientData ClientData) {
-  procCursor(Cursor);
-  return CXChildVisit_Recurse;
+static enum CXChildVisitResult visitorFunc(CXCursor Cursor,
+        CXCursor Parent,
+        CXClientData ClientData) {
+    procCursor(Cursor);
+    return CXChildVisit_Recurse;
 }
 
 /******************************************************************************/
 /* Loading ASTs/source.                                                       */
 /******************************************************************************/
 
-static int perform_test_load(CXIndex Idx, CXTranslationUnit TU,
-                             const char *prefix,
-                             CXCursorVisitor Visitor,
-                             PostVisitTU PV,
-                             const char *CommentSchemaFile) {
-  if (Visitor) {
-    enum CXCursorKind *ck = NULL;
-    VisitorData Data;
+static int performIndexing(const char* cur_dir, const char* out_dir, const char* in_file_name, int argc, const char **argv) {
+    int result;
 
-    Data.TU = TU;
-    Data.Filter = ck;
-    Data.ValidationData.CommentSchemaFile = CommentSchemaFile;
-    clang_visitChildren(clang_getTranslationUnitCursor(TU), Visitor, &Data);
-  }
+    // Set which cursor types are to be tagged.
+    setCursorTypeAvailable(CXCursor_EnumConstantDecl);
+    setCursorTypeAvailable(CXCursor_TypedefDecl);
+    setCursorTypeAvailable(CXCursor_ClassDecl);
+    setCursorTypeAvailable(CXCursor_EnumDecl);
+    setCursorTypeAvailable(CXCursor_Namespace);
+    setCursorTypeAvailable(CXCursor_StructDecl);
+    setCursorTypeAvailable(CXCursor_UnionDecl);
+    setCursorTypeAvailable(CXCursor_VarDecl);
+    setCursorTypeAvailable(CXCursor_ParmDecl);
+    setCursorTypeAvailable(CXCursor_FieldDecl);
+    setCursorTypeAvailable(CXCursor_MacroDefinition);
+    setCursorTypeAvailable(CXCursor_CXXMethod);
+    setCursorTypeAvailable(CXCursor_FunctionDecl);
+    setCursorTypeAvailable(CXCursor_Constructor);
+    setCursorTypeAvailable(CXCursor_Destructor);
+    setCursorTypeAvailable(CXCursor_DeclRefExpr);
+    setCursorTypeAvailable(CXCursor_MemberRefExpr);
+    setCursorTypeAvailable(CXCursor_TypeRef);
+    setCursorTypeAvailable(CXCursor_MemberRef);
+    setCursorTypeAvailable(CXCursor_NamespaceRef);
+    setCursorTypeAvailable(CXCursor_MacroExpansion);
+    setCursorTypeAvailable(CXCursor_TemplateTypeParameter);
+    setCursorTypeAvailable(CXCursor_FunctionTemplate);
+    setCursorTypeAvailable(CXCursor_ClassTemplate);
+    setCursorTypeAvailable(CXCursor_TemplateRef);
+    setCursorTypeAvailable(CXCursor_OverloadedDeclRef);
+    setCursorTypeAvailable(CXCursor_CXXBaseSpecifier);
 
-  if (PV)
-    PV(TU);
+    gDb = new cxxtags::DbImplLevelDb();
+    check_rv(gDb->init(out_dir, in_file_name, gExcludeListStr, gIsRebuild, cur_dir, argc, argv));
 
-  int rv = PrintDiagnostics(TU);
-  clang_disposeTranslationUnit(TU);
-  return rv;
-}
+    CXIndex Idx = clang_createIndex(/* excludeDeclsFromPCH */0,
+            /* displayDiagnosics=*/0);
 
-static int perform_test_load_source(int argc, const char **argv,
-                             CXCursorVisitor Visitor,
-                             PostVisitTU PV) {
-  CXIndex Idx = 0;
-  CXTranslationUnit TU;
-  const char *CommentSchemaFile = NULL;
-  int result;
-  const char *cur_dir = argv[0];
-  const char *out_dir = argv[1];
-  const char *in_file_name = argv[2];
-  // increment argv to pass clang
-  argv+=2;
-  argc-=2;
+    CXTranslationUnit TU = clang_parseTranslationUnit(Idx, in_file_name,
+            argv,
+            argc,
+            0, 0, 
+            getDefaultParsingOptions());
+    if (!TU) {
+        fprintf(stderr, "Unable to load translation unit!\n");
+        result = 1;
+        goto FUNC_END;
+    }
 
-  // Set which cursor types are to be tagged.
-  setCursorTypeAvailable(CXCursor_EnumConstantDecl);
-  setCursorTypeAvailable(CXCursor_TypedefDecl);
-  setCursorTypeAvailable(CXCursor_ClassDecl);
-  setCursorTypeAvailable(CXCursor_EnumDecl);
-  setCursorTypeAvailable(CXCursor_Namespace);
-  setCursorTypeAvailable(CXCursor_StructDecl);
-  setCursorTypeAvailable(CXCursor_UnionDecl);
-  setCursorTypeAvailable(CXCursor_VarDecl);
-  setCursorTypeAvailable(CXCursor_ParmDecl);
-  setCursorTypeAvailable(CXCursor_FieldDecl);
-  setCursorTypeAvailable(CXCursor_MacroDefinition);
-  setCursorTypeAvailable(CXCursor_CXXMethod);
-  setCursorTypeAvailable(CXCursor_FunctionDecl);
-  setCursorTypeAvailable(CXCursor_Constructor);
-  setCursorTypeAvailable(CXCursor_Destructor);
-  setCursorTypeAvailable(CXCursor_DeclRefExpr);
-  setCursorTypeAvailable(CXCursor_MemberRefExpr);
-  setCursorTypeAvailable(CXCursor_TypeRef);
-  setCursorTypeAvailable(CXCursor_MemberRef);
-  setCursorTypeAvailable(CXCursor_NamespaceRef);
-  setCursorTypeAvailable(CXCursor_MacroExpansion);
-  setCursorTypeAvailable(CXCursor_TemplateTypeParameter);
-  setCursorTypeAvailable(CXCursor_FunctionTemplate);
-  setCursorTypeAvailable(CXCursor_ClassTemplate);
-  setCursorTypeAvailable(CXCursor_TemplateRef);
-  setCursorTypeAvailable(CXCursor_OverloadedDeclRef);
-  setCursorTypeAvailable(CXCursor_CXXBaseSpecifier);
+    clang_visitChildren(clang_getTranslationUnitCursor(TU), visitorFunc, NULL);
 
-  gDb = new cxxtags::DbImplLevelDb();
-  check_rv(gDb->init(out_dir, in_file_name, gExcludeListStr, gIsRebuild, cur_dir, argc-1, argv+1));
+    result = printDiagnostics(TU);
+    clang_disposeTranslationUnit(TU);
 
-  Idx = clang_createIndex(/* excludeDeclsFromPCH */0,
-                          /* displayDiagnosics=*/0);
-
-  TU = clang_parseTranslationUnit(Idx, 0,
-                                  argv,
-                                  argc,
-                                  0, 0, 
-                                  getDefaultParsingOptions());
-  if (!TU) {
-    fprintf(stderr, "Unable to load translation unit!\n");
-    result = 1;
-    goto FUNC_END;
-  }
-
-  result = perform_test_load(Idx, TU, NULL, Visitor, PV,
-                             CommentSchemaFile);
 FUNC_END:
-  if(Idx) {
-    clang_disposeIndex(Idx);
-  }
-  check_rv(gDb->fin());
-  return result;
+    if(Idx) {
+        clang_disposeIndex(Idx);
+    }
+    check_rv(gDb->fin());
+    return result;
 }
 
 /******************************************************************************/
@@ -500,36 +459,39 @@ static int indexSource(int argc, const char **argv) {
     //clang_enableStackTraces();
     argv++; // increment for command name
     argc--; // decrement for command name
-    if (argc >= 3) {
-        while(argc) {
-            if(strncmp(*argv, "-e", 2) == 0) { 
-                gExcludeListStr = argv[1];
-                gExcludeList = splitString(gExcludeListStr);
-                argv+=2;
-                argc-=2;
-            }
-            else if(strncmp(*argv, "-p", 2) == 0) {
-                gIsOmitLocal = true;
-                argv++;
-                argc--;
-            }
-            else if(strncmp(*argv, "-f", 2) == 0) {
-                gIsRebuild = true;
-                argv++;
-                argc--;
-            }
-            else {
-                break;
-            }
+    if (argc < 3) {
+        print_usage();
+        return 1;
+    }
+
+    while(argc) {
+        if(strncmp(*argv, "-e", 2) == 0) { 
+            gExcludeListStr = argv[1];
+            gExcludeList = splitString(gExcludeListStr);
+            argv+=2;
+            argc-=2;
         }
-        CXCursorVisitor I = printingVisitor;
-        PostVisitTU postVisit = 0;
-        if (I) {
-            return perform_test_load_source(argc, argv, I, postVisit);
+        else if(strncmp(*argv, "-p", 2) == 0) {
+            gIsOmitLocal = true;
+            argv++;
+            argc--;
+        }
+        else if(strncmp(*argv, "-f", 2) == 0) {
+            gIsRebuild = true;
+            argv++;
+            argc--;
+        }
+        else {
+            break;
         }
     }
-    print_usage();
-    return 1;
+    const char *cur_dir = argv[0];
+    const char *out_dir = argv[1];
+    const char *in_file_name = argv[2];
+    // increment argv to pass clang
+    argv+=3;
+    argc-=3;
+    return performIndexing(cur_dir, out_dir, in_file_name, argc, argv);
 }
 
 };

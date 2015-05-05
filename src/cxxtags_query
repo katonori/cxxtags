@@ -135,7 +135,7 @@ def GetLineFromFile(fn, line_no):
     all_lines = fi.readlines()
     str_line = ""
     if len(all_lines) < line_no:
-        my_exit(1, "ERROR: GetLineFromFile: %s, %d\n"%(fn, line_no))
+        DEBUG_PRINT("ERROR: GetLineFromFile: %s, %d\n"%(fn, line_no))
     else:
         str_line = all_lines[line_no-1]
     str_line = str_line.rstrip('\r\n')
@@ -313,7 +313,7 @@ class HandlerBase:
     def GetUsrIdList(self, fileName, lineNo, colNo):
         if fileName == "":
             print "ERROR: specify file name"
-            sys.exit(1)
+            return None
         mainDb = self.GetMainDb()
         DEBUG_PRINT("file: " + fileName)
         q = self.m_dbId + TABLE_NAME_POSITION_TO_LOCAL_USR_ID + "|%s|%s"%(lineNo, colNo)
@@ -432,7 +432,7 @@ class HandlerBase:
     def ParseArg(self, argv):
         if len(argv) != 3:
             usage()
-            sys.exit(1)
+            return RV_ERROR
         fn, lineNo, colNo = argv
         self.m_srcFileName = os.path.abspath(fn)
         self.m_lineNo = format(int(lineNo), 'x')
@@ -441,6 +441,7 @@ class HandlerBase:
             self.m_lineNo = self.EncVal(self.m_lineNo)
             self.m_colNo = self.EncVal(self.m_colNo)
         # get token name from the file
+        return RV_SUCCESS
 
 class QueryHandlerDecl(HandlerBase):
     #
@@ -449,8 +450,8 @@ class QueryHandlerDecl(HandlerBase):
     def DoQuery(self):
         self.InitUsrDb()
         if self.InitDbByFilename(self.m_srcFileName) == None:
-            print "ERROR: cannot open database of '%s'"%(self.m_srcFileName)
-            sys.exit(1)
+            DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
+            return RV_NOT_FOUND
         usrIds = self.GetUsrIdList(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         found = False
         if usrIds:
@@ -509,8 +510,8 @@ class QueryHandlerDef(HandlerBase):
         self.m_isOnlyMainCompileUnit = isOnlyMainCompileUnit
         self.InitUsrDb()
         if self.InitDbByFilename(self.m_srcFileName) == None:
-            print "ERROR: cannot open database of '%s'"%(self.m_srcFileName)
-            sys.exit(1)
+            DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
+            return RV_NOT_FOUND
         usrIds = self.GetUsrIdList(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         found = False
         if usrIds:
@@ -566,8 +567,8 @@ class QueryHandlerRef(HandlerBase):
         self.m_startTime = time.time()
         self.InitUsrDb()
         if self.InitDbByFilename(self.m_srcFileName) == None:
-            print "ERROR: cannot open database of '%s'"%(self.m_srcFileName)
-            sys.exit(1)
+            DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
+            return RV_NOT_FOUND
         usrIds = self.GetUsrIdList(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         found = False
         if usrIds:
@@ -629,8 +630,8 @@ class QueryHandlerOverride(QueryHandlerDecl):
         startTime = time.time()
         self.InitUsrDb()
         if self.InitDbByFilename(self.m_srcFileName) == None:
-            print "ERROR: cannot open database of '%s'"%(self.m_srcFileName)
-            sys.exit(1)
+            DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
+            return RV_NOT_FOUND
         usrIds = self.GetUsrIdList(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         found = False
         if usrIds:
@@ -670,8 +671,8 @@ class QueryHandlerOverrideN(HandlerBase):
         startTime = time.time()
         self.InitUsrDb()
         if self.InitDbByFilename(self.m_srcFileName) == None:
-            print "ERROR: cannot open database of '%s'"%(self.m_srcFileName)
-            sys.exit(1)
+            DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
+            return RV_NOT_FOUND
         usrIds = self.GetUsrIdList(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         found = False
         if usrIds:
@@ -739,13 +740,14 @@ class QueryHandlerDump(HandlerBase):
     def ParseArg(self, argv):
         if len(argv) != 0:
             usage()
-            sys.exit(1)
+            return RV_ERROR
+        return RV_SUCCESS
 
 class QueryHandlerRebuild(HandlerBase):
     def DoQuery(self):
         if self.InitDbByFilename(self.m_srcFileName) == None:
-            print "ERROR: cannot open database of '%s'"%(self.m_srcFileName)
-            sys.exit(1)
+            DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
+            return RV_NOT_FOUND
         rv = self.GetDb(self.m_dbId).get(self.m_dbId + TABLE_NAME_BUILD_INFO)
         if rv == None:
             print "ERROR: cannot obtain build options from the database."
@@ -770,8 +772,9 @@ class QueryHandlerRebuild(HandlerBase):
     def ParseArg(self, argv):
         if len(argv) != 1:
             usage()
-            sys.exit(1)
+            return RV_ERROR
         self.m_srcFileName = os.path.abspath(argv[0])
+        return RV_SUCCESS
 
     def DeleteOldEntries(self, dbId):
         dbList = self.OpenAllDb()
@@ -790,13 +793,17 @@ def procOneDb(queryType, dbDir, argv):
     if queryType == 'decl': # get a declaration or definition
         DEBUG_PRINT("decl start")
         handler = QueryHandlerDecl(dbDir)
-        handler.ParseArg(argv)
+        rv = handler.ParseArg(argv)
+        if rv != RV_SUCCESS:
+            sys.exit(1)
         rv = handler.DoQuery()
         handler.CloseDb()
         if rv == RV_NOT_FOUND:
             DEBUG_PRINT("def start")
             handler = QueryHandlerDef(dbDir)
-            handler.ParseArg(argv)
+            rv = handler.ParseArg(argv)
+            if rv != RV_SUCCESS:
+                sys.exit(1)
             rv = handler.DoQuery(True)
             handler.CloseDb()
         if rv == RV_ERROR:
@@ -840,7 +847,9 @@ def procOneDb(queryType, dbDir, argv):
         else:
             print "ERROR: query type must be ref, decl, def, override, overriden, name or dump"
             return 1
-        handler.ParseArg(argv)
+        rv = handler.ParseArg(argv)
+        if rv != RV_SUCCESS:
+            sys.exit(1)
         rv = handler.DoQuery()
         if rv == RV_ERROR:
             funcResult = 1
@@ -873,11 +882,11 @@ def main():
         genCConfig(argv[1])
     else:
         dbDirList = dbDir.split(",")
+        funcResult = 1
         for db in dbDirList:
             rv = procOneDb(queryType, db, argv[2:])
-            if rv != 0:
-                print("ERROR: " + db)
-                funcResult = 1
+            if rv == 0:
+                funcResult = 0
     return funcResult
 
 #######

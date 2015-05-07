@@ -13,7 +13,7 @@
 
 #include <clang-c/Index.h>
 
-#include "DbImplLevelDb.h"
+#include "IndexDbLevelDb.h"
 #include "IIndexDb.h"
 
 namespace cxxtags {
@@ -407,7 +407,7 @@ static int performIndexing(const char* cur_dir, const char* out_dir, const char*
     setCursorTypeAvailable(CXCursor_OverloadedDeclRef);
     setCursorTypeAvailable(CXCursor_CXXBaseSpecifier);
 
-    gDb = new cxxtags::DbImplLevelDb();
+    gDb = new cxxtags::IndexDbLevelDb();
     check_rv(gDb->init(out_dir, in_file_name, gExcludeListStr, gIsRebuild, cur_dir, argc, argv));
 
     CXIndex Idx = clang_createIndex(/* excludeDeclsFromPCH */0,

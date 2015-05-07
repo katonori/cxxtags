@@ -36,7 +36,7 @@ include_directories(
 )
 link_directories(${LEVELDB_HOME}/lib)
 
-add_executable(cxxtags_core cxxtags_core.cpp DbImplLevelDb.cpp)
+add_executable(cxxtags_core cxxtags_core.cpp IndexDbLevelDb.cpp)
 target_link_libraries(cxxtags_core clang stdc++ leveldb snappy
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_TIMER_LIBRARY}

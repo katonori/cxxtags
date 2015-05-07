@@ -11,7 +11,6 @@
 #include <time.h>
 #include <unistd.h>
 
-#include <boost/filesystem/path.hpp>
 #include <clang-c/Index.h>
 
 #include "DbImplLevelDb.h"
@@ -129,19 +128,26 @@ static inline char isCursorTypeAvailable(int val)
     return isCursorTypeAvailableTable[val];
 }
 
+static bool isLocal(const std::string& usr, const CXCursor& cursor)
+{
+    if((cursor.kind == CXCursor_VarDecl || cursor.kind == CXCursor_ParmDecl)
+            && (usr.find("c:@") != 0 && usr.find("c:macro") != 0)) {
+        CXCursor parentCur = clang_getCursorLexicalParent(cursor);
+        if(parentCur.kind == CXCursor_FunctionDecl
+            || parentCur.kind == CXCursor_CXXMethod
+            || parentCur.kind == CXCursor_Constructor
+            || parentCur.kind == CXCursor_Destructor) {
+            //printf("OMIT: %s\n", usr.c_str());
+            return true;
+        }
+    }
+    return false;
+}
+
 // process declarations other than function declarations.
 static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column)
 {
-    int isDef = clang_isCursorDefinition(Cursor);
-    // insert to database
-    check_rv(gDb->insert_decl_value(cUsr, fileName, name, line, column, isDef));
-}
-
-static inline void procValDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column)
-{
-    std::string usr = cUsr;
-    if(!gIsOmitLocal
-        || (usr.find("c:@") == 0 || usr.find("c:macro") == 0)) {
+    if(!gIsOmitLocal || !isLocal(cUsr, Cursor)) {
         int isDef = clang_isCursorDefinition(Cursor);
         // insert to database
         check_rv(gDb->insert_decl_value(cUsr, fileName, name, line, column, isDef));
@@ -188,11 +194,16 @@ static inline void procRef(const CXCursor& Cursor, std::string name, std::string
         // ref_usr
         CXString cxRefUSR = clang_getCursorUSR(refCur);
         cUsr = clang_getCString(cxRefUSR);
+        std::string usr(cUsr);
         assert(cUsr);
+        if(gIsOmitLocal && isLocal(cUsr, refCur)) {
+            return ;
+        }
         // insert to database.
         check_rv(gDb->insert_ref_value(cUsr, fileName, name, line, column));
         clang_disposeString(cxRefUSR);
     }
+    return ;
 }
 
 // process c++ base class informations
@@ -250,13 +261,10 @@ static inline void procCursor(const CXCursor& Cursor) {
             case CXCursor_Namespace:
             case CXCursor_UnionDecl:
             case CXCursor_FieldDecl:
+            case CXCursor_VarDecl:
+            case CXCursor_ParmDecl:
             case CXCursor_MacroDefinition: {
                 procDecl(Cursor, cUsr, name, fileName, line, column);
-                break;
-            }
-            case CXCursor_VarDecl:
-            case CXCursor_ParmDecl: {
-                procValDecl(Cursor, cUsr, name, fileName, line, column);
                 break;
             }
             case CXCursor_StructDecl:

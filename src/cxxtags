@@ -17,7 +17,6 @@ class CxxTagsCoreWrapper:
     mOutFile = ""
     mTimeList = []
     mIsVerbose = 0
-    mIsPartial = 0
     mBuildOpt = ""
     mConfigFile = ".cxxtags/config.json"
     mHomeDir = ""
@@ -66,6 +65,7 @@ class CxxTagsCoreWrapper:
                 self.mIsVerbose = 1
                 i += 1
             elif arg == "-p":
+                # omit local symbols
                 self.mOptCore += " -p"
                 i += 1
             elif arg == "-f":

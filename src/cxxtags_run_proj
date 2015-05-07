@@ -210,7 +210,7 @@ class CmdRunner():
 
     def ParseArgs(self):
         try:
-            opts, args = getopt.getopt(sys.argv[1:], "j:Jt:e:v", [])
+            opts, args = getopt.getopt(sys.argv[1:], "j:Jt:e:vp", [])
         except getopt.GetoptError, err:
             print str(err) # will print something like "option -a not recognized"
             self.usage()
@@ -226,6 +226,8 @@ class CmdRunner():
                 self.m_projType = a
             elif o in ("-e"):
                 self.m_options += " -e " + a
+            elif o in ("-p"):
+                self.m_options += " -p "
             elif o in ("-v"):
                 logging.basicConfig(format='%(levelname)s: %(lineno)s: %(message)s', level=logging.INFO)
             else:

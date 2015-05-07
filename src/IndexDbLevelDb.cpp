@@ -13,14 +13,14 @@
 #include <leveldb/cache.h>
 #include <leveldb/filter_policy.h>
 
-#include "DbImplLevelDb.h"
+#include "IndexDbLevelDb.h"
 #include "config.h"
 
 namespace cxxtags {
 
 using namespace std;
 
-int DbImplLevelDb::dbTryOpen(leveldb::DB*& db, string dir)
+int IndexDbLevelDb::dbTryOpen(leveldb::DB*& db, string dir)
 {
     time_t start;
     time(&start);
@@ -68,7 +68,7 @@ static int makeDirectory(const char* name)
     return 0;
 }
 
-int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, const string& excludeList, bool isRebuild, const char* curDir, int argc, const char** argv)
+int IndexDbLevelDb::init(const string& out_dir, const string& src_file_name, const string& excludeList, bool isRebuild, const char* curDir, int argc, const char** argv)
 {
     leveldb::DB* dbCommon = NULL;
     m_defaultOptions.create_if_missing = true;
@@ -171,7 +171,7 @@ int DbImplLevelDb::init(const string& out_dir, const string& src_file_name, cons
     return 0;
 }
 
-int DbImplLevelDb::dbWrite(leveldb::DB* db, const string& key, const string& value)
+int IndexDbLevelDb::dbWrite(leveldb::DB* db, const string& key, const string& value)
 {
     leveldb::Status st = db->Put(m_defaultWoptions, key, value);
     // TODO: add error handling
@@ -183,7 +183,7 @@ int DbImplLevelDb::dbWrite(leveldb::DB* db, const string& key, const string& val
     return 0;
 }
 
-int DbImplLevelDb::dbRead(string& value, leveldb::DB* db, const string& key)
+int IndexDbLevelDb::dbRead(string& value, leveldb::DB* db, const string& key)
 {
     string result;
     leveldb::Status st = db->Get(m_defaultRoptions, key, &result);
@@ -308,7 +308,7 @@ static inline void encItemInfo(char* buff, int buffLen, unsigned int nameId, uns
 #endif
 }
 
-int DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, const string& name, int line, int col)
+int IndexDbLevelDb::insert_ref_value(const string& usr, const string& filename, const string& name, int line, int col)
 {
     FileContext& fctx = m_fileContextMap[filename];
 
@@ -353,7 +353,7 @@ int DbImplLevelDb::insert_ref_value(const string& usr, const string& filename, c
     return 0;
 }
 
-int DbImplLevelDb::insert_decl_value(const string& usr, const string& filename, const string& name, int line, int col, int isDef)
+int IndexDbLevelDb::insert_decl_value(const string& usr, const string& filename, const string& name, int line, int col, int isDef)
 {
     FileContext& fctx = m_fileContextMap[filename];
 
@@ -387,7 +387,7 @@ int DbImplLevelDb::insert_decl_value(const string& usr, const string& filename, 
     return 0;
 }
 
-int DbImplLevelDb::insert_overriden_value(const string& usr, const string& name, const string& filename, int line, int col, const string& usrOverrider, int isDef)
+int IndexDbLevelDb::insert_overriden_value(const string& usr, const string& name, const string& filename, int line, int col, const string& usrOverrider, int isDef)
 {
     timerResume(TIMER_INS_OVERRIDEN);
     //printf("overriden: %s, %s, %s, line=%d, col=%d\n", usr.c_str(), filename.c_str(), name.c_str(), line, col);
@@ -418,12 +418,12 @@ int DbImplLevelDb::insert_overriden_value(const string& usr, const string& name,
     return 0;
 }
 
-int DbImplLevelDb::insert_base_class_value(const string& classUsr, const string& baseClassUsr, int line, int col, int accessibility)
+int IndexDbLevelDb::insert_base_class_value(const string& classUsr, const string& baseClassUsr, int line, int col, int accessibility)
 {
     return 0;
 }
 
-int DbImplLevelDb::addIdList(leveldb::WriteBatch* db, const SiMap& inMap, const string& tableName)
+int IndexDbLevelDb::addIdList(leveldb::WriteBatch* db, const SiMap& inMap, const string& tableName)
 {
     string prefix = tableName + "|";
     // lookup map
@@ -443,7 +443,7 @@ int DbImplLevelDb::addIdList(leveldb::WriteBatch* db, const SiMap& inMap, const 
     return 0;
 }
 
-int DbImplLevelDb::addFilesToFileList(leveldb::DB* db)
+int IndexDbLevelDb::addFilesToFileList(leveldb::DB* db)
 {
     char buf[1024];
     int startId = 0;
@@ -493,7 +493,7 @@ int DbImplLevelDb::addFilesToFileList(leveldb::DB* db)
     return 0;
 }
 
-int DbImplLevelDb::dbFlush(leveldb::DB* db, leveldb::WriteBatch* wb)
+int IndexDbLevelDb::dbFlush(leveldb::DB* db, leveldb::WriteBatch* wb)
 {
     leveldb::Status status = db->Write(m_defaultWoptions, wb);
     if (!status.ok()) {
@@ -503,14 +503,14 @@ int DbImplLevelDb::dbFlush(leveldb::DB* db, leveldb::WriteBatch* wb)
     return 0;
 }
 
-int DbImplLevelDb::dbClose(leveldb::DB*& db)
+int IndexDbLevelDb::dbClose(leveldb::DB*& db)
 {
     delete db;
     db = NULL;
     return 0;
 }
 
-int DbImplLevelDb::writeUsrDb(const SiMap& usrMap, map<string, SiMap> usrFidMap, leveldb::DB* dbUsrDb, leveldb::WriteBatch& wb_usrdb, const string& dbName)
+int IndexDbLevelDb::writeUsrDb(const SiMap& usrMap, map<string, SiMap> usrFidMap, leveldb::DB* dbUsrDb, leveldb::WriteBatch& wb_usrdb, const string& dbName)
 {
     // lookup map
     for(const auto& itr : usrMap) {
@@ -545,7 +545,7 @@ int DbImplLevelDb::writeUsrDb(const SiMap& usrMap, map<string, SiMap> usrFidMap,
     return 0;
 }
 
-int DbImplLevelDb::fin(void)
+int IndexDbLevelDb::fin(void)
 {
     {
         leveldb::WriteBatch wb_common;

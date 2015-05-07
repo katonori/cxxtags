@@ -95,9 +95,9 @@ struct FileContext
 typedef std::map<std::string, FileContext>      FcMap;
 typedef std::pair<std::string, FileContext>     FcPair;
 
-class DbImplLevelDb : public IIndexDb {
+class IndexDbLevelDb : public IIndexDb {
 public:
-    DbImplLevelDb()
+    IndexDbLevelDb()
         : m_isRebuild(false)
         , m_cuDbId()
     {}

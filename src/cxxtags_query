@@ -1,7 +1,6 @@
 #!/usr/bin/python
 def usage():
     print 'usage: cxxtags_query decl/def/ref database_dir file_name line_no column_no'
-    print '     : cxxtags_query         name database_dir item_name [-f file_name] [-l line_no] [-c column_no]'
     print '     : cxxtags_query         dump database_dir table_name'
 
 OUTPUT_DELIMITER = '|'
@@ -777,16 +776,15 @@ class QueryHandlerRebuild(HandlerBase):
         return RV_SUCCESS
 
     def DeleteOldEntries(self, dbId):
-        dbList = self.OpenAllDb()
-        for db in dbList:
-            batch = DbBatch(db)
-            for d in db.getItr():
-                key = d[0]
-                keyLen = len(key)
-                dbIdLen = len(dbId)
-                if key.startswith(dbId) and (keyLen >= dbIdLen + 2) and key[len(dbId) + 1] == '|':
-                    batch.delete(key)
-            batch.flush()
+        db = self.GetDbByDbId(dbId)
+        batch = DbBatch(db)
+        for d in db.getItr():
+            key = d[0]
+            keyLen = len(key)
+            dbIdLen = len(dbId)
+            if key.startswith(dbId) and (keyLen >= dbIdLen + 2) and key[len(dbId) + 1] == '|':
+                batch.delete(key)
+        batch.flush()
 
 def procOneDb(queryType, dbDir, argv):
     funcResult = 0
@@ -845,7 +843,7 @@ def procOneDb(queryType, dbDir, argv):
         elif queryType == 'rebuild': # 
             handler = QueryHandlerRebuild(dbDir)
         else:
-            print "ERROR: query type must be ref, decl, def, override, overriden, name or dump"
+            print "ERROR: query type must be ref, decl, def, override, overriden or dump"
             return 1
         rv = handler.ParseArg(argv)
         if rv != RV_SUCCESS:

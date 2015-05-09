@@ -605,7 +605,7 @@ int IndexDbLevelDb::fin(void)
         char* errp = NULL;
         int cuId = strtol(m_compileUnitId.c_str(), &errp, 16);
         assert(*errp == '\0');
-        snprintf(m_CharBuff0, sizeof(m_CharBuff0), "%x", (cuId % k_usrDbDirNum)); 
+        snprintf(m_CharBuff0, sizeof(m_CharBuff0), "%x", (cuId % USR_DB_NUM)); 
         curDir.append(string("/") + string(m_CharBuff0));
 
         timerStart(TIMER_USR_DB0);

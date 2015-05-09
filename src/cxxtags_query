@@ -7,7 +7,8 @@ OUTPUT_DELIMITER = '|'
 USE_BASE64 = 1
 USE_USR2FILE_TABLE2 = False
 USE_PLYVEL = False
-DB_NUM = 1
+DB_NUM = 16
+USR_DB_NUM = 16
 
 import sys
 if USE_PLYVEL:
@@ -71,6 +72,7 @@ def genCConfig(filename):
     with open(filename, "w") as f:
         f.write('#define USE_BASE64 %d\n'%(USE_BASE64))
         f.write('#define DB_NUM %d\n'%(DB_NUM))
+        f.write('#define USR_DB_NUM %d\n'%(USR_DB_NUM))
         f.write('#define TABLE_NAME_POSITION_TO_LOCAL_USR_ID "%s"\n'%(TABLE_NAME_POSITION_TO_LOCAL_USR_ID))
         f.write('#define TABLE_NAME_USR_TO_GLOBAL_FILE_ID_REF "%s"\n'%(TABLE_NAME_USR_TO_GLOBAL_FILE_ID_REF))
         f.write('#define TABLE_NAME_USR_TO_GLOBAL_FILE_ID_OVERRIDER "%s"\n'%(TABLE_NAME_USR_TO_GLOBAL_FILE_ID_OVERRIDER))
@@ -398,13 +400,13 @@ class HandlerBase:
         self.mUsrDbList = []
         timeE = time.time()
         DEBUG_PRINT("time: close: usrDb: " + str(timeE - timeS))
-        timeS = time.time()
         for db in self.m_dbList:
+            timeS = time.time()
             if db:
                 db.close()
+            timeE = time.time()
+            DEBUG_PRINT("time: close: dbList: " + str(timeE - timeS))
         self.m_dbList = [None]*DB_NUM
-        timeE = time.time()
-        DEBUG_PRINT("time: close: dbList: " + str(timeE - timeS))
 
     def getToken(self, filename, line, col):
         # get token name from the file

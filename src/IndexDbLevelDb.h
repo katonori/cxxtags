@@ -166,8 +166,6 @@ private:
     leveldb::WriteOptions           m_defaultWoptions;
     leveldb::Options                m_defaultOptions;
 
-    const int                       k_usrDbDirNum = 1;
-
     std::string                     m_compileUnitId;
     FcMap                           m_fileContextMap;
     SiMap                           m_refUsrMap;

@@ -114,7 +114,7 @@ def getFilename(db, dbId):
     rv = db.get(dbId + TABLE_NAME_BUILD_INFO)
     if rv == None:
         return None
-    cuFileName, filename, workDir, excludes, opt = rv.split("|")
+    cuFileName, filename, workDir, excludes, isRebuild, opt = rv.split("|")
     return filename
 
 def GetResultString(db, dbId, nameId):
@@ -753,15 +753,18 @@ class QueryHandlerRebuild(HandlerBase):
         if rv == None:
             print "ERROR: cannot obtain build options from the database."
             sys.exit(1)
-        cuFileName, src_file_name, workDir, excludes, opt = rv.split("|")
+        cuFileName, src_file_name, workDir, excludes, isRebuild, opt = rv.split("|")
         assert src_file_name == self.m_srcFileName
+        cmdOpt = ""
         if excludes != "":
-            excludes = " -e " + excludes
+            cmdOpt += " -e " + excludes
+        if int(isRebuild) != 0:
+            cmdOpt += " -p "
 
         self.DeleteOldEntries(self.m_dbId)
 
         # rebuild
-        cmd = "cxxtags -f " + excludes + " " + self.mDbDir + " " + cuFileName + " -- " + opt
+        cmd = "cxxtags -f " + cmdOpt + " " + self.mDbDir + " " + cuFileName + " -- " + opt
         DEBUG_PRINT("cmd: " + cmd)
         self.CloseDb()
         (rv, out) = commands.getstatusoutput(cmd)

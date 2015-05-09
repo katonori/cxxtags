@@ -78,7 +78,7 @@ int IndexDbLevelDb::init(const string& out_dir, const string& src_file_name, con
     m_defaultOptions.filter_policy = leveldb::NewBloomFilterPolicy(10);
 
     // build options
-    m_buildOpt = string(curDir) + "|" + excludeList + "|";
+    m_buildOpt = string(curDir) + "|" + excludeList + "|" + std::to_string((int)isRebuild) + "|";
     for(int i = 0; i < argc; i++) {
         m_buildOpt += " " + string(argv[i]);
     }

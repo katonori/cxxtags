@@ -634,12 +634,12 @@ int IndexDbLevelDb::fin(void)
         //////
 #ifdef TIMER
         printf("---- Statistics ----\n");
-        printf("time: TIMER_USR_DB0: %s", m_timers[TIMER_USR_DB0].format().c_str());
-        printf("time: TIMER_USR_DB3: %s", m_timers[TIMER_USR_DB3].format().c_str());
-        printf("time: TIMER_INS_REF: %s", m_timers[TIMER_INS_REF].format().c_str());
-        printf("time: TIMER_INS_REF_1: %s", m_timers[TIMER_INS_REF_1].format().c_str());
-        printf("time: TIMER_INS_REF_2: %s", m_timers[TIMER_INS_REF_2].format().c_str());
-        printf("time: TIMER_INS_DECL: %s", m_timers[TIMER_INS_DECL].format().c_str());
+        timerShow("time: TIMER_USR_DB0: ", TIMER_USR_DB0);
+        timerShow("time: TIMER_USR_DB3: ", TIMER_USR_DB3);
+        timerShow("time: TIMER_INS_REF: ", TIMER_INS_REF);
+        timerShow("time: TIMER_INS_REF_1: ", TIMER_INS_REF_1);
+        timerShow("time: TIMER_INS_REF_2: ", TIMER_INS_REF_2);
+        timerShow("time: TIMER_INS_DECL: ", TIMER_INS_DECL);
 #endif
     }
 
@@ -778,7 +778,7 @@ int IndexDbLevelDb::fin(void)
     }
 #ifdef TIMER
     timerStop(TIMER_DB_WRITE);
-    printf("time: TIMER_DB_WRITE: %s", m_timers[TIMER_DB_WRITE].format().c_str());
+    timerShow("time: TIMER_DB_WRITE: ", TIMER_DB_WRITE);
 #endif
 
     delete m_defaultOptions.block_cache;

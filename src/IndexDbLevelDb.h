@@ -155,6 +155,13 @@ private:
 #endif
     }
 
+    inline void timerShow(const char* str, int idx)
+    {
+#ifdef TIMER
+        std::cout << str << m_timers[idx].format();
+#endif
+    }
+
     bool                            m_isRebuild;
     std::string                     m_cuDbId;
     std::string                     m_compileUnit;

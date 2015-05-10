@@ -5,6 +5,7 @@ from xml.etree.ElementTree import *
 from subprocess import Popen, PIPE
 import multiprocessing
 import logging
+import subprocess
 
 CXXTAGS = "cxxtags"
 
@@ -52,8 +53,17 @@ class CmakeJsonParser(ProjParserBase):
             # remove output name
             args = re.sub("\s-o\s*\S+", " ", args)
             # remove source name
-            args = args.replace(filename, "")
-            resultList.append((dirname, "", args, filename))
+
+            argsList = re.split("\s+", args)
+            for i in xrange(len(argsList)):
+                a = argsList[i]
+                if a.startswith("/"):
+                    abspath = a
+                else:
+                    abspath = os.path.abspath(dirname + "/" + a)
+                if abspath == filename:
+                    del argsList[i]
+            resultList.append((dirname, "", " ".join(argsList), filename))
         return resultList
 
 class VSParser(ProjParserBase):
@@ -240,8 +250,14 @@ class CmdRunner():
         self.m_dbName = os.path.abspath(args[0])
         self.m_fileName = args[1]
 
-    def RunOne(self, q, cmd):
-        (rv, out) = commands.getstatusoutput(cmd)
+    def RunOne(self, q, cmd, cwd):
+        p = subprocess.Popen(cmd, shell=False, cwd=cwd)
+        (stdout, stderr) = p.communicate()
+        out = ""
+        if stdout:
+            out += stdout
+        if stderr:
+            out += stderr
         q.put(out)
 
     def Run(self):
@@ -259,12 +275,23 @@ class CmdRunner():
 
         result = parser.Run()
         cmdList = []
+        dirList = []
         for r in result:
             dirname, defs, incs, filename = r
-            cmd = "cd \"" + dirname + "\" && " + CXXTAGS + " " + self.m_options + " \"" + parser.GetDbDir() + "\" \"" + filename + "\" -- " + defs + " " + incs + self.m_buildOptions
+            cmd = [CXXTAGS]
+            if self.m_options:
+                cmd.append(self.m_options)
+            cmd += [parser.GetDbDir(), filename, "--",]
+            if defs:
+                cmd += re.split("\s+", defs)
+            if incs:
+                cmd += re.split("\s+", incs)
+            if self.m_buildOptions:
+                cmd += re.split("\s+", self.m_buildOptions)
             #print cmd
             #cmd = cmd.replace('"', '\\"')
             cmdList.append(cmd)
+            dirList.append(dirname)
 
         total = len(cmdList)
         process_list = [None]*self.m_numProc
@@ -276,9 +303,11 @@ class CmdRunner():
             if process_list[i] == None:
                 if len(cmdList) != 0:
                     cmd = cmdList.pop(0)
+                    cwd = dirList.pop(0)
                     self.m_count += 1
-                    print "#" + str(self.m_count) + "/" + str(total) + ":" + cmd
-                    process_list[i] = multiprocessing.Process(target=self.RunOne, args=(q, cmd))
+                    #print "#" + str(self.m_count) + "/" + str(total) + ":" + str(cmd)
+                    print "#" + str(self.m_count) + "/" + str(total) + ":" + " ".join(cmd)
+                    process_list[i] = multiprocessing.Process(target=self.RunOne, args=(q, cmd, cwd))
                     process_list[i].start()
                     #print "start: " + cmd
             elif False == process_list[i].is_alive():

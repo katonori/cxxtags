@@ -250,15 +250,9 @@ class CmdRunner():
         self.m_dbName = os.path.abspath(args[0])
         self.m_fileName = args[1]
 
-    def RunOne(self, q, cmd, cwd):
+    def RunOne(self, cmd, cwd):
         p = subprocess.Popen(cmd, shell=False, cwd=cwd)
-        (stdout, stderr) = p.communicate()
-        out = ""
-        if stdout:
-            out += stdout
-        if stderr:
-            out += stderr
-        q.put(out)
+        p.wait()
 
     def Run(self):
         # determin project type
@@ -295,7 +289,6 @@ class CmdRunner():
 
         total = len(cmdList)
         process_list = [None]*self.m_numProc
-        q = multiprocessing.Queue()
         i = 0
         while True:
             if len(cmdList) == 0 and process_list == [None]*self.m_numProc:
@@ -307,15 +300,12 @@ class CmdRunner():
                     self.m_count += 1
                     #print "#" + str(self.m_count) + "/" + str(total) + ":" + str(cmd)
                     print "#" + str(self.m_count) + "/" + str(total) + ":" + " ".join(cmd)
-                    process_list[i] = multiprocessing.Process(target=self.RunOne, args=(q, cmd, cwd))
+                    process_list[i] = multiprocessing.Process(target=self.RunOne, args=(cmd, cwd))
                     process_list[i].start()
                     #print "start: " + cmd
             elif False == process_list[i].is_alive():
                 process_list[i].join()
                 process_list[i] = None
-                out = q.get()
-                if out != "":
-                    print out
             i += 1
             if i >= self.m_numProc:
                 i = 0

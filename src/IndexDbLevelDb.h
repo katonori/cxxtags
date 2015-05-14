@@ -132,7 +132,7 @@ private:
     inline int dbRead(std::string& value, leveldb::DB* db, const std::string& key);
     inline int dbFlush(leveldb::DB* db, leveldb::WriteBatch* wb);
     inline int dbClose(leveldb::DB*& db);
-    int writeUsrDb(const SiMap& usrMap, std::map<std::string, SiMap> usrFidMap, leveldb::DB* dbUsrDb, leveldb::WriteBatch& wb_usrdb, const std::string& dbName);
+    int writeUsrDb(const std::map<std::string, SiMap> usrFidMap, leveldb::DB* dbUsrDb, leveldb::WriteBatch& wb_usrdb, const std::string& dbName);
 
     inline void timerStart(int idx)
     {
@@ -175,15 +175,14 @@ private:
 
     std::string                     m_compileUnitId;
     FcMap                           m_fileContextMap;
-    SiMap                           m_refUsrMap;
-    SiMap                           m_defUsrMap;
-    SiMap                           m_overriderUsrMap;
 #ifdef TIMER
     const int                       k_timerNum = 128;
     boost::timer::cpu_timer*        m_timers;
 #endif
     SsMap                           m_finishedFiles;
-    std::map<std::string, SiMap >   m_usr2fileMap;
+    std::map<std::string, std::vector<std::string>>   m_usr2defineFileMap;
+    std::map<std::string, std::vector<std::string>>   m_usr2referenceFileMap;
+    std::map<std::string, std::vector<std::string>>   m_usr2overriderFileMap;
     std::string                     m_buildOpt;
 };
 

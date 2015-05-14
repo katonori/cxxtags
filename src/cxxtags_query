@@ -534,15 +534,15 @@ class QueryHandlerDef(HandlerBase):
                 self.PrintResult(name, fileName, line, col)
 
     def GetDef(self, usr):
-        dbIdList = []
-        if self.m_isOnlyMainCompileUnit == False:
-            dbIdList = self.GetDbIdListByDefUsr(usr)
-        else:
-            rv = self.GetMainDb().get(self.m_dbId + TABLE_NAME_CUFILES)
-            assert rv != None
-            dbIdList = rv.split(",")[1:]
+        dbIdList = self.GetDbIdListByDefUsr(usr)
         DEBUG_PRINT("dbIdList: " + str(dbIdList))
         DEBUG_PRINT("m_dbList: " + str(self.m_dbList))
+
+        if len(dbIdList) == 0:
+            return []
+
+        if self.m_isOnlyMainCompileUnit == True:
+            dbIdList = [dbIdList[0]]
         result = []
         for dbId in dbIdList:
             db = self.GetDbByDbId(dbId)

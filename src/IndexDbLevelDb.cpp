@@ -324,7 +324,6 @@ int IndexDbLevelDb::insert_ref_value(const string& usr, const string& filename, 
     m_timers[TIMER_INS_REF_1].resume();
 #endif
     int nameId = fctx.m_nameIdTbl.GetId(name);
-    m_refUsrMap[usr] = 1;
     int usrId = fctx.m_usrIdTbl.GetId(usr);
     encItemInfo(m_CharBuff0, sizeof(m_CharBuff0), nameId, line, col);
     {
@@ -339,7 +338,7 @@ int IndexDbLevelDb::insert_ref_value(const string& usr, const string& filename, 
     }
 
     if(!usr.empty()) {
-        m_usr2fileMap[usr][filename] = 0;
+        m_usr2referenceFileMap[usr].push_back(filename);
     }
 #ifdef TIMER
     m_timers[TIMER_INS_REF_1].stop();
@@ -366,19 +365,17 @@ int IndexDbLevelDb::insert_decl_value(const string& usr, const string& filename,
     int nameId = fctx.m_nameIdTbl.GetId(name);
     int usrId = fctx.m_usrIdTbl.GetId(usr);
     if(isDef) {
-        m_defUsrMap[usr] = 1;
         // usrId -> def info
         setKeyValueUsr2Def(m_CharBuff0, m_CharBuff1, sizeof(m_CharBuff0), nameId, line, col, usrId);
         fctx.m_declList.push_back(SsPair(m_CharBuff0, m_CharBuff1));
+        if(!usr.empty()) {
+            m_usr2defineFileMap[usr].push_back(filename);
+        }
     }
     else {
         // usrId -> decl info
         setKeyValueUsr2Decl(m_CharBuff0, m_CharBuff1, sizeof(m_CharBuff0), nameId, line, col, usrId);
         fctx.m_declList.push_back(SsPair(m_CharBuff0, m_CharBuff1));
-    }
-
-    if(!usr.empty()) {
-        m_usr2fileMap[usr][filename] = 0;
     }
 
     // pos -> usr
@@ -396,7 +393,6 @@ int IndexDbLevelDb::insert_overriden_value(const string& usr, const string& name
     int nameId = fctx.m_nameIdTbl.GetId(name);
     int usrId = fctx.m_usrIdTbl.GetId(usr);
     int usrIdOverrider = fctx.m_usrIdTbl.GetId(usrOverrider);
-    m_overriderUsrMap[usr] = 1;
     // usrId -> decl info
     encItemInfo(m_CharBuff1, sizeof(m_CharBuff1), nameId, line, col);
     if(!fctx.m_usrId2overrideeMap[usrId].empty()) {
@@ -409,7 +405,7 @@ int IndexDbLevelDb::insert_overriden_value(const string& usr, const string& name
     fctx.m_usrId2overriderMap[usrIdOverrider][usrId] = 0;
 
     if(!usr.empty()) {
-        m_usr2fileMap[usr][filename] = 0;
+        m_usr2overriderFileMap[usr].push_back(filename);
     }
     // pos -> usr
     fctx.m_positition2usrList[Position(line, col)][Token(name, usrIdOverrider)] = 1;
@@ -510,13 +506,13 @@ int IndexDbLevelDb::dbClose(leveldb::DB*& db)
     return 0;
 }
 
-int IndexDbLevelDb::writeUsrDb(const SiMap& usrMap, map<string, SiMap> usrFidMap, leveldb::DB* dbUsrDb, leveldb::WriteBatch& wb_usrdb, const string& dbName)
+int IndexDbLevelDb::writeUsrDb(const map<string, SiMap> usrFidMap, leveldb::DB* dbUsrDb, leveldb::WriteBatch& wb_usrdb, const string& dbName)
 {
     // lookup map
-    for(const auto& itr : usrMap) {
+    for(const auto& itr : usrFidMap) {
         const string& usr = itr.first;
         if(usr != "") {
-            SiMap& file_list_map = usrFidMap[usr];
+            SiMap file_list_map = itr.second;
 #ifdef USE_USR2FILE_TABLE2
             for(const auto& itr_str : file_list_map) {
                 wb_usrdb.Put(dbName + "|" + usr + "|" + itr_str.first, "1");
@@ -529,8 +525,8 @@ int IndexDbLevelDb::writeUsrDb(const SiMap& usrMap, map<string, SiMap> usrFidMap
                 const string delim = ",";
                 list<string> old_list;
                 boost::split(old_list, value, boost::is_any_of(delim));
-                for(const auto& itr : old_list) {
-                    file_list_map[itr] = 0;
+                for(const auto& itr_old : old_list) {
+                    file_list_map[itr_old] = 0;
                 }
             }
             string file_list_string = "";
@@ -570,35 +566,29 @@ int IndexDbLevelDb::fin(void)
         }
 
         map<string, SiMap> refUsrFidMap; // store the file IDs a USR found
-        for(const auto& itr : m_refUsrMap) {
+        for(const auto& itr : m_usr2referenceFileMap) {
             const string& usr = itr.first;
-            if(!usr.empty()) {
-                SiMap& fidMap = refUsrFidMap[usr];
-                for(const auto& itr_file_list : m_usr2fileMap[usr]) {
-                    fidMap[m_fileContextMap[itr_file_list.first].m_dbId] = 0;
-                }
+            SiMap& fidMap = refUsrFidMap[usr];
+            for(const auto& itr_file_list : itr.second) {
+                fidMap[m_fileContextMap[itr_file_list].m_dbId] = 0;
             }
         }
 
         map<string, SiMap> defUsrFidMap;
-        for(const auto& itr : m_defUsrMap) {
+        for(const auto& itr : m_usr2defineFileMap) {
             const string& usr = itr.first;
-            if(!usr.empty()) {
-                SiMap& fidMap = defUsrFidMap[usr];
-                for(const auto& itr_file_list : m_usr2fileMap[usr]) {
-                    fidMap[m_fileContextMap[itr_file_list.first].m_dbId] = 0;
-                }
+            SiMap& fidMap = defUsrFidMap[usr];
+            for(const auto& itr_file_list : itr.second) {
+                fidMap[m_fileContextMap[itr_file_list].m_dbId] = 0;
             }
         }
 
         map<string, SiMap> overriderUsrFidMap;
-        for(const auto& itr : m_overriderUsrMap) {
+        for(const auto& itr : m_usr2overriderFileMap) {
             const string& usr = itr.first;
-            if(!usr.empty()) {
-                SiMap& fidMap = overriderUsrFidMap[usr];
-                for(const auto& itr_file_list : m_usr2fileMap[usr]) {
-                    fidMap[m_fileContextMap[itr_file_list.first].m_dbId] = 0;
-                }
+            SiMap& fidMap = overriderUsrFidMap[usr];
+            for(const auto& itr_file_list : itr.second) {
+                fidMap[m_fileContextMap[itr_file_list].m_dbId] = 0;
             }
         }
 
@@ -618,13 +608,13 @@ int IndexDbLevelDb::fin(void)
         }
 
 #ifdef USE_USR2FILE_TABLE2
-        writeUsrDb(m_refUsrMap, refUsrFidMap,                   dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_REF);
-        writeUsrDb(m_defUsrMap, defUsrFidMap,                   dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF2);
-        writeUsrDb(m_overriderUsrMap, overriderUsrFidMap,       dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_OVERRIDER);
+        writeUsrDb(refUsrFidMap,             dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_REF);
+        writeUsrDb(defUsrFidMap,             dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF2);
+        writeUsrDb(overriderUsrFidMap,       dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_OVERRIDER);
 #else
-        writeUsrDb(m_refUsrMap, refUsrFidMap,                   dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_REF);
-        writeUsrDb(m_defUsrMap, defUsrFidMap,                   dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF);
-        writeUsrDb(m_overriderUsrMap, overriderUsrFidMap,       dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_OVERRIDER);
+        writeUsrDb(refUsrFidMap,             dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_REF);
+        writeUsrDb(defUsrFidMap,             dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF);
+        writeUsrDb(overriderUsrFidMap,       dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_OVERRIDER);
 #endif
 
         dbFlush(dbUsrDb, &wb_usrdb);

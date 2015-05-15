@@ -7,8 +7,9 @@ OUTPUT_DELIMITER = '|'
 USE_BASE64 = 1
 USE_USR2FILE_TABLE2 = False
 USE_PLYVEL = False
+DB_RETRY_OPEN_DURATION = 5.0
 DB_NUM = 16
-USR_DB_NUM = 16
+USR_DB_NUM = 8
 
 import sys
 if USE_PLYVEL:
@@ -145,11 +146,21 @@ def GetLineFromFile(fn, line_no):
 
 class Db:
     m_instance = None
-    def __init__(self, dirname):
-        if USE_PLYVEL:
-            self.m_instance = plyvel.DB(dirname, bloom_filter_bits=10, lru_cache_size=(128<<20), create_if_missing=False)
-        else:
-            self.m_instance = leveldb.LevelDB(dirname, block_cache_size=(128<<20), create_if_missing=False)
+    def tryOpen(self, dirname):
+        start = time.time()
+        while time.time() - start < DB_RETRY_OPEN_DURATION:
+            try:
+                if self.m_instance:
+                    return True
+                if USE_PLYVEL:
+                    self.m_instance = plyvel.DB(dirname, bloom_filter_bits=10, lru_cache_size=(128<<20), create_if_missing=False)
+                else:
+                    self.m_instance = leveldb.LevelDB(dirname, block_cache_size=(128<<20), create_if_missing=False)
+            except Exception as e:
+                if not ("Resource temporarily unavailable" in str(e)):
+                    raise
+        return False
+
     def get(self, key):
         try:
             if USE_PLYVEL:
@@ -170,6 +181,8 @@ class Db:
             del self.m_instance
     def flushBatch(self, batch):
         self.m_instance.Write(batch, sync = True)
+    def compactRange(self, start, end):
+        self.m_instance.CompactRange(start, end)
 
 class DbBatch:
     m_batch = None
@@ -204,7 +217,9 @@ class HandlerBase:
     def __init__(self, dbDir):
         self.mUsrDbList = []
         self.mDbDir = dbDir + "/"
-        self.mFileListDb = Db(dbDir + "/common")
+        self.mFileListDb = Db()
+        if self.mFileListDb.tryOpen(dbDir + "/common") == False:
+            assert False
         self.m_srcFileName = ""
         self.m_dbId = 0
         self.m_lineNo = 0
@@ -238,7 +253,9 @@ class HandlerBase:
         DEBUG_PRINT("usrDbList: " + str(dbList))
         for dir in dbList:
             if re.match("^[0-9a-f]+$", dir):
-                db = Db(self.mDbDir + "/usr_db/" + dir)
+                db = Db()
+                if db.tryOpen(self.mDbDir + "/usr_db/" + dir) == False:
+                    assert False
                 if db == None:
                     print("ERROR: db open: " + str(dir))
                     return None
@@ -264,8 +281,8 @@ class HandlerBase:
         cmd = self.mDbDir + format(int(cuId, 16)%DB_NUM, 'x')
         DEBUG_PRINT("OpenDbById: " + cmd)
         timeS = time.time()
-        db = Db(cmd)
-        if db == None:
+        db = Db()
+        if db.tryOpen(cmd) == False:
             print("ERROR:1: db_dir: "  + cuId)
             return None
         timeE = time.time()
@@ -278,8 +295,8 @@ class HandlerBase:
             if self.m_dbList[i] == None:
                 cmd = self.mDbDir + format(i, 'x')
                 timeS = time.time()
-                db = Db(cmd)
-                if db == None:
+                db = Db()
+                if db.tryOpen(cmd) == False:
                     print("ERROR:1: db_dir: "  + i)
                     return None
                 timeE = time.time()
@@ -723,8 +740,9 @@ class QueryHandlerDump(HandlerBase):
         for i in os.listdir(self.mDbDir + "/usr_db"):
             name = self.mDbDir + "/usr_db/" + i
             print "============ "+ name 
-            db = Db(name)
-            tmp = None
+            db = Db()
+            if db.tryOpen(name) == False:
+                assert False
             for d in db.getItr():
                 print(str(d))
             db.close()
@@ -732,8 +750,9 @@ class QueryHandlerDump(HandlerBase):
             if re.match("^[0-9a-f]+", i):
                 name = self.mDbDir + "/" + i
                 print "============ "+ name 
-                db = Db(name)
-                tmp = None
+                db = Db()
+                if db.tryOpen(name) == False:
+                    assert False
                 for d in db.getItr():
                     print(str(d))
                 db.close()
@@ -816,23 +835,18 @@ def procOneDb(queryType, dbDir, argv):
             for i in os.listdir(dbDir + "/usr_db"):
                 name = dbDir + "/usr_db/" + i
                 print name
-                db = Db(name)
-                tmp = None
-                res = ""
-                for d in db.getItr():
-                    f.write(str(d))
-                print res
+                db = Db()
+                if db.tryOpen(name) == False:
+                    assert False
+                db.compactRange(None, None)
                 db.close()
             for i in os.listdir(dbDir):
                 if re.match("^[0-9a-f]+", i):
                     name = dbDir + "/" + i
                     print name
-                    db = Db(name)
-                    tmp = None
-                    res = ""
-                    for d in db.getItr():
-                        f.write(str(d))
-                    print res
+                    if db.tryOpen(name) == False:
+                        assert False
+                    db.compactRange(None, None)
                     db.close()
     else:
         if queryType == 'ref': # get all references

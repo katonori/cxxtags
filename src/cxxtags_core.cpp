@@ -311,6 +311,27 @@ static inline void procCursor(const CXCursor& Cursor) {
     return;
 }
 
+#ifdef USE_CLANG_INDEX_SOURCE
+static void indexDeclaration(CXClientData client_data, const CXIdxDeclInfo* decl)
+{
+    //printf("USR: %s, %s\n", decl->entityInfo->USR, decl->entityInfo->name);
+    procCursor(decl->cursor);
+}
+
+static void indexEntityReference(CXClientData client_data, const CXIdxEntityRefInfo* ref)
+{
+    unsigned int line = 0;
+    unsigned int column = 0; 
+    clang_indexLoc_getFileLocation(ref->loc,
+            NULL,
+            NULL,
+            &line,
+            &column,
+            NULL);
+    procCursor(ref->cursor);
+}
+#else
+
 /******************************************************************************/
 /* Callbacks.                                                                 */
 /******************************************************************************/
@@ -370,10 +391,7 @@ static enum CXChildVisitResult visitorFunc(CXCursor Cursor,
     procCursor(Cursor);
     return CXChildVisit_Recurse;
 }
-
-/******************************************************************************/
-/* Loading ASTs/source.                                                       */
-/******************************************************************************/
+#endif
 
 static int performIndexing(const char* cur_dir, const char* out_dir, const char* in_file_name, int argc, const char **argv) {
     int result;
@@ -408,11 +426,48 @@ static int performIndexing(const char* cur_dir, const char* out_dir, const char*
     setCursorTypeAvailable(CXCursor_CXXBaseSpecifier);
 
     gDb = new cxxtags::IndexDbLevelDb();
-    check_rv(gDb->init(out_dir, in_file_name, gExcludeListStr, gIsRebuild, cur_dir, argc, argv));
+    check_rv(gDb->initialize(out_dir, in_file_name, gExcludeListStr, gIsRebuild, cur_dir, argc, argv));
 
     CXIndex Idx = clang_createIndex(/* excludeDeclsFromPCH */0,
             /* displayDiagnosics=*/0);
+#ifdef USE_CLANG_INDEX_SOURCE
+    CXIndexAction action = clang_IndexAction_create(Idx);
 
+    IndexerCallbacks callbacks;
+    callbacks.abortQuery = 0;
+    callbacks.diagnostic = 0;
+    callbacks.enteredMainFile = 0;
+    callbacks.ppIncludedFile = 0;
+    callbacks.importedASTFile = 0;
+    callbacks.startedTranslationUnit = 0;
+    callbacks.indexDeclaration = indexDeclaration;
+    callbacks.indexEntityReference = indexEntityReference;
+      
+    int rv = clang_indexSourceFile(
+            action,
+            NULL,
+            &callbacks,
+            sizeof(callbacks),
+            CXIndexOpt_IndexFunctionLocalSymbols  |
+            CXIndexOpt_SuppressWarnings,
+            //0,
+            in_file_name,
+            argv,
+            argc,
+            NULL,
+            0,
+            NULL,
+            getDefaultParsingOptions()
+            );
+    if (rv != 0) {
+        fprintf(stderr, "Unable to load translation unit!\n");
+        result = 1;
+        goto FUNC_END;
+    }
+    else {
+        result = 0;
+    }
+#else
     CXTranslationUnit TU = clang_parseTranslationUnit(Idx, in_file_name,
             argv,
             argc,
@@ -428,12 +483,13 @@ static int performIndexing(const char* cur_dir, const char* out_dir, const char*
 
     result = printDiagnostics(TU);
     clang_disposeTranslationUnit(TU);
+#endif
 
 FUNC_END:
     if(Idx) {
         clang_disposeIndex(Idx);
     }
-    check_rv(gDb->fin());
+    check_rv(gDb->finalize());
     return result;
 }
 

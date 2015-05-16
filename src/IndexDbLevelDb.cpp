@@ -471,6 +471,7 @@ int IndexDbLevelDb::addFilesToFileList(leveldb::DB* db)
             fid = string(buf);
             dbWrite(db, key, m_compileUnitId + "," + fid);
             id++;
+            dbWrite(db, std::string(TABLE_NAME_FILE_ID_TO_CU_ID) + "|" + fid, m_compileUnitId);
         }
         else {
             // get fid
@@ -639,7 +640,6 @@ int IndexDbLevelDb::fin(void)
     {
         string valFiles;
         leveldb::WriteBatch wbList[DB_NUM];
-        char dbDirtyFlags[DB_NUM] = {0};
 
         for(const auto &itr : m_fileContextMap) {
             //const string& filename = itr->first;
@@ -662,7 +662,6 @@ int IndexDbLevelDb::fin(void)
             }
 
             leveldb::WriteBatch& wb = wbList[idRem];
-            dbDirtyFlags[idRem] = 1;
 
             // position to usr
             for(const auto& itr : fctx.m_positition2usrList) {
@@ -751,20 +750,17 @@ int IndexDbLevelDb::fin(void)
             wb.Put(dbId + TABLE_NAME_BUILD_INFO, m_compileUnit + "|" + filename + "|" + m_buildOpt);
         }
 
-        for(int i = 0; i < DB_NUM; i++) {
-            if(dbDirtyFlags[i]) {
-                leveldb::DB* db;
-                snprintf(m_CharBuff0, sizeof(m_CharBuff0), "%x", i);
-                string dbDir = string(m_CharBuff0);
-                int rv = dbTryOpen(db, m_dbDir + "/" + dbDir);
-                if(rv < 0) {
-                    printf("ERROR: fin: open: %s\n", m_commonDbDir.c_str());
-                    return -1;
-                }
-                dbFlush(db, &wbList[i]);
-                dbClose(db);
-            }
+        leveldb::DB* db;
+        string dbDir = m_compileUnitId;
+        int rv = dbTryOpen(db, m_dbDir + "/" + dbDir);
+        if(rv < 0) {
+            printf("ERROR: fin: open: %s\n", m_commonDbDir.c_str());
+            return -1;
         }
+        for(int i = 0; i < DB_NUM; ++i) {
+            dbFlush(db, &wbList[i]);
+        }
+        dbClose(db);
     }
 #ifdef TIMER
     timerStop(TIMER_DB_WRITE);

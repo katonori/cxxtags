@@ -41,6 +41,7 @@ TABLE_NAME_USR_TO_LOCAL_ID = "R"
 TABLE_NAME_CUFILES = "S"
 TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF = "T"
 TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF2 = "U"
+TABLE_NAME_FILE_ID_TO_CU_ID = "G"
 
 RV_ERROR = -1
 RV_SUCCESS = 0
@@ -92,6 +93,7 @@ def genCConfig(filename):
         f.write('#define TABLE_NAME_CUFILES "%s"\n'%(TABLE_NAME_CUFILES))
         f.write('#define TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF "%s"\n'%(TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF))
         f.write('#define TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF2 "%s"\n'%(TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF2))
+        f.write('#define TABLE_NAME_FILE_ID_TO_CU_ID "%s"\n'%(TABLE_NAME_FILE_ID_TO_CU_ID))
 
 def DEBUG_PRINT(str):
     global gVerboseMode
@@ -146,6 +148,8 @@ def GetLineFromFile(fn, line_no):
 
 class Db:
     m_instance = None
+    def __init__(self):
+        self.m_instance = None
     def tryOpen(self, dirname):
         start = time.time()
         while time.time() - start < DB_RETRY_OPEN_DURATION:
@@ -179,6 +183,7 @@ class Db:
             return self.m_instance.close()
         else:
             del self.m_instance
+        self.m_instance = None
     def flushBatch(self, batch):
         self.m_instance.Write(batch, sync = True)
     def compactRange(self, start, end):
@@ -205,33 +210,30 @@ class HandlerBase:
     # Base class of *Handler classes
     #
 
-    mDbDir = ""
-    mFileListDb = None
-    m_srcFileName = ""
-    m_dbId = None
-    m_lineNo = None
-    m_colNo = None
-    m_fileCount = None
-    m_dbList = [None]*DB_NUM
-
     def __init__(self, dbDir):
+        self.m_dbId = None
+        self.m_lineNo = None
+        self.m_colNo = None
+        self.m_dbMap = {}
+        self.m_cuId = None
+        self.m_srcFileName = None
         self.mUsrDbList = []
+
         self.mDbDir = dbDir + "/"
-        self.mFileListDb = Db()
-        if self.mFileListDb.tryOpen(dbDir + "/common") == False:
+        self.m_FileListDb = Db()
+        if self.m_FileListDb.tryOpen(dbDir + "/common") == False:
             assert False
-        self.m_srcFileName = ""
-        self.m_dbId = 0
-        self.m_lineNo = 0
-        self.m_colNo = 0
-        self.m_dbList = [None]*DB_NUM
-        count = self.mFileListDb.get("file_count")
+        count = self.m_FileListDb.get("file_count")
         assert count != None
         self.m_fileCount = count
 
+    def GetCuidFromFid(self, fid):
+        result = self.m_FileListDb.get(TABLE_NAME_FILE_ID_TO_CU_ID + "|%s"%(str(fid)))
+        return result
+
     def GetIdByFilename(self, filename):
         q = TABLE_NAME_FILE_LIST + "|" + filename
-        rv = self.mFileListDb.get(q)
+        rv = self.m_FileListDb.get(q)
         if rv == None:
             return None
         return rv.split(",")
@@ -242,10 +244,10 @@ class HandlerBase:
             return None
         cuId, dbId = rv
         self.m_dbId = dbId
-        DEBUG_PRINT("InitDbByFilename: " + dbId)
-        dbDirNo = self.GetDbDirNo()
-        db = self.OpenDbById(dbId)
-        self.m_dbList[dbDirNo] = db
+        self.m_cuId = cuId
+        DEBUG_PRINT("InitDbByFilename: dbId=" + dbId + ", cuId=" + cuId)
+        db = self.GetDbByCuId(cuId)
+        assert db
         return db
 
     def InitUsrDb(self):
@@ -264,46 +266,24 @@ class HandlerBase:
         DEBUG_PRINT("usrDbList: " + str(self.mUsrDbList))
         return self.mUsrDbList
 
-    def GetDbDirNo(self):
-        return self.CalcDbDirNo(self.m_dbId)
-
-    def CalcDbDirNo(self, dbId):
-        return int(dbId, 16)%DB_NUM
-
-    def GetDb(self, dbId):
-        return self.m_dbList[int(dbId, 16)%DB_NUM]
-
+    #
+    # return database contains information about a file specified by a command line argument.
+    #
     def GetMainDb(self):
-        return self.m_dbList[int(self.m_dbId, 16)%DB_NUM]
+        return self.m_dbMap[int(self.m_cuId, 16)]
 
     def OpenDbById(self, cuId):
         DEBUG_PRINT("OpenDbById: cuId: " + str(cuId))
-        cmd = self.mDbDir + format(int(cuId, 16)%DB_NUM, 'x')
-        DEBUG_PRINT("OpenDbById: " + cmd)
+        path = self.mDbDir + format(int(cuId, 16), 'x')
+        DEBUG_PRINT("OpenDbById: " + path)
         timeS = time.time()
         db = Db()
-        if db.tryOpen(cmd) == False:
+        if db.tryOpen(path) == False:
             print("ERROR:1: db_dir: "  + cuId)
             return None
         timeE = time.time()
         DEBUG_PRINT("OpenDbById: " + str((timeE-timeS)*1000.0) + " ms")
         return db
-
-    def OpenAllDb(self):
-        i = 0
-        while i < DB_NUM:
-            if self.m_dbList[i] == None:
-                cmd = self.mDbDir + format(i, 'x')
-                timeS = time.time()
-                db = Db()
-                if db.tryOpen(cmd) == False:
-                    print("ERROR:1: db_dir: "  + i)
-                    return None
-                timeE = time.time()
-                DEBUG_PRINT("OpenAllDb: " + str((timeE-timeS)*1000.0) + " ms")
-                self.m_dbList[i] = db
-            i += 1
-        return self.m_dbList
 
     def EncVal(self, val):
         str = ""
@@ -397,18 +377,24 @@ class HandlerBase:
         return list(set(dbIdList))
 
     def GetDbByDbId(self, dbId):
-        idx = int(dbId, 16)%DB_NUM
-        db = self.m_dbList[idx]
-        if db == None:
-            db = self.OpenDbById(dbId)
-            self.m_dbList[idx] = db
+        cuId = self.GetCuidFromFid(dbId)
+        return self.GetDbByCuId(cuId)
+
+    def GetDbByCuId(self, cuId):
+        idx = int(cuId, 16)
+        if self.m_dbMap.has_key(idx):
+            db = self.m_dbMap[idx]
+        else:
+            db = self.OpenDbById(cuId)
+            self.m_dbMap[idx] = db
+        assert db != None
         return db
 
     def CloseDb(self):
         timeS = time.time()
-        if self.mFileListDb:
-            self.mFileListDb.close()
-            self.mFileListDb = None
+        if self.m_FileListDb:
+            self.m_FileListDb.close()
+            self.m_FileListDb = None
         timeE = time.time()
         DEBUG_PRINT("time: close: fileListDb: " + str(timeE - timeS))
         timeS = time.time()
@@ -417,13 +403,13 @@ class HandlerBase:
         self.mUsrDbList = []
         timeE = time.time()
         DEBUG_PRINT("time: close: usrDb: " + str(timeE - timeS))
-        for db in self.m_dbList:
+        for db in self.m_dbMap.values():
             timeS = time.time()
             if db:
                 db.close()
             timeE = time.time()
-            DEBUG_PRINT("time: close: dbList: " + str(timeE - timeS))
-        self.m_dbList = [None]*DB_NUM
+            DEBUG_PRINT("time: close: dbMap: " + str(timeE - timeS))
+        self.m_dbMap = {}
 
     def getToken(self, filename, line, col):
         # get token name from the file
@@ -553,7 +539,7 @@ class QueryHandlerDef(HandlerBase):
     def GetDef(self, usr):
         dbIdList = self.GetDbIdListByDefUsr(usr)
         DEBUG_PRINT("dbIdList: " + str(dbIdList))
-        DEBUG_PRINT("m_dbList: " + str(self.m_dbList))
+        DEBUG_PRINT("m_dbMap: " + str(self.m_dbMap))
 
         if len(dbIdList) == 0:
             return []
@@ -768,7 +754,8 @@ class QueryHandlerRebuild(HandlerBase):
         if self.InitDbByFilename(self.m_srcFileName) == None:
             DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
             return RV_NOT_FOUND
-        rv = self.GetDb(self.m_dbId).get(self.m_dbId + TABLE_NAME_BUILD_INFO)
+        db = self.GetMainDb()
+        rv = db.get(self.m_dbId + TABLE_NAME_BUILD_INFO)
         if rv == None:
             print "ERROR: cannot obtain build options from the database."
             sys.exit(1)
@@ -800,6 +787,7 @@ class QueryHandlerRebuild(HandlerBase):
         return RV_SUCCESS
 
     def DeleteOldEntries(self, dbId):
+        """
         db = self.GetDbByDbId(dbId)
         batch = DbBatch(db)
         for d in db.getItr():
@@ -809,6 +797,11 @@ class QueryHandlerRebuild(HandlerBase):
             if key.startswith(dbId) and (keyLen >= dbIdLen + 2) and key[len(dbId) + 1] == '|':
                 batch.delete(key)
         batch.flush()
+        """
+        self.CloseDb()
+        cmd = "rm -rf " + self.mDbDir + "/" + self.m_cuId
+        DEBUG_PRINT("cmd: " + cmd)
+        (rv, out) = commands.getstatusoutput(cmd)
 
 def procOneDb(queryType, dbDir, argv):
     funcResult = 0

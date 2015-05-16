@@ -118,7 +118,7 @@ def getFilename(db, dbId):
     cuFileName, filename, workDir, excludes, isRebuild, opt = rv.split("|")
     return filename
 
-def GetResultString(db, dbId, nameId):
+def getResultString(db, dbId, nameId):
     name = id2name(db, dbId, nameId)
     if name == None:
         print("ERRRO: name lookup failed: " + str(nameId) + ": " + dbId)
@@ -131,13 +131,13 @@ def GetResultString(db, dbId, nameId):
     DEBUG_PRINT("filename: " + str(fn))
     return name, fn
 
-def GetLineFromFile(fn, line_no):
+def getLineFromFile(fn, line_no):
     line_no = int(line_no)
     fi = open(fn, 'r')
     all_lines = fi.readlines()
     str_line = ""
     if len(all_lines) < line_no:
-        DEBUG_PRINT("ERROR: GetLineFromFile: %s, %d\n"%(fn, line_no))
+        DEBUG_PRINT("ERROR: getLineFromFile: %s, %d\n"%(fn, line_no))
     else:
         str_line = all_lines[line_no-1]
     str_line = str_line.rstrip('\r\n')
@@ -145,7 +145,10 @@ def GetLineFromFile(fn, line_no):
     return str_line
 
 class Db:
-    m_instance = None
+
+    def __init__(self):
+        self.m_instance = None
+
     def tryOpen(self, dirname):
         start = time.time()
         while time.time() - start < DB_RETRY_OPEN_DURATION:
@@ -169,25 +172,29 @@ class Db:
                 return self.m_instance.Get(key)
         except KeyError as e:
             return None
+
     def getItr(self):
         if USE_PLYVEL:
             return self.m_instance
         else:
             return self.m_instance.RangeIter()
+
     def close(self):
         if USE_PLYVEL:
             return self.m_instance.close()
         else:
             del self.m_instance
+
     def flushBatch(self, batch):
         self.m_instance.Write(batch, sync = True)
+
     def compactRange(self, start, end):
         self.m_instance.CompactRange(start, end)
 
 class DbBatch:
-    m_batch = None
-    m_db = None
     def __init__(self, db):
+        self.m_batch = None
+        self.m_db = None
         if USE_PLYVEL:
             print("ERROR: rebuild by plyvel is not supported yet")
             assert False
@@ -205,105 +212,85 @@ class HandlerBase:
     # Base class of *Handler classes
     #
 
-    mDbDir = ""
-    mFileListDb = None
-    m_srcFileName = ""
-    m_dbId = None
-    m_lineNo = None
-    m_colNo = None
-    m_fileCount = None
-    m_dbList = [None]*DB_NUM
-
     def __init__(self, dbDir):
-        self.mUsrDbList = []
-        self.mDbDir = dbDir + "/"
-        self.mFileListDb = Db()
-        if self.mFileListDb.tryOpen(dbDir + "/common") == False:
-            assert False
-        self.m_srcFileName = ""
-        self.m_dbId = 0
-        self.m_lineNo = 0
-        self.m_colNo = 0
+        self.m_usrDbList = []
+        self.m_dbDir = dbDir + "/"
+        self.m_srcFileName = None
+        self.m_dbId = None
+        self.m_lineNo = None
+        self.m_colNo = None
         self.m_dbList = [None]*DB_NUM
-        count = self.mFileListDb.get("file_count")
+        self.m_fileListDb = None
+        self.m_fileCount = None
+
+    def initCommonDatabase(self):
+        self.m_fileListDb = Db()
+        if self.m_fileListDb.tryOpen(self.m_dbDir + "/common") == False:
+            assert False
+        count = self.m_fileListDb.get("file_count")
         assert count != None
         self.m_fileCount = count
+        self.initUsrDb()
 
-    def GetIdByFilename(self, filename):
+    def getIdByFilename(self, filename):
         q = TABLE_NAME_FILE_LIST + "|" + filename
-        rv = self.mFileListDb.get(q)
+        rv = self.m_fileListDb.get(q)
         if rv == None:
             return None
         return rv.split(",")
 
-    def InitDbByFilename(self, filename):
-        rv = self.GetIdByFilename(filename)
+    def initDbByFilename(self, filename):
+        rv = self.getIdByFilename(filename)
         if rv == None:
             return None
         cuId, dbId = rv
         self.m_dbId = dbId
-        DEBUG_PRINT("InitDbByFilename: " + dbId)
-        dbDirNo = self.GetDbDirNo()
-        db = self.OpenDbById(dbId)
+        DEBUG_PRINT("initDbByFilename: " + dbId)
+        dbDirNo = self.getDbDirNo()
+        db = self.openDbById(dbId)
         self.m_dbList[dbDirNo] = db
         return db
 
-    def InitUsrDb(self):
-        dbList = os.listdir(self.mDbDir + "/usr_db")
+    def initUsrDb(self):
+        dbList = os.listdir(self.m_dbDir + "/usr_db")
         DEBUG_PRINT("usrDbList: " + str(dbList))
         for dir in dbList:
             if re.match("^[0-9a-f]+$", dir):
                 db = Db()
-                if db.tryOpen(self.mDbDir + "/usr_db/" + dir) == False:
+                if db.tryOpen(self.m_dbDir + "/usr_db/" + dir) == False:
                     assert False
                 if db == None:
                     print("ERROR: db open: " + str(dir))
                     return None
-                self.mUsrDbList.append(db)
-        self.mUsrDbList = list(set(self.mUsrDbList))
-        DEBUG_PRINT("usrDbList: " + str(self.mUsrDbList))
-        return self.mUsrDbList
+                self.m_usrDbList.append(db)
+        self.m_usrDbList = list(set(self.m_usrDbList))
+        DEBUG_PRINT("usrDbList: " + str(self.m_usrDbList))
+        return self.m_usrDbList
 
-    def GetDbDirNo(self):
-        return self.CalcDbDirNo(self.m_dbId)
+    def getDbDirNo(self):
+        return self.calcDbDirNo(self.m_dbId)
 
-    def CalcDbDirNo(self, dbId):
+    def calcDbDirNo(self, dbId):
         return int(dbId, 16)%DB_NUM
 
-    def GetDb(self, dbId):
+    def getDb(self, dbId):
         return self.m_dbList[int(dbId, 16)%DB_NUM]
 
-    def GetMainDb(self):
+    def getMainDb(self):
         return self.m_dbList[int(self.m_dbId, 16)%DB_NUM]
 
-    def OpenDbById(self, cuId):
-        DEBUG_PRINT("OpenDbById: cuId: " + str(cuId))
-        cmd = self.mDbDir + format(int(cuId, 16)%DB_NUM, 'x')
-        DEBUG_PRINT("OpenDbById: " + cmd)
+    def openDbById(self, cuId):
+        DEBUG_PRINT("cuId: " + str(cuId))
+        db_dir = self.m_dbDir + format(int(cuId, 16)%DB_NUM, 'x')
+        DEBUG_PRINT("dir: " + db_dir)
         timeS = time.time()
         db = Db()
-        if db.tryOpen(cmd) == False:
+        if db.tryOpen(db_dir) == False:
             print("ERROR:1: db_dir: "  + cuId)
             return None
         timeE = time.time()
-        DEBUG_PRINT("OpenDbById: " + str((timeE-timeS)*1000.0) + " ms")
+        DEBUG_PRINT(str((timeE-timeS)*1000.0) + " ms")
         return db
-
-    def OpenAllDb(self):
-        i = 0
-        while i < DB_NUM:
-            if self.m_dbList[i] == None:
-                cmd = self.mDbDir + format(i, 'x')
-                timeS = time.time()
-                db = Db()
-                if db.tryOpen(cmd) == False:
-                    print("ERROR:1: db_dir: "  + i)
-                    return None
-                timeE = time.time()
-                DEBUG_PRINT("OpenAllDb: " + str((timeE-timeS)*1000.0) + " ms")
-                self.m_dbList[i] = db
-            i += 1
-        return self.m_dbList
 
     def EncVal(self, val):
         str = ""
@@ -332,7 +319,7 @@ class HandlerBase:
         if fileName == "":
             print "ERROR: specify file name"
             return None
-        mainDb = self.GetMainDb()
+        mainDb = self.getMainDb()
         DEBUG_PRINT("file: " + fileName)
         q = self.m_dbId + TABLE_NAME_POSITION_TO_LOCAL_USR_ID + "|%s|%s"%(lineNo, colNo)
         DEBUG_PRINT("q: " + q)
@@ -347,8 +334,8 @@ class HandlerBase:
     def GetDbIdListByDefUsr(self, usr):
         dbIdList = []
         if USE_USR2FILE_TABLE2:
-            DEBUG_PRINT("usrDbList: " + str(self.mUsrDbList))
-            for db in self.mUsrDbList:
+            DEBUG_PRINT("usrDbList: " + str(self.m_usrDbList))
+            for db in self.m_usrDbList:
                 i = 0
                 while i < int(self.m_fileCount, 16) + 1:
                     q = TABLE_NAME_USR2GLOBAL_FILE_ID2 + "|" + usr + "|" + format(i, 'x')
@@ -357,7 +344,7 @@ class HandlerBase:
                         dbIdList.append(format(i, 'x'))
                     i += 1
         else:
-            for db in self.mUsrDbList:
+            for db in self.m_usrDbList:
                 res = db.get(TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF + "|" + usr)
                 if res:
                     for fid in res.split(","):
@@ -368,7 +355,7 @@ class HandlerBase:
 
     def GetDbIdListByOverriderUsr(self, usr):
         dbIdList = []
-        for db in self.mUsrDbList:
+        for db in self.m_usrDbList:
             res = db.get(TABLE_NAME_USR_TO_GLOBAL_FILE_ID_OVERRIDER + "|" + usr)
             if res:
                 for fid in res.split(","):
@@ -378,8 +365,8 @@ class HandlerBase:
     def GetDbIdListByRefUsr(self, usr):
         dbIdList = []
         if USE_USR2FILE_TABLE2:
-            DEBUG_PRINT("usrDbList: " + str(self.mUsrDbList))
-            for db in self.mUsrDbList:
+            DEBUG_PRINT("usrDbList: " + str(self.m_usrDbList))
+            for db in self.m_usrDbList:
                 i = 0
                 while i < int(self.m_fileCount, 16) + 1:
                     q = TABLE_NAME_USR2GLOBAL_FILE_ID2 + "|" + usr + "|" + format(i, 'x')
@@ -388,7 +375,7 @@ class HandlerBase:
                         dbIdList.append(format(i, 'x'))
                     i += 1
         else:
-            for db in self.mUsrDbList:
+            for db in self.m_usrDbList:
                 res = db.get(TABLE_NAME_USR_TO_GLOBAL_FILE_ID_REF + "|" + usr)
                 DEBUG_PRINT("usrDb: " + str(res))
                 if res:
@@ -400,21 +387,21 @@ class HandlerBase:
         idx = int(dbId, 16)%DB_NUM
         db = self.m_dbList[idx]
         if db == None:
-            db = self.OpenDbById(dbId)
+            db = self.openDbById(dbId)
             self.m_dbList[idx] = db
         return db
 
     def CloseDb(self):
         timeS = time.time()
-        if self.mFileListDb:
-            self.mFileListDb.close()
-            self.mFileListDb = None
+        if self.m_fileListDb:
+            self.m_fileListDb.close()
+            self.m_fileListDb = None
         timeE = time.time()
         DEBUG_PRINT("time: close: fileListDb: " + str(timeE - timeS))
         timeS = time.time()
-        for db in self.mUsrDbList:
+        for db in self.m_usrDbList:
             db.close()
-        self.mUsrDbList = []
+        self.m_usrDbList = []
         timeE = time.time()
         DEBUG_PRINT("time: close: usrDb: " + str(timeE - timeS))
         for db in self.m_dbList:
@@ -445,7 +432,7 @@ class HandlerBase:
         # get token from filenam
         tokenName = self.getToken(fileName, lineInt, colInt)
         if name == tokenName:
-            print str(name) + OUTPUT_DELIMITER + str(fileName) + OUTPUT_DELIMITER + str(lineInt) + OUTPUT_DELIMITER + str(colInt) + OUTPUT_DELIMITER + str(GetLineFromFile(fileName, lineInt))
+            print str(name) + OUTPUT_DELIMITER + str(fileName) + OUTPUT_DELIMITER + str(lineInt) + OUTPUT_DELIMITER + str(colInt) + OUTPUT_DELIMITER + str(getLineFromFile(fileName, lineInt))
 
     def ParseArg(self, argv):
         if len(argv) != 3:
@@ -466,8 +453,8 @@ class QueryHandlerDecl(HandlerBase):
     # Handle Rquest for infomation about declarations
     #
     def DoQuery(self):
-        self.InitUsrDb()
-        if self.InitDbByFilename(self.m_srcFileName) == None:
+        self.initCommonDatabase()
+        if self.initDbByFilename(self.m_srcFileName) == None:
             DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
             return RV_NOT_FOUND
         usrIds = self.GetUsrIdList(self.m_srcFileName, self.m_lineNo, self.m_colNo)
@@ -493,7 +480,7 @@ class QueryHandlerDecl(HandlerBase):
         return RV_NOT_FOUND
 
     def QueryDeclInfo(self, usrId):
-        mainDb = self.GetMainDb()
+        mainDb = self.getMainDb()
         usr = id2usr(mainDb, self.m_dbId, usrId)
         rv = mainDb.get(self.m_dbId + TABLE_NAME_CUFILES)
         assert rv != None
@@ -513,7 +500,7 @@ class QueryHandlerDecl(HandlerBase):
             DEBUG_PRINT("decl: " + str(decl))
             if decl:
                 nameId, line, col = decl.split("|")
-                name, fileName = GetResultString(db, dbId, nameId)
+                name, fileName = getResultString(db, dbId, nameId)
                 if fileName != None and name != None:
                     return name, fileName, line, col
         return None
@@ -522,12 +509,13 @@ class QueryHandlerDef(HandlerBase):
     #
     # Handle Rquest for infomation about definition
     #
-    m_isOnlyMainCompileUnit = False
-    m_mainDb = None
-    def DoQuery(self, isOnlyMainCompileUnit = False):
+    def __init__(self, dbDir, isOnlyMainCompileUnit = False):
+        HandlerBase.__init__(self, dbDir)
         self.m_isOnlyMainCompileUnit = isOnlyMainCompileUnit
-        self.InitUsrDb()
-        if self.InitDbByFilename(self.m_srcFileName) == None:
+        self.m_mainDb = None
+    def DoQuery(self):
+        self.initCommonDatabase()
+        if self.initDbByFilename(self.m_srcFileName) == None:
             DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
             return RV_NOT_FOUND
         usrIds = self.GetUsrIdList(self.m_srcFileName, self.m_lineNo, self.m_colNo)
@@ -542,7 +530,7 @@ class QueryHandlerDef(HandlerBase):
             return RV_NOT_FOUND
 
     def ProcOneUsr(self, usrId):
-        usr = id2usr(self.GetMainDb(), self.m_dbId, usrId)
+        usr = id2usr(self.getMainDb(), self.m_dbId, usrId)
         DEBUG_PRINT("usr: " + str(usr))
         if usr:
             result = self.GetDef(usr)
@@ -571,7 +559,7 @@ class QueryHandlerDef(HandlerBase):
             if resDef:
                 defList = resDef.split("|")
                 nameId, line, col = tuple(defList)
-                name, fileName = GetResultString(db, dbId, nameId)
+                name, fileName = getResultString(db, dbId, nameId)
                 if fileName != None and name != None:
                     result.append((name, fileName, line, col))
         return result
@@ -580,11 +568,14 @@ class QueryHandlerRef(HandlerBase):
     #
     # Handle Rquest for infomation about reference
     #
-    m_startTime = None
+    def __init__(self, dbDir):
+        HandlerBase.__init__(self, dbDir)
+        self.m_startTime = None
+        
     def DoQuery(self):
         self.m_startTime = time.time()
-        self.InitUsrDb()
-        if self.InitDbByFilename(self.m_srcFileName) == None:
+        self.initCommonDatabase()
+        if self.initDbByFilename(self.m_srcFileName) == None:
             DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
             return RV_NOT_FOUND
         usrIds = self.GetUsrIdList(self.m_srcFileName, self.m_lineNo, self.m_colNo)
@@ -599,7 +590,7 @@ class QueryHandlerRef(HandlerBase):
             return RV_NOT_FOUND
 
     def ProcOneUsr(self, usrId):
-        mainDb = self.GetMainDb()
+        mainDb = self.getMainDb()
         usr = id2usr(mainDb, self.m_dbId, usrId)
         endTime = time.time()
         DEBUG_PRINT("usr: " + str(usr) + ": " + str((endTime-self.m_startTime)*1000) + " ms")
@@ -633,7 +624,7 @@ class QueryHandlerRef(HandlerBase):
                 rvList = rv.split(",")
                 for rv in rvList:
                     nameId, line, col = rv.split("|")
-                    name, fn = GetResultString(db, dbId, nameId)
+                    name, fn = getResultString(db, dbId, nameId)
                     if fn != None and name != None:
                         resultList.append((name, fn, line, col))
             for i in sorted(set(resultList)):
@@ -646,8 +637,8 @@ class QueryHandlerOverride(QueryHandlerDecl):
     #
     def DoQuery(self):
         startTime = time.time()
-        self.InitUsrDb()
-        if self.InitDbByFilename(self.m_srcFileName) == None:
+        self.initCommonDatabase()
+        if self.initDbByFilename(self.m_srcFileName) == None:
             DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
             return RV_NOT_FOUND
         usrIds = self.GetUsrIdList(self.m_srcFileName, self.m_lineNo, self.m_colNo)
@@ -666,7 +657,7 @@ class QueryHandlerOverride(QueryHandlerDecl):
 
     def GetAllOverrides(self, usrId):
         resultList = []
-        mainDb = self.GetMainDb()
+        mainDb = self.getMainDb()
         q = self.m_dbId + TABLE_NAME_LOCAL_USR_ID_TO_OVERRIDEE + "|" + str(usrId)
         rv = mainDb.get(q)
         DEBUG_PRINT("q: " + str(q))
@@ -687,8 +678,8 @@ class QueryHandlerOverrideN(HandlerBase):
     #
     def DoQuery(self):
         startTime = time.time()
-        self.InitUsrDb()
-        if self.InitDbByFilename(self.m_srcFileName) == None:
+        self.initCommonDatabase()
+        if self.initDbByFilename(self.m_srcFileName) == None:
             DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
             return RV_NOT_FOUND
         usrIds = self.GetUsrIdList(self.m_srcFileName, self.m_lineNo, self.m_colNo)
@@ -703,7 +694,7 @@ class QueryHandlerOverrideN(HandlerBase):
             return RV_NOT_FOUND
 
     def ProcOneUsr(self, usrId):
-        usr = id2usr(self.GetMainDb(), self.m_dbId, usrId)
+        usr = id2usr(self.getMainDb(), self.m_dbId, usrId)
         DEBUG_PRINT("usr: " + str(usr))
         if usr:
             self.GetAllOverriders(usr)
@@ -723,7 +714,7 @@ class QueryHandlerOverrideN(HandlerBase):
                 rvList = rv.split(",")
                 for rv in rvList:
                     nameId, line, col = rv.split("|")
-                    name, fn = GetResultString(db, dbId, nameId)
+                    name, fn = getResultString(db, dbId, nameId)
                     if name != None and fn != None:
                         resultList.append((name, fn, line, col))
         for i in sorted(set(resultList)):
@@ -737,8 +728,8 @@ class QueryHandlerDump(HandlerBase):
 
     mTableName = ""
     def DoQuery(self):
-        for i in os.listdir(self.mDbDir + "/usr_db"):
-            name = self.mDbDir + "/usr_db/" + i
+        for i in os.listdir(self.m_dbDir + "/usr_db"):
+            name = self.m_dbDir + "/usr_db/" + i
             print "============ "+ name 
             db = Db()
             if db.tryOpen(name) == False:
@@ -746,9 +737,9 @@ class QueryHandlerDump(HandlerBase):
             for d in db.getItr():
                 print(str(d))
             db.close()
-        for i in os.listdir(self.mDbDir):
+        for i in os.listdir(self.m_dbDir):
             if re.match("^[0-9a-f]+", i):
-                name = self.mDbDir + "/" + i
+                name = self.m_dbDir + "/" + i
                 print "============ "+ name 
                 db = Db()
                 if db.tryOpen(name) == False:
@@ -765,10 +756,11 @@ class QueryHandlerDump(HandlerBase):
 
 class QueryHandlerRebuild(HandlerBase):
     def DoQuery(self):
-        if self.InitDbByFilename(self.m_srcFileName) == None:
+        self.initCommonDatabase()
+        if self.initDbByFilename(self.m_srcFileName) == None:
             DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
             return RV_NOT_FOUND
-        rv = self.GetDb(self.m_dbId).get(self.m_dbId + TABLE_NAME_BUILD_INFO)
+        rv = self.getDb(self.m_dbId).get(self.m_dbId + TABLE_NAME_BUILD_INFO)
         if rv == None:
             print "ERROR: cannot obtain build options from the database."
             sys.exit(1)
@@ -783,7 +775,7 @@ class QueryHandlerRebuild(HandlerBase):
         self.DeleteOldEntries(self.m_dbId)
 
         # rebuild
-        cmd = "cxxtags -f " + cmdOpt + " " + self.mDbDir + " " + cuFileName + " -- " + opt
+        cmd = "cxxtags -f " + cmdOpt + " " + self.m_dbDir + " " + cuFileName + " -- " + opt
         DEBUG_PRINT("cmd: " + cmd)
         self.CloseDb()
         (rv, out) = commands.getstatusoutput(cmd)
@@ -810,67 +802,79 @@ class QueryHandlerRebuild(HandlerBase):
                 batch.delete(key)
         batch.flush()
 
-def procOneDb(queryType, dbDir, argv):
-    funcResult = 0
-    if queryType == 'decl': # get a declaration or definition
-        DEBUG_PRINT("decl start")
-        handler = QueryHandlerDecl(dbDir)
-        rv = handler.ParseArg(argv)
-        if rv != RV_SUCCESS:
-            sys.exit(1)
-        rv = handler.DoQuery()
-        handler.CloseDb()
-        if rv == RV_NOT_FOUND:
-            DEBUG_PRINT("def start")
-            handler = QueryHandlerDef(dbDir)
-            rv = handler.ParseArg(argv)
-            if rv != RV_SUCCESS:
-                sys.exit(1)
-            rv = handler.DoQuery(True)
-            handler.CloseDb()
-        if rv == RV_ERROR:
-            funcResult = 1
-    elif queryType == 'compaction': #
-        with open(os.devnull,"w") as f:
-            for i in os.listdir(dbDir + "/usr_db"):
-                name = dbDir + "/usr_db/" + i
+class QueryHandlerComapction(HandlerBase):
+    def DoQuery(self):
+        dbDir = self.m_dbDir
+        for i in os.listdir(dbDir + "/usr_db"):
+            name = dbDir + "/usr_db/" + i
+            print name
+            db = Db()
+            if db.tryOpen(name) == False:
+                assert False
+            db.compactRange(None, None)
+            db.close()
+        for i in os.listdir(dbDir):
+            if re.match("^[0-9a-f]+", i):
+                name = dbDir + "/" + i
                 print name
-                db = Db()
                 if db.tryOpen(name) == False:
                     assert False
                 db.compactRange(None, None)
                 db.close()
-            for i in os.listdir(dbDir):
-                if re.match("^[0-9a-f]+", i):
-                    name = dbDir + "/" + i
-                    print name
-                    if db.tryOpen(name) == False:
-                        assert False
-                    db.compactRange(None, None)
-                    db.close()
-    else:
-        if queryType == 'ref': # get all references
-            handler = QueryHandlerRef(dbDir)
-        elif queryType == 'def': # get a definition
-            handler = QueryHandlerDef(dbDir)
-        elif queryType == 'override': # get override information
-            handler = QueryHandlerOverride(dbDir)
-        elif queryType == 'overriden': # get overriden items
-            handler = QueryHandlerOverrideN(dbDir)
-        elif queryType == 'dump': # dump the contents of a table
-            handler = QueryHandlerDump(dbDir)
-        elif queryType == 'rebuild': # 
-            handler = QueryHandlerRebuild(dbDir)
-        else:
-            print "ERROR: query type must be ref, decl, def, override, overriden or dump"
-            return 1
-        rv = handler.ParseArg(argv)
-        if rv != RV_SUCCESS:
-            sys.exit(1)
-        rv = handler.DoQuery()
+        return RV_SUCCESS
+
+    def ParseArg(self, argv):
+        if len(argv) != 0:
+            usage()
+            return RV_ERROR
+        return RV_SUCCESS
+
+def procOneQuery(handler, argv):
+    funcResult = 0
+    rv = handler.ParseArg(argv)
+    if rv != RV_SUCCESS:
+        sys.exit(1)
+    rv = handler.DoQuery()
+    handler.CloseDb()
+    return rv
+
+def procOneDb(queryType, dbDir, argv):
+    funcResult = 0
+    if queryType == 'decl': # get a declaration or definition
+        DEBUG_PRINT("decl start")
+        rv = procOneQuery(QueryHandlerDecl(dbDir), argv)
+        if rv == RV_NOT_FOUND:
+            DEBUG_PRINT("def start")
+            rv = procOneQuery(QueryHandlerDef(dbDir, True), argv)
         if rv == RV_ERROR:
             funcResult = 1
-        handler.CloseDb()
+    elif queryType == 'ref': # get all references
+        if RV_ERROR == procOneQuery(QueryHandlerRef(dbDir), argv):
+            funcResult = 1
+    elif queryType == 'def': # get a definition
+        if RV_ERROR == procOneQuery(QueryHandlerDef(dbDir), argv):
+            funcResult = 1
+    elif queryType == 'override': # get override information
+        if procOneQuery(QueryHandlerOverride(dbDir), argv) == RV_ERROR:
+            funcResult = 1
+        #if procOneQuery(QueryHandlerOverrideN(dbDir), argv) == RV_ERROR:
+        #    funcResult = 1
+    elif queryType == 'overriden': # get overriden items
+        #if procOneQuery(QueryHandlerOverride(dbDir), argv) == RV_ERROR:
+        #    funcResult = 1
+        if procOneQuery(QueryHandlerOverrideN(dbDir), argv) == RV_ERROR:
+            funcResult = 1
+    elif queryType == 'dump': # dump the contents of a table
+        if RV_ERROR == procOneQuery(QueryHandlerDump(dbDir), argv):
+            funcResult = 1
+    elif queryType == 'rebuild': # 
+        if RV_ERROR == procOneQuery(QueryHandlerRebuild(dbDir), argv):
+            funcResult = 1
+    elif queryType == 'compaction': #
+        procOneQuery(QueryHandlerComapction(dbDir), argv)
+    else:
+        print "ERROR: query type must be ref, decl, def, override, overriden or dump"
+        funcResult = 1
     return funcResult
 
 def main():

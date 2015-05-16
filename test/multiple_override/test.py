@@ -18,7 +18,7 @@ db_dir = sys.argv[1]
 
 q_list = [
 # main.cpp
-"overriden " + db_dir + " " + cur_dir + "/Interface.h 3 17",
+"override  " + db_dir + " " + cur_dir + "/Interface.h 3 17",
 "override  " + db_dir + " " + cur_dir + "/Impl0.cpp 4 9",
 "override  " + db_dir + " " + cur_dir + "/Impl1.cpp 4 9",
 "override  " + db_dir + " " + cur_dir + "/Impl2.cpp 4 9",

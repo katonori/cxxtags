@@ -68,7 +68,7 @@ static int makeDirectory(const char* name)
     return 0;
 }
 
-int IndexDbLevelDb::init(const string& out_dir, const string& src_file_name, const string& excludeList, bool isRebuild, const char* curDir, int argc, const char** argv)
+int IndexDbLevelDb::initialize(const string& out_dir, const string& src_file_name, const string& excludeList, bool isRebuild, const char* curDir, int argc, const char** argv)
 {
     leveldb::DB* dbCommon = NULL;
     m_defaultOptions.create_if_missing = true;
@@ -78,7 +78,8 @@ int IndexDbLevelDb::init(const string& out_dir, const string& src_file_name, con
     m_defaultOptions.filter_policy = leveldb::NewBloomFilterPolicy(10);
 
     // build options
-    m_buildOpt = string(curDir) + "|" + excludeList + "|" + std::to_string((int)isRebuild) + "|";
+    snprintf(m_CharBuff0, sizeof(m_CharBuff0), "%d", isRebuild);
+    m_buildOpt = string(curDir) + "|" + excludeList + "|" + m_CharBuff0 + "|";
     for(int i = 0; i < argc; i++) {
         m_buildOpt += " " + string(argv[i]);
     }
@@ -151,7 +152,7 @@ int IndexDbLevelDb::init(const string& out_dir, const string& src_file_name, con
         leveldb::DB* db_common;
         int rv = dbTryOpen(db_common, m_commonDbDir);
         if(rv < 0) {
-            printf("ERROR: fin: common db open: %s\n", m_commonDbDir.c_str());
+            printf("ERROR: common db open: %s\n", m_commonDbDir.c_str());
             return -1;
         }
         leveldb::Iterator* it = db_common->NewIterator(leveldb::ReadOptions());
@@ -541,14 +542,14 @@ int IndexDbLevelDb::writeUsrDb(const map<string, SiMap> usrFidMap, leveldb::DB* 
     return 0;
 }
 
-int IndexDbLevelDb::fin(void)
+int IndexDbLevelDb::finalize(void)
 {
     {
         leveldb::WriteBatch wb_common;
         leveldb::DB* db_common;
         int rv = dbTryOpen(db_common, m_commonDbDir);
         if(rv < 0) {
-            printf("ERROR: fin: common db open: %s\n", m_commonDbDir.c_str());
+            printf("ERROR: finalize: common db open: %s\n", m_commonDbDir.c_str());
             return -1;
         }
         addFilesToFileList(db_common);
@@ -603,7 +604,7 @@ int IndexDbLevelDb::fin(void)
         // open db
         int rv = dbTryOpen(dbUsrDb, curDir);
         if(rv < 0) {
-            printf("ERROR: fin: common db open: %s\n", curDir.c_str());
+            printf("ERROR: finalize: common db open: %s\n", curDir.c_str());
             return -1;
         }
 
@@ -758,7 +759,7 @@ int IndexDbLevelDb::fin(void)
                 string dbDir = string(m_CharBuff0);
                 int rv = dbTryOpen(db, m_dbDir + "/" + dbDir);
                 if(rv < 0) {
-                    printf("ERROR: fin: open: %s\n", m_commonDbDir.c_str());
+                    printf("ERROR: finalize: open: %s\n", m_commonDbDir.c_str());
                     return -1;
                 }
                 dbFlush(db, &wbList[i]);

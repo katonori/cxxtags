@@ -102,12 +102,12 @@ public:
         , m_cuDbId()
     {}
     // IIndexDb
-    int init(const std::string& out_dir, const std::string& src_file_name, const std::string& excludeList, bool isRebuild, const char* curDir, int argc, const char** argv);
-    int fin(void);
-    int insert_ref_value(const std::string& usr, const std::string& filename, const std::string& name, int line, int col);
-    int insert_decl_value(const std::string& usr, const std::string& filename, const std::string& name, int line, int col, int isDef);
-    int insert_overriden_value(const std::string& usr, const std::string& name, const std::string& filename, int line, int col, const std::string& overriderUsr, int isDef);
-    int insert_base_class_value(const std::string& classUsr, const std::string& baseClassUsr, int line, int col, int accessibility);
+    int initialize(const std::string& out_dir, const std::string& src_file_name, const std::string& excludeList, bool isRebuild, const char* curDir, int argc, const char** argv) override;
+    int finalize(void) override;
+    int insert_ref_value(const std::string& usr, const std::string& filename, const std::string& name, int line, int col) override;
+    int insert_decl_value(const std::string& usr, const std::string& filename, const std::string& name, int line, int col, int isDef) override;
+    int insert_overriden_value(const std::string& usr, const std::string& name, const std::string& filename, int line, int col, const std::string& overriderUsr, int isDef) override;
+    int insert_base_class_value(const std::string& classUsr, const std::string& baseClassUsr, int line, int col, int accessibility) override;
 
     int addIdList(leveldb::WriteBatch* db, const SiMap& inMap, const std::string& tableName);
 

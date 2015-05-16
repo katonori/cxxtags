@@ -1,7 +1,7 @@
 #!/usr/bin/python
 def usage():
-    print 'usage: cxxtags_query decl/def/ref database_dir file_name line_no column_no'
-    print '     : cxxtags_query         dump database_dir table_name'
+    print 'usage: cxxtags_query decl/def/ref/override database_dir file_name line_no column_no'
+    print '     : cxxtags_query                  dump database_dir table_name'
 
 OUTPUT_DELIMITER = '|'
 USE_BASE64 = 1
@@ -857,11 +857,12 @@ def procOneDb(queryType, dbDir, argv):
     elif queryType == 'override': # get override information
         if procOneQuery(QueryHandlerOverride(dbDir), argv) == RV_ERROR:
             funcResult = 1
-        #if procOneQuery(QueryHandlerOverrideN(dbDir), argv) == RV_ERROR:
-        #    funcResult = 1
+        if procOneQuery(QueryHandlerOverrideN(dbDir), argv) == RV_ERROR:
+            funcResult = 1
     elif queryType == 'overriden': # get overriden items
-        #if procOneQuery(QueryHandlerOverride(dbDir), argv) == RV_ERROR:
-        #    funcResult = 1
+        # same as "override"
+        if procOneQuery(QueryHandlerOverride(dbDir), argv) == RV_ERROR:
+            funcResult = 1
         if procOneQuery(QueryHandlerOverrideN(dbDir), argv) == RV_ERROR:
             funcResult = 1
     elif queryType == 'dump': # dump the contents of a table
@@ -873,7 +874,7 @@ def procOneDb(queryType, dbDir, argv):
     elif queryType == 'compaction': #
         procOneQuery(QueryHandlerComapction(dbDir), argv)
     else:
-        print "ERROR: query type must be ref, decl, def, override, overriden or dump"
+        print "ERROR: query type must be ref, decl, def, override or dump"
         funcResult = 1
     return funcResult
 

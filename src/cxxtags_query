@@ -184,6 +184,7 @@ class Db:
             return self.m_instance.close()
         else:
             del self.m_instance
+        self.m_instance = None
 
     def flushBatch(self, batch):
         self.m_instance.Write(batch, sync = True)
@@ -807,7 +808,7 @@ class QueryHandlerComapction(HandlerBase):
         dbDir = self.m_dbDir
         for i in os.listdir(dbDir + "/usr_db"):
             name = dbDir + "/usr_db/" + i
-            print name
+            #print name
             db = Db()
             if db.tryOpen(name) == False:
                 assert False
@@ -816,7 +817,7 @@ class QueryHandlerComapction(HandlerBase):
         for i in os.listdir(dbDir):
             if re.match("^[0-9a-f]+", i):
                 name = dbDir + "/" + i
-                print name
+                #print name
                 if db.tryOpen(name) == False:
                     assert False
                 db.compactRange(None, None)

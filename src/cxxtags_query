@@ -830,7 +830,7 @@ def procOneDb(queryType, dbDir, argv):
             handler.CloseDb()
         if rv == RV_ERROR:
             funcResult = 1
-    elif queryType == 'dryrun': #
+    elif queryType == 'compaction': #
         with open(os.devnull,"w") as f:
             for i in os.listdir(dbDir + "/usr_db"):
                 name = dbDir + "/usr_db/" + i

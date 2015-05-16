@@ -55,6 +55,7 @@ class CmakeJsonParser(ProjParserBase):
             # remove source name
 
             argsList = re.split("\s+", args)
+            deli = None
             for i in xrange(len(argsList)):
                 a = argsList[i]
                 if a.startswith("/"):
@@ -62,7 +63,9 @@ class CmakeJsonParser(ProjParserBase):
                 else:
                     abspath = os.path.abspath(dirname + "/" + a)
                 if abspath == filename:
-                    del argsList[i]
+                    deli = i
+            if deli:
+                del argsList[deli]
             resultList.append((dirname, "", " ".join(argsList), filename))
         return resultList
 
@@ -202,7 +205,7 @@ class CmdRunner():
     m_projType = ""
     m_dbName = ""
     m_fileName = ""
-    m_options = ""
+    m_options = None
     m_buildOptions = ""
     m_count = 0
     def __init__(self):
@@ -210,7 +213,7 @@ class CmdRunner():
         self.m_projType = ""
         self.m_dbName = ""
         self.m_fileName = ""
-        self.m_options = ""
+        self.m_options = []
         self.m_buildOptions = ""
         self.m_count = 0
         self.ParseArgs()
@@ -235,9 +238,9 @@ class CmdRunner():
             elif o in ("-t"):
                 self.m_projType = a
             elif o in ("-e"):
-                self.m_options += " -e " + a
+                self.m_options.append("-e " + a)
             elif o in ("-p"):
-                self.m_options += " -p "
+                self.m_options.append("-p")
             elif o in ("-v"):
                 logging.basicConfig(format='%(levelname)s: %(lineno)s: %(message)s', level=logging.INFO)
             else:
@@ -274,7 +277,7 @@ class CmdRunner():
             dirname, defs, incs, filename = r
             cmd = [CXXTAGS]
             if self.m_options:
-                cmd.append(self.m_options)
+                cmd += self.m_options
             cmd += [parser.GetDbDir(), filename, "--",]
             if defs:
                 cmd += re.split("\s+", defs)
@@ -283,7 +286,6 @@ class CmdRunner():
             if self.m_buildOptions:
                 cmd += re.split("\s+", self.m_buildOptions)
             #print cmd
-            #cmd = cmd.replace('"', '\\"')
             cmdList.append(cmd)
             dirList.append(dirname)
 

@@ -123,6 +123,7 @@ public:
         TIMER_USR_DB3,
         TIMER_DB_CACHE,
         TIMER_DB_WRITE,
+        TIMER_DB_SLEEP,
     };
 
 private:

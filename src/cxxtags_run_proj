@@ -312,24 +312,24 @@ class CmdRunner():
         # run threads
         self.m_semaphore = threading.Semaphore(self.m_numProc)
         total = len(self.m_cmdList)
-        process_list = [None]*self.m_numProc
+        thread_list = [None]*self.m_numProc
         for i_task in xrange(len(self.m_cmdList)):
             self.m_semaphore.acquire()
-            for p in process_list:
-                if p == None:
-                    p = RunnerThread(self.m_semaphore)
-                    self.StartThread(p, i_task)
+            for i in xrange(len(thread_list)):
+                if thread_list[i] == None:
+                    thread_list[i] = RunnerThread(self.m_semaphore)
+                    self.StartThread(thread_list[i], i_task)
                     break
                 else:
-                    if p.is_alive() == False:
-                        p.join()
-                        p = RunnerThread(self.m_semaphore)
-                        self.StartThread(p, i_task)
+                    if thread_list[i].is_alive() == False:
+                        thread_list[i].join()
+                        thread_list[i] = RunnerThread(self.m_semaphore)
+                        self.StartThread(thread_list[i], i_task)
                         break
 
-        for p in process_list:
-            if p != None:
-                p.join()
+        for t in thread_list:
+            if t != None:
+                t.join()
 
         (rv, out) = commands.getstatusoutput("cxxtags_query compaction " + parser.GetDbDir())
         if out:

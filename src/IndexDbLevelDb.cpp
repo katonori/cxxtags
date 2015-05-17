@@ -26,10 +26,9 @@ int IndexDbLevelDb::dbTryOpen(leveldb::DB*& db, string dir)
     time(&start);
     leveldb::Status st;
     time_t now;
+    timerStart(TIMER_USR_DB3);
     while(1) {
-        timerStart(TIMER_USR_DB3);
         st= leveldb::DB::Open(m_defaultOptions, dir, &db);
-        timerStop(TIMER_USR_DB3);
         if(st.ok() || !st.IsIOError()) {
             break;
         }
@@ -39,8 +38,11 @@ int IndexDbLevelDb::dbTryOpen(leveldb::DB*& db, string dir)
             break;
         }
         //printf("WAITING: %f ms\n", (now - start)*1000.0f/CLOCKS_PER_SEC);
+        timerStart(TIMER_DB_SLEEP);
         usleep(1000);
+        timerStop(TIMER_DB_SLEEP);
     }
+    timerStop(TIMER_USR_DB3);
     if (!st.ok()) {
         fprintf(stderr, "Open fail.: wait time %ld sec: %s\n", now - start, st.ToString().c_str());
         return -1;
@@ -631,6 +633,7 @@ int IndexDbLevelDb::finalize(void)
         timerShow("time: TIMER_INS_REF_1: ", TIMER_INS_REF_1);
         timerShow("time: TIMER_INS_REF_2: ", TIMER_INS_REF_2);
         timerShow("time: TIMER_INS_DECL: ", TIMER_INS_DECL);
+        timerShow("time: TIMER_DB_SLEEP: ", TIMER_DB_SLEEP);
 #endif
     }
 

@@ -214,7 +214,9 @@ class HandlerBase:
     #
 
     def __init__(self, dbDir):
-        self.m_usrDbList = []
+        self.m_defUsrDbList = []
+        self.m_refUsrDbList = []
+        self.m_overrideUsrDbList = []
         self.m_dbDir = dbDir + "/"
         self.m_srcFileName = None
         self.m_dbId = None
@@ -231,7 +233,6 @@ class HandlerBase:
         count = self.m_fileListDb.get("file_count")
         assert count != None
         self.m_fileCount = count
-        self.initUsrDb()
 
     def getIdByFilename(self, filename):
         q = TABLE_NAME_FILE_LIST + "|" + filename
@@ -252,21 +253,53 @@ class HandlerBase:
         self.m_dbList[dbDirNo] = db
         return db
 
-    def initUsrDb(self):
-        dbList = os.listdir(self.m_dbDir + "/usr_db")
+    def initDefUsrDb(self):
+        dbList = os.listdir(self.m_dbDir + "/usr_db/def")
         DEBUG_PRINT("usrDbList: " + str(dbList))
         for dir in dbList:
             if re.match("^[0-9a-f]+$", dir):
                 db = Db()
-                if db.tryOpen(self.m_dbDir + "/usr_db/" + dir) == False:
+                if db.tryOpen(self.m_dbDir + "/usr_db/def/" + dir) == False:
                     assert False
                 if db == None:
                     print("ERROR: db open: " + str(dir))
                     return None
-                self.m_usrDbList.append(db)
-        self.m_usrDbList = list(set(self.m_usrDbList))
-        DEBUG_PRINT("usrDbList: " + str(self.m_usrDbList))
-        return self.m_usrDbList
+                self.m_defUsrDbList.append(db)
+        self.m_defUsrDbList = list(set(self.m_defUsrDbList))
+        DEBUG_PRINT("usrDbList: " + str(self.m_defUsrDbList))
+        return self.m_defUsrDbList
+
+    def initRefUsrDb(self):
+        dbList = os.listdir(self.m_dbDir + "/usr_db/ref")
+        DEBUG_PRINT("usrDbList: " + str(dbList))
+        for dir in dbList:
+            if re.match("^[0-9a-f]+$", dir):
+                db = Db()
+                if db.tryOpen(self.m_dbDir + "/usr_db/ref/" + dir) == False:
+                    assert False
+                if db == None:
+                    print("ERROR: db open: " + str(dir))
+                    return None
+                self.m_refUsrDbList.append(db)
+        self.m_refUsrDbList = list(set(self.m_refUsrDbList))
+        DEBUG_PRINT("usrDbList: " + str(self.m_refUsrDbList))
+        return self.m_refUsrDbList
+
+    def initOverrideUsrDb(self):
+        dbList = os.listdir(self.m_dbDir + "/usr_db/override")
+        DEBUG_PRINT("usrDbList: " + str(dbList))
+        for dir in dbList:
+            if re.match("^[0-9a-f]+$", dir):
+                db = Db()
+                if db.tryOpen(self.m_dbDir + "/usr_db/override/" + dir) == False:
+                    assert False
+                if db == None:
+                    print("ERROR: db open: " + str(dir))
+                    return None
+                self.m_overrideUsrDbList.append(db)
+        self.m_overrideUsrDbList = list(set(self.m_overrideUsrDbList))
+        DEBUG_PRINT("usrDbList: " + str(self.m_overrideUsrDbList))
+        return self.m_overrideUsrDbList
 
     def getDbDirNo(self):
         return self.calcDbDirNo(self.m_dbId)
@@ -335,8 +368,8 @@ class HandlerBase:
     def GetDbIdListByDefUsr(self, usr):
         dbIdList = []
         if USE_USR2FILE_TABLE2:
-            DEBUG_PRINT("usrDbList: " + str(self.m_usrDbList))
-            for db in self.m_usrDbList:
+            DEBUG_PRINT("usrDbList: " + str(self.m_defUsrDbList))
+            for db in self.m_defUsrDbList:
                 i = 0
                 while i < int(self.m_fileCount, 16) + 1:
                     q = TABLE_NAME_USR2GLOBAL_FILE_ID2 + "|" + usr + "|" + format(i, 'x')
@@ -345,7 +378,7 @@ class HandlerBase:
                         dbIdList.append(format(i, 'x'))
                     i += 1
         else:
-            for db in self.m_usrDbList:
+            for db in self.m_defUsrDbList:
                 res = db.get(TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF + "|" + usr)
                 if res:
                     for fid in res.split(","):
@@ -356,7 +389,7 @@ class HandlerBase:
 
     def GetDbIdListByOverriderUsr(self, usr):
         dbIdList = []
-        for db in self.m_usrDbList:
+        for db in self.m_overrideUsrDbList:
             res = db.get(TABLE_NAME_USR_TO_GLOBAL_FILE_ID_OVERRIDER + "|" + usr)
             if res:
                 for fid in res.split(","):
@@ -366,8 +399,8 @@ class HandlerBase:
     def GetDbIdListByRefUsr(self, usr):
         dbIdList = []
         if USE_USR2FILE_TABLE2:
-            DEBUG_PRINT("usrDbList: " + str(self.m_usrDbList))
-            for db in self.m_usrDbList:
+            DEBUG_PRINT("usrDbList: " + str(self.m_refUsrDbList))
+            for db in self.m_refUsrDbList:
                 i = 0
                 while i < int(self.m_fileCount, 16) + 1:
                     q = TABLE_NAME_USR2GLOBAL_FILE_ID2 + "|" + usr + "|" + format(i, 'x')
@@ -376,7 +409,7 @@ class HandlerBase:
                         dbIdList.append(format(i, 'x'))
                     i += 1
         else:
-            for db in self.m_usrDbList:
+            for db in self.m_refUsrDbList:
                 res = db.get(TABLE_NAME_USR_TO_GLOBAL_FILE_ID_REF + "|" + usr)
                 DEBUG_PRINT("usrDb: " + str(res))
                 if res:
@@ -400,9 +433,15 @@ class HandlerBase:
         timeE = time.time()
         DEBUG_PRINT("time: close: fileListDb: " + str(timeE - timeS))
         timeS = time.time()
-        for db in self.m_usrDbList:
+        for db in self.m_defUsrDbList:
             db.close()
-        self.m_usrDbList = []
+        self.m_defUsrDbList = []
+        for db in self.m_refUsrDbList:
+            db.close()
+        self.m_refUsrDbList = []
+        for db in self.m_overrideUsrDbList:
+            db.close()
+        self.m_overrideUsrDbList = []
         timeE = time.time()
         DEBUG_PRINT("time: close: usrDb: " + str(timeE - timeS))
         for db in self.m_dbList:
@@ -516,6 +555,7 @@ class QueryHandlerDef(HandlerBase):
         self.m_mainDb = None
     def DoQuery(self):
         self.initCommonDatabase()
+        self.initDefUsrDb()
         if self.initDbByFilename(self.m_srcFileName) == None:
             DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
             return RV_NOT_FOUND
@@ -576,6 +616,7 @@ class QueryHandlerRef(HandlerBase):
     def DoQuery(self):
         self.m_startTime = time.time()
         self.initCommonDatabase()
+        self.initRefUsrDb()
         if self.initDbByFilename(self.m_srcFileName) == None:
             DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
             return RV_NOT_FOUND
@@ -680,6 +721,7 @@ class QueryHandlerOverrideN(HandlerBase):
     def DoQuery(self):
         startTime = time.time()
         self.initCommonDatabase()
+        self.initOverrideUsrDb()
         if self.initDbByFilename(self.m_srcFileName) == None:
             DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
             return RV_NOT_FOUND
@@ -804,24 +846,33 @@ class QueryHandlerRebuild(HandlerBase):
         batch.flush()
 
 class QueryHandlerComapction(HandlerBase):
+    
+    def runOneDir(self, dirname):
+        #print dirname
+        db = Db()
+        if db.tryOpen(dirname) == False:
+            assert False
+        db.compactRange(None, None)
+        db.close()
+        
     def DoQuery(self):
         dbDir = self.m_dbDir
-        for i in os.listdir(dbDir + "/usr_db"):
-            name = dbDir + "/usr_db/" + i
-            #print name
-            db = Db()
-            if db.tryOpen(name) == False:
-                assert False
-            db.compactRange(None, None)
-            db.close()
+        prefix = "/usr_db/def/"
+        for i in os.listdir(dbDir + prefix):
+            name = dbDir + prefix + i
+            self.runOneDir(name)
+        prefix = "/usr_db/ref/"
+        for i in os.listdir(dbDir + prefix):
+            name = dbDir + prefix + i
+            self.runOneDir(name)
+        prefix = "/usr_db/override/"
+        for i in os.listdir(dbDir + prefix):
+            name = dbDir + prefix + i
+            self.runOneDir(name)
         for i in os.listdir(dbDir):
             if re.match("^[0-9a-f]+", i):
                 name = dbDir + "/" + i
-                #print name
-                if db.tryOpen(name) == False:
-                    assert False
-                db.compactRange(None, None)
-                db.close()
+                self.runOneDir(name)
         return RV_SUCCESS
 
     def ParseArg(self, argv):

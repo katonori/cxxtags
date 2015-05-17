@@ -559,10 +559,26 @@ int IndexDbLevelDb::finalize(void)
 
     // update UsrDb
     {
-        leveldb::DB* dbUsrDb = NULL;
-        leveldb::WriteBatch wb_usrdb;
-        string curDir = m_dbDir + "/usr_db";
-        if(makeDirectory(curDir.c_str())) {
+        leveldb::DB* dbUsrDbDef = NULL;
+        leveldb::DB* dbUsrDbRef = NULL;
+        leveldb::DB* dbUsrDbOverride = NULL;
+        leveldb::WriteBatch wb_usrdb_def;
+        leveldb::WriteBatch wb_usrdb_ref;
+        leveldb::WriteBatch wb_usrdb_override;
+        string dbDir = m_dbDir + "/usr_db/";
+        if(makeDirectory(dbDir.c_str())) {
+            return -1; 
+        }
+        string dbDirDef = m_dbDir + "/usr_db/def/";
+        string dbDirRef = m_dbDir + "/usr_db/ref/";
+        string dbDirOverride = m_dbDir + "/usr_db/override/";
+        if(makeDirectory(dbDirDef.c_str())) {
+            return -1; 
+        }
+        if(makeDirectory(dbDirRef.c_str())) {
+            return -1; 
+        }
+        if(makeDirectory(dbDirOverride.c_str())) {
             return -1; 
         }
 
@@ -597,29 +613,46 @@ int IndexDbLevelDb::finalize(void)
         int cuId = strtol(m_compileUnitId.c_str(), &errp, 16);
         assert(*errp == '\0');
         snprintf(m_CharBuff0, sizeof(m_CharBuff0), "%x", (cuId % USR_DB_NUM)); 
-        curDir.append(string("/") + string(m_CharBuff0));
+        dbDirDef.append(string("/") + string(m_CharBuff0));
+        dbDirRef.append(string("/") + string(m_CharBuff0));
+        dbDirOverride.append(string("/") + string(m_CharBuff0));
 
         timerStart(TIMER_USR_DB0);
         //////
         // open db
-        int rv = dbTryOpen(dbUsrDb, curDir);
+        int rv = 0;
+        rv = dbTryOpen(dbUsrDbDef, dbDirDef);
         if(rv < 0) {
-            printf("ERROR: finalize: common db open: %s\n", curDir.c_str());
+            printf("ERROR: finalize: common db open: %s\n", dbDirDef.c_str());
+            return -1;
+        }
+        rv = dbTryOpen(dbUsrDbRef, dbDirRef);
+        if(rv < 0) {
+            printf("ERROR: finalize: common db open: %s\n", dbDirDef.c_str());
+            return -1;
+        }
+        rv = dbTryOpen(dbUsrDbOverride, dbDirOverride);
+        if(rv < 0) {
+            printf("ERROR: finalize: common db open: %s\n", dbDirDef.c_str());
             return -1;
         }
 
 #ifdef USE_USR2FILE_TABLE2
-        writeUsrDb(refUsrFidMap,             dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_REF);
-        writeUsrDb(defUsrFidMap,             dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF2);
-        writeUsrDb(overriderUsrFidMap,       dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_OVERRIDER);
+        writeUsrDb(defUsrFidMap,             dbUsrDbDef, wb_usrdb_def, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF2);
+        writeUsrDb(refUsrFidMap,             dbUsrDbRef, wb_usrdb_ref, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_REF);
+        writeUsrDb(overriderUsrFidMap,       dbUsrDbOverride, wb_usrdb_override, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_OVERRIDER);
 #else
-        writeUsrDb(refUsrFidMap,             dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_REF);
-        writeUsrDb(defUsrFidMap,             dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF);
-        writeUsrDb(overriderUsrFidMap,       dbUsrDb, wb_usrdb, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_OVERRIDER);
+        writeUsrDb(defUsrFidMap,             dbUsrDbDef, wb_usrdb_def, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_DEF);
+        writeUsrDb(refUsrFidMap,             dbUsrDbRef, wb_usrdb_ref, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_REF);
+        writeUsrDb(overriderUsrFidMap,       dbUsrDbOverride, wb_usrdb_override, TABLE_NAME_USR_TO_GLOBAL_FILE_ID_OVERRIDER);
 #endif
 
-        dbFlush(dbUsrDb, &wb_usrdb);
-        dbClose(dbUsrDb);
+        dbFlush(dbUsrDbDef, &wb_usrdb_def);
+        dbFlush(dbUsrDbRef, &wb_usrdb_ref);
+        dbFlush(dbUsrDbOverride, &wb_usrdb_override);
+        dbClose(dbUsrDbDef);
+        dbClose(dbUsrDbRef);
+        dbClose(dbUsrDbOverride);
         timerStop(TIMER_USR_DB0);
         // close db
         //////

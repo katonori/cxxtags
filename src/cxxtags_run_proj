@@ -230,7 +230,7 @@ class CmdRunner():
         self.m_projType = ""
         self.m_dbName = ""
         self.m_fileName = ""
-        self.m_options = ""
+        self.m_options = []
         self.m_buildOptions = ""
         self.m_count = 0
         self.ParseArgs()

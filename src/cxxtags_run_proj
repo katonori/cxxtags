@@ -2,10 +2,10 @@
 
 import json, sys, re, commands, os, getopt, time
 from xml.etree.ElementTree import *
-from subprocess import Popen, PIPE
 import multiprocessing
 import logging
 import subprocess
+import threading
 
 CXXTAGS = "cxxtags"
 
@@ -200,23 +200,43 @@ class VSParser(ProjParserBase):
                     #print "line: " + prj + ":" + self.m_curProjDir + ":" + defs + ":" + incs + ":" + s
         return resultList
 
+class RunnerThread(threading.Thread):
+    def __init__(self, semaphore):
+        threading.Thread.__init__(self)
+        self.m_semaphore = semaphore
+        self.m_cmd = None
+        self.m_cwd = None
+
+    def setCmd(self, tid, cmd, cwd):
+        self.m_cmd = cmd
+        self.m_cwd = cwd
+        self.m_taskId = tid
+
+    def run(self):
+        #print "#" + str(self.m_count) + "/" + str(total) + ":" + str(cmd)
+        #print "#" + str(self.m_taskId) + "/" + str(total) + ":" + " ".join(cmd)
+        p = subprocess.Popen(self.m_cmd, shell=False, cwd=self.m_cwd)
+        stdout_data, stderr_data = p.communicate()
+        if stdout_data:
+            print stdout_data,
+        if stderr_data:
+            print stderr_data,
+        p.wait()
+        self.m_semaphore.release()
+
 class CmdRunner():
-    m_numProc = 1
-    m_projType = ""
-    m_dbName = ""
-    m_fileName = ""
-    m_options = None
-    m_buildOptions = ""
-    m_count = 0
     def __init__(self):
         self.m_numProc = 1
         self.m_projType = ""
         self.m_dbName = ""
         self.m_fileName = ""
-        self.m_options = []
+        self.m_options = ""
         self.m_buildOptions = ""
         self.m_count = 0
         self.ParseArgs()
+        self.m_cmdList = []
+        self.m_dirList = []
+        self.m_semaphore = None
 
     def usage(self):
         print("usage: cmd [-vJ] [-j N] database_dir file_name")
@@ -253,9 +273,11 @@ class CmdRunner():
         self.m_dbName = os.path.abspath(args[0])
         self.m_fileName = args[1]
 
-    def RunOne(self, cmd, cwd):
-        p = subprocess.Popen(cmd, shell=False, cwd=cwd)
-        p.wait()
+    def StartThread(self, p, taskId):
+        p.setCmd(taskId, self.m_cmdList[taskId], self.m_dirList[taskId])
+        p.start()
+        cmd = " ".join(self.m_cmdList[taskId])
+        print "#" + str(taskId+1) + "/" + str(len(self.m_cmdList)) + ":" + str(cmd)
 
     def Run(self):
         # determin project type
@@ -271,8 +293,6 @@ class CmdRunner():
             sys.exit(1)
 
         result = parser.Run()
-        cmdList = []
-        dirList = []
         for r in result:
             dirname, defs, incs, filename = r
             cmd = [CXXTAGS]
@@ -286,36 +306,34 @@ class CmdRunner():
             if self.m_buildOptions:
                 cmd += re.split("\s+", self.m_buildOptions)
             #print cmd
-            cmdList.append(cmd)
-            dirList.append(dirname)
+            self.m_cmdList.append(cmd)
+            self.m_dirList.append(dirname)
 
-        total = len(cmdList)
+        # run threads
+        self.m_semaphore = threading.Semaphore(self.m_numProc)
+        total = len(self.m_cmdList)
         process_list = [None]*self.m_numProc
-        i = 0
-        while True:
-            if len(cmdList) == 0 and process_list == [None]*self.m_numProc:
-                break
-            if process_list[i] == None:
-                if len(cmdList) != 0:
-                    cmd = cmdList.pop(0)
-                    cwd = dirList.pop(0)
-                    self.m_count += 1
-                    #print "#" + str(self.m_count) + "/" + str(total) + ":" + str(cmd)
-                    print "#" + str(self.m_count) + "/" + str(total) + ":" + " ".join(cmd)
-                    process_list[i] = multiprocessing.Process(target=self.RunOne, args=(cmd, cwd))
-                    process_list[i].start()
-                    #print "start: " + cmd
-            elif False == process_list[i].is_alive():
-                process_list[i].join()
-                process_list[i] = None
-            i += 1
-            if i >= self.m_numProc:
-                i = 0
-            time.sleep(0.001)
+        for i_task in xrange(len(self.m_cmdList)):
+            self.m_semaphore.acquire()
+            for p in process_list:
+                if p == None:
+                    p = RunnerThread(self.m_semaphore)
+                    self.StartThread(p, i_task)
+                    break
+                else:
+                    if p.is_alive() == False:
+                        p.join()
+                        p = RunnerThread(self.m_semaphore)
+                        self.StartThread(p, i_task)
+                        break
+
+        for p in process_list:
+            if p != None:
+                p.join()
+
         (rv, out) = commands.getstatusoutput("cxxtags_query compaction " + parser.GetDbDir())
         if out:
             print out 
-
 """
 " start
 """

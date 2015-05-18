@@ -259,6 +259,7 @@ static inline void procCursor(const CXCursor& Cursor) {
             case CXCursor_FunctionTemplate:
             case CXCursor_ClassTemplate:
             case CXCursor_Namespace:
+            case CXCursor_NamespaceAlias:
             case CXCursor_UnionDecl:
             case CXCursor_FieldDecl:
             case CXCursor_VarDecl:
@@ -402,6 +403,7 @@ static int performIndexing(const char* cur_dir, const char* out_dir, const char*
     setCursorTypeAvailable(CXCursor_ClassDecl);
     setCursorTypeAvailable(CXCursor_EnumDecl);
     setCursorTypeAvailable(CXCursor_Namespace);
+    setCursorTypeAvailable(CXCursor_NamespaceAlias);
     setCursorTypeAvailable(CXCursor_StructDecl);
     setCursorTypeAvailable(CXCursor_UnionDecl);
     setCursorTypeAvailable(CXCursor_VarDecl);

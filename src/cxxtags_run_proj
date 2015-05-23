@@ -258,7 +258,8 @@ class CmdRunner():
             elif o in ("-t"):
                 self.m_projType = a
             elif o in ("-e"):
-                self.m_options.append("-e " + a)
+                self.m_options.append("-e")
+                self.m_options.append(a)
             elif o in ("-p"):
                 self.m_options.append("-p")
             elif o in ("-v"):
@@ -305,7 +306,7 @@ class CmdRunner():
                 cmd += re.split("\s+", incs)
             if self.m_buildOptions:
                 cmd += re.split("\s+", self.m_buildOptions)
-            #print cmd
+            print cmd
             self.m_cmdList.append(cmd)
             self.m_dirList.append(dirname)
 

@@ -213,8 +213,6 @@ class RunnerThread(threading.Thread):
         self.m_taskId = tid
 
     def run(self):
-        #print "#" + str(self.m_count) + "/" + str(total) + ":" + str(cmd)
-        #print "#" + str(self.m_taskId) + "/" + str(total) + ":" + " ".join(cmd)
         p = subprocess.Popen(self.m_cmd, shell=False, cwd=self.m_cwd)
         stdout_data, stderr_data = p.communicate()
         if stdout_data:
@@ -306,7 +304,7 @@ class CmdRunner():
                 cmd += re.split("\s+", incs)
             if self.m_buildOptions:
                 cmd += re.split("\s+", self.m_buildOptions)
-            print cmd
+            #print cmd
             self.m_cmdList.append(cmd)
             self.m_dirList.append(dirname)
 

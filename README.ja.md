@@ -103,7 +103,7 @@ int main()
 
 vimをお使いの方は *cxxtags_query* のラッパープラグイン[cxxtags-vim](https://github.com/katonori/cxxtags-vim)をご利用ください。
 
-### CMakeLists.txtからのデータベース生成
+### CMakeLists.txtからのタグデータベース生成
 
 **cxxtags** は正確な情報を得るために、"-I", "-D"などのコンパイルオプションが必要になるため、
 実際の利用の際にはCMakeLists.txtから生成されたコンピレーションデータベース(compile\_commands.json)からタグデータベースを生成する
@@ -111,8 +111,8 @@ vimをお使いの方は *cxxtags_query* のラッパープラグイン[cxxtags-
 **cxxtags_run_proj**の使い方は下記の通りです。
 
 * cmakeにオプション`-DCMAKE_EXPORT_COMPILE_COMMANDS=1`を指定するとビルド対象のファイルやコンパイルオプションなどが
-  記録されている"compile\_commands.json"が生成されます。
-* このファイルを入力としてcxxtags\_run\_projを実行します。下記の例では"\_db"にデータベースが作成されます。
+  記録されているcompile\_commands.jsonが生成されます。
+* このファイルを入力としてcxxtags\_run\_projを実行します。下記の例では"\_db"にタグデータベースが作成されます。
 
         $ cxxtags_run_proj _db compile_commands.json
 

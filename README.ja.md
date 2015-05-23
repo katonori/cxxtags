@@ -105,7 +105,7 @@ vimをお使いの方は *cxxtags_query* のラッパープラグイン[cxxtags-
 
 ### CMakeLists.txtからのデータベース生成
 
-**cxxtags** は正確な情報を得るために、"-I" "-D"などのコンパイルオプションが必要になるため、
+**cxxtags** は正確な情報を得るために、"-I", "-D"などのコンパイルオプションが必要になるため、
 実際の利用の際にはCMakeLists.txtから生成されたコンピレーションデータベース(compile\_commands.json)からタグデータベースを生成する
 **cxxtags_run_proj**の利用をお勧めします。
 **cxxtags_run_proj**の使い方は下記の通りです。

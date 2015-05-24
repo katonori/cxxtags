@@ -33,7 +33,7 @@ TABLE_NAME_LOCAL_USR_ID_TO_DEF = "E"
 TABLE_NAME_LOCAL_USR_ID_TO_REF = "L"
 TABLE_NAME_LOCAL_USR_ID_TO_OVERRIDER = "M"
 TABLE_NAME_CU_NAME_TO_ID = "H"
-TABLE_NAME_CU_ID_TO_NAME = "I"
+TABLE_NAME_LINE_TO_INCLUSION = "I"
 TABLE_NAME_LOCAL_USR_ID_TO_OVERRIDEE = "N"
 TABLE_NAME_FILE_LIST = "O"
 TABLE_NAME_BUILD_INFO = "Q"
@@ -82,7 +82,7 @@ def genCConfig(filename):
         f.write('#define TABLE_NAME_LOCAL_USR_ID_TO_DEF "%s"\n'%(TABLE_NAME_LOCAL_USR_ID_TO_DEF))
         f.write('#define TABLE_NAME_LOCAL_USR_ID_TO_USR "%s"\n'%(TABLE_NAME_LOCAL_USR_ID_TO_USR))
         f.write('#define TABLE_NAME_CU_NAME_TO_ID "%s"\n'%(TABLE_NAME_CU_NAME_TO_ID))
-        f.write('#define TABLE_NAME_CU_ID_TO_NAME "%s"\n'%(TABLE_NAME_CU_ID_TO_NAME))
+        f.write('#define TABLE_NAME_LINE_TO_INCLUSION "%s"\n'%(TABLE_NAME_LINE_TO_INCLUSION))
         f.write('#define TABLE_NAME_LOCAL_USR_ID_TO_REF "%s"\n'%(TABLE_NAME_LOCAL_USR_ID_TO_REF))
         f.write('#define TABLE_NAME_LOCAL_USR_ID_TO_OVERRIDER "%s"\n'%(TABLE_NAME_LOCAL_USR_ID_TO_OVERRIDER))
         f.write('#define TABLE_NAME_LOCAL_USR_ID_TO_OVERRIDEE "%s"\n'%(TABLE_NAME_LOCAL_USR_ID_TO_OVERRIDEE))
@@ -246,7 +246,7 @@ class HandlerBase:
             return None
         cuId, dbId = rv
         self.m_dbId = dbId
-        DEBUG_PRINT("initDbByFilename: " + dbId)
+        DEBUG_PRINT(dbId)
         dbDirNo = self.getDbDirNo()
         db = self.openDbById(dbId)
         self.m_dbList[dbDirNo] = db
@@ -293,9 +293,23 @@ class HandlerBase:
         DEBUG_PRINT(str((timeE-timeS)*1000.0) + " ms")
         return db
 
-    def EncVal(self, val):
+    def openDbByDbId(self, dbId):
+        DEBUG_PRINT("dbId: " + str(dbId))
+        self.getCuIdFromDbId(dbId)
+        db_dir = self.m_dbDir + format(int(cuId, 16)%DB_NUM, 'x')
+        DEBUG_PRINT("dir: " + db_dir)
+        timeS = time.time()
+        db = Db()
+        if db.tryOpen(db_dir) == False:
+            print("ERROR:1: db_dir: "  + cuId)
+            return None
+        timeE = time.time()
+        DEBUG_PRINT(str((timeE-timeS)*1000.0) + " ms")
+        return db
+
+    def EncVal(self, val, base=16):
         str = ""
-        val = int(val, 16)
+        val = int(val, base)
         str = ENCODING_TABLE[val & 0x3f]
         val >>= 6;
         while val != 0:
@@ -803,6 +817,27 @@ class QueryHandlerRebuild(HandlerBase):
                 batch.delete(key)
         batch.flush()
 
+class QueryHandlerInclusion(HandlerBase):
+    def DoQuery(self):
+        self.initCommonDatabase()
+        if self.initDbByFilename(self.m_srcFileName) == None:
+            DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
+            return RV_NOT_FOUND
+        q = self.m_dbId + TABLE_NAME_LINE_TO_INCLUSION + "|" + self.EncVal(str(self.m_lineNo), 10)
+        db = self.getMainDb()
+        val = db.get(q)
+        if val:
+            print os.path.abspath(val)
+        return 0
+
+    def ParseArg(self, argv):
+        if len(argv) != 2:
+            usage()
+            return RV_ERROR
+        self.m_srcFileName = os.path.abspath(argv[0])
+        self.m_lineNo = argv[1]
+        return RV_SUCCESS
+
 class QueryHandlerComapction(HandlerBase):
     def DoQuery(self):
         dbDir = self.m_dbDir
@@ -865,6 +900,9 @@ def procOneDb(queryType, dbDir, argv):
         if procOneQuery(QueryHandlerOverride(dbDir), argv) == RV_ERROR:
             funcResult = 1
         if procOneQuery(QueryHandlerOverrideN(dbDir), argv) == RV_ERROR:
+            funcResult = 1
+    elif queryType == 'include': # get a definition
+        if RV_ERROR == procOneQuery(QueryHandlerInclusion(dbDir), argv):
             funcResult = 1
     elif queryType == 'dump': # dump the contents of a table
         if RV_ERROR == procOneQuery(QueryHandlerDump(dbDir), argv):

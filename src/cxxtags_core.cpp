@@ -261,6 +261,23 @@ static inline void procRef(const CXCursor& Cursor)
     return ;
 }
 
+static inline void procIncludsion(const CXCursor& Cursor)
+{
+    unsigned int line = 0;
+    unsigned int column = 0;
+    std::string fileName;
+    std::string name;
+    if(procCommon(line, column, fileName, name, Cursor) != 0) {
+        return;
+    }
+    CXFile File = clang_getIncludedFile(Cursor);
+    CXString Included = clang_getFileName(File);
+    check_rv(gDb->insert_inclusion(fileName, clang_getCString(Included), line));
+    clang_disposeString(Included);
+
+    return ;
+}
+
 // process c++ base class informations
 #if 0
 static inline void procCXXBaseClassInfo(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column)
@@ -408,6 +425,7 @@ static int performIndexing(const char* cur_dir, const char* out_dir, const char*
     setFunctionForCursorKind(CXCursor_TemplateTypeParameter,  procRef);
     setFunctionForCursorKind(CXCursor_TemplateRef,            procRef);
     setFunctionForCursorKind(CXCursor_OverloadedDeclRef,      procRef);
+    setFunctionForCursorKind(CXCursor_InclusionDirective,     procIncludsion);
     //setFunctionForCursorKind(CXCursor_CXXBaseSpecifier] = 0;
 
     gDb = new cxxtags::IndexDbLevelDb();

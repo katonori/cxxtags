@@ -91,6 +91,7 @@ struct FileContext
     std::map<int, IiMap>                        m_usrId2overriderMap;
     IsMap                                       m_usrId2refMap;
     std::string                                 m_dbId;
+    IsMap                                       m_line2inclusionfMap;
 };
 typedef std::map<std::string, FileContext>      FcMap;
 typedef std::pair<std::string, FileContext>     FcPair;
@@ -108,6 +109,7 @@ public:
     int insert_decl_value(const std::string& usr, const std::string& filename, const std::string& name, int line, int col, int isDef) override;
     int insert_overriden_value(const std::string& usr, const std::string& name, const std::string& filename, int line, int col, const std::string& overriderUsr, int isDef) override;
     int insert_base_class_value(const std::string& classUsr, const std::string& baseClassUsr, int line, int col, int accessibility) override;
+    int insert_inclusion(const std::string& filename, const std::string& includedFilename, int line) override;
 
     int addIdList(leveldb::WriteBatch* db, const SiMap& inMap, const std::string& tableName);
 
@@ -185,6 +187,7 @@ private:
     std::map<std::string, std::vector<std::string>>   m_usr2referenceFileMap;
     std::map<std::string, std::vector<std::string>>   m_usr2overriderFileMap;
     std::string                     m_buildOpt;
+    std::string                     m_currentDirectory;
 };
 
 

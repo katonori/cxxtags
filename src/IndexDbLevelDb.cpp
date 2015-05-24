@@ -79,6 +79,10 @@ int IndexDbLevelDb::initialize(const string& out_dir, const string& src_file_nam
     m_defaultOptions.block_cache = leveldb::NewLRUCache(128 * 1024 * 1024); 
     m_defaultOptions.filter_policy = leveldb::NewBloomFilterPolicy(10);
 
+    const char* cwd = getcwd(m_CharBuff0, sizeof(m_CharBuff0));
+    assert(cwd != 0);
+    m_currentDirectory = m_CharBuff0;
+
     // build options
     snprintf(m_CharBuff0, sizeof(m_CharBuff0), "%d", isRebuild);
     m_buildOpt = string(curDir) + "|" + excludeList + "|" + m_CharBuff0 + "|";
@@ -422,6 +426,21 @@ int IndexDbLevelDb::insert_base_class_value(const string& classUsr, const string
     return 0;
 }
 
+int IndexDbLevelDb::insert_inclusion(const string& filename, const std::string& includedFilename, int line)
+{
+    FileContext& fctx = m_fileContextMap[filename];
+    std::string includedFilenameAbs;
+    if(includedFilename.find("/") != 0) {
+        // change to absolute path
+        includedFilenameAbs = m_currentDirectory + "/" + includedFilename;
+    }
+    else {
+        includedFilenameAbs = includedFilename;
+    }
+    fctx.m_line2inclusionfMap[line] = includedFilenameAbs;
+    return 0;
+}
+
 int IndexDbLevelDb::addIdList(leveldb::WriteBatch* db, const SiMap& inMap, const string& tableName)
 {
     string prefix = tableName + "|";
@@ -745,6 +764,22 @@ int IndexDbLevelDb::finalize(void)
 #else
                 snprintf(m_CharBuff0, sizeof(m_CharBuff0), "%x", usrId);
                 string key(dbId + TABLE_NAME_LOCAL_USR_ID_TO_REF "|" + m_CharBuff0);
+#endif
+                wb.Put(key, itr.second);
+            }
+
+            // inclusion
+            for(auto& itr : fctx.m_line2inclusionfMap) {
+#if (USE_BASE64 != 0)
+                string key(dbId + TABLE_NAME_LINE_TO_INCLUSION "|");
+                char* p = m_CharBuff0;
+                p = encodeVal(p, itr.first);
+                *p = '\0';
+                key.append(m_CharBuff0);
+#else
+                // TODO: implement hex version
+                //snprintf(m_CharBuff0, sizeof(m_CharBuff0), "%x", usrId);
+                //string key(dbId + TABLE_NAME_LOCAL_USR_ID_TO_REF "|" + m_CharBuff0);
 #endif
                 wb.Put(key, itr.second);
             }

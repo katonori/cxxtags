@@ -128,12 +128,12 @@ public:
 
 private:
     int addFilesToFileList(leveldb::DB* db);
-    int dbTryOpen(leveldb::DB*& db, std::string dir);
+    int dbTryOpen(leveldb::DB*& db, const std::string& dir);
     inline int dbWrite(leveldb::DB* db, const std::string& key, const std::string& value);
     inline int dbRead(std::string& value, leveldb::DB* db, const std::string& key);
     inline int dbFlush(leveldb::DB* db, leveldb::WriteBatch* wb);
     inline int dbClose(leveldb::DB*& db);
-    int writeUsrDb(const std::map<std::string, SiMap> usrFidMap, leveldb::DB* dbUsrDb, leveldb::WriteBatch& wb_usrdb, const std::string& dbName);
+    int writeUsrDb(const std::map<std::string, SiMap>& usrFidMap, leveldb::DB* dbUsrDb, leveldb::WriteBatch& wb_usrdb, const std::string& dbName);
 
     inline void timerStart(int idx)
     {

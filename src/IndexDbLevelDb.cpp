@@ -20,7 +20,7 @@ namespace cxxtags {
 
 using namespace std;
 
-int IndexDbLevelDb::dbTryOpen(leveldb::DB*& db, string dir)
+int IndexDbLevelDb::dbTryOpen(leveldb::DB*& db, const string& dir)
 {
     time_t start;
     time(&start);
@@ -248,7 +248,7 @@ static inline char* encodeDecl(char *buff, unsigned int nameId, unsigned int lin
 }
 #endif
 
-static inline void setKeyValuePos2Usr(char* buffKey, char* buffVal, int buffLen, const Position& pos, std::map<Token, int> tokenList)
+static inline void setKeyValuePos2Usr(char* buffKey, char* buffVal, int buffLen, const Position& pos, const std::map<Token, int>& tokenList)
 {
 #if (USE_BASE64 != 0)
     encodePos(buffKey, pos);
@@ -509,7 +509,7 @@ int IndexDbLevelDb::dbClose(leveldb::DB*& db)
     return 0;
 }
 
-int IndexDbLevelDb::writeUsrDb(const map<string, SiMap> usrFidMap, leveldb::DB* dbUsrDb, leveldb::WriteBatch& wb_usrdb, const string& dbName)
+int IndexDbLevelDb::writeUsrDb(const map<string, SiMap>& usrFidMap, leveldb::DB* dbUsrDb, leveldb::WriteBatch& wb_usrdb, const string& dbName)
 {
     // lookup map
     for(const auto& itr : usrFidMap) {

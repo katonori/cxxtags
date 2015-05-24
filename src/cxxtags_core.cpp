@@ -29,6 +29,9 @@ const char* keywordListWithSpace[] = {
     "union ",
 };
 
+#define FUNCTION_TABLE_NUM (1024)
+static void (*cursorFunctionTable[FUNCTION_TABLE_NUM])(const CXCursor& Cursor);
+
 #ifndef PATH_MAX
 #define PATH_MAX (1024*1024)
 #endif
@@ -36,8 +39,6 @@ static char s_filenameBuff[PATH_MAX];
 static std::vector<std::string > gExcludeList;
 static std::string gExcludeListStr;
 // Table to keep which cursor types are to be tagged.
-#define AVAILABLE_TABLE_MAX 1024
-static char isCursorTypeAvailableTable[AVAILABLE_TABLE_MAX];
 
 static inline void check_rv(int a) {
     assert(a == 0);
@@ -49,7 +50,7 @@ static inline unsigned getDefaultParsingOptions() {
   return options;
 }
 
-static inline int isInExcludeList(std::string fileName)
+static inline int isInExcludeList(const std::string& fileName)
 {
     std::vector<std::string >::iterator itrEnd = gExcludeList.end();
     for(std::vector<std::string >::iterator itr = gExcludeList.begin();
@@ -72,23 +73,23 @@ static inline std::string getName(const CXCursor& C)
     return name;
 }
 
-
-static inline std::string formatName(std::string name)
+static inline std::string formatName(const std::string& name)
 {
+    std::string nameWork(name);
     std::string::size_type pos;
     for(unsigned i = 0; i < sizeof(keywordListWithSpace)/sizeof(keywordListWithSpace[0]); ++i) {
         std::string kw = keywordListWithSpace[i];
-        pos = name.find(kw);
+        pos = nameWork.find(kw);
         if(pos == 0) {
-            name = name.substr(kw.size(), name.size()-kw.size());
+            nameWork = nameWork.substr(kw.size(), nameWork.size()-kw.size());
             break;
         }
     }
-    pos = name.rfind(":");
+    pos = nameWork.rfind(":");
     if(pos != std::string::npos) {
-        name = name.substr(pos+1, name.size()-(pos+1));
+        nameWork = nameWork.substr(pos+1, nameWork.size()-(pos+1));
     }
-    return name;
+    return nameWork;
 }
 
 // get source file name
@@ -117,17 +118,6 @@ static std::string getCursorSourceLocation(unsigned int& line, unsigned int& col
     return filename;
 }
 
-static inline void setCursorTypeAvailable(int val)
-{
-    assert(val < AVAILABLE_TABLE_MAX); 
-    isCursorTypeAvailableTable[val] = 1;
-}
-static inline char isCursorTypeAvailable(int val)
-{
-    assert(val < AVAILABLE_TABLE_MAX); 
-    return isCursorTypeAvailableTable[val];
-}
-
 static bool isLocal(const std::string& usr, const CXCursor& cursor)
 {
     if((cursor.kind == CXCursor_VarDecl || cursor.kind == CXCursor_ParmDecl)
@@ -144,27 +134,83 @@ static bool isLocal(const std::string& usr, const CXCursor& cursor)
     return false;
 }
 
-// process declarations other than function declarations.
-static inline void procDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column)
+static inline int procCommon(unsigned int& line, unsigned int& column, std::string& fileName, std::string& name, const CXCursor& Cursor)
 {
+    // file_name
+    fileName = getCursorSourceLocation(line, column, Cursor);
+    // decide if this Cursor info is to be registered to db.
+    if(isInExcludeList(fileName)) {
+        return 1;
+    }
+    // name
+    name = getName(Cursor);
+    if(name == "") {
+        return 1;
+    }
+    name = formatName(name);
+
+    return 0;
+}
+
+// process declarations other than function declarations.
+static inline void procDecl(const CXCursor& Cursor)
+{
+    unsigned int line = 0;
+    unsigned int column = 0;
+    std::string fileName;
+    std::string name;
+    if(procCommon(line, column, fileName, name, Cursor) != 0) {
+        return;
+    }
+
+    CXString cxUSR = clang_getCursorUSR(Cursor);
+    const char *cUsr = clang_getCString(cxUSR);
+    assert(cUsr);
+
     if(!gIsOmitLocal || !isLocal(cUsr, Cursor)) {
         int isDef = clang_isCursorDefinition(Cursor);
         // insert to database
         check_rv(gDb->insert_decl_value(cUsr, fileName, name, line, column, isDef));
     }
+    clang_disposeString(cxUSR);
 }
 
 // process declarations
-static inline void procFuncDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column)
+static inline void procFuncDecl(const CXCursor& Cursor)
 {
+    unsigned int line = 0;
+    unsigned int column = 0;
+    std::string fileName;
+    std::string name;
+    if(procCommon(line, column, fileName, name, Cursor) != 0) {
+        return;
+    }
+
+    CXString cxUSR = clang_getCursorUSR(Cursor);
+    const char *cUsr = clang_getCString(cxUSR);
+    assert(cUsr);
+
     int isDef = clang_isCursorDefinition(Cursor);
     // insert to database
     check_rv(gDb->insert_decl_value(cUsr, fileName, name, line, column, isDef));
+    clang_disposeString(cxUSR);
 }
 
 // process c++ method declarations
-static inline void procCXXMethodDecl(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column)
+static inline void procCXXMethodDecl(const CXCursor& Cursor)
 {
+    unsigned int line = 0;
+    unsigned int column = 0;
+    std::string fileName;
+    std::string name;
+    if(procCommon(line, column, fileName, name, Cursor) != 0) {
+        return;
+    }
+
+    CXString cxUSR = clang_getCursorUSR(Cursor);
+    const char *cUsr = clang_getCString(cxUSR);
+    assert(cUsr);
+
     unsigned int numOverridden = 0;
     CXCursor *cursorOverridden;
     clang_getOverriddenCursors(Cursor, 
@@ -181,12 +227,21 @@ static inline void procCXXMethodDecl(const CXCursor& Cursor, const char* cUsr, s
     //int isVirt = clang_CXXMethod_isVirtual(Cursor);
     clang_disposeOverriddenCursors(cursorOverridden);
     // process as a function declaration is also done. 
-    procFuncDecl(Cursor, cUsr, name, fileName, line, column);
+    procFuncDecl(Cursor);
+    clang_disposeString(cxUSR);
 }
 
 // process c++ references.
-static inline void procRef(const CXCursor& Cursor, std::string name, std::string fileName, int line, int column)
+static inline void procRef(const CXCursor& Cursor)
 {
+    unsigned int line = 0;
+    unsigned int column = 0;
+    std::string fileName;
+    std::string name;
+    if(procCommon(line, column, fileName, name, Cursor) != 0) {
+        return;
+    }
+
     const char* cUsr = nullptr;
     CXCursor refCur = clang_getCursorReferenced(Cursor);
     std::string cRefFileName;
@@ -207,7 +262,8 @@ static inline void procRef(const CXCursor& Cursor, std::string name, std::string
 }
 
 // process c++ base class informations
-static inline void procCXXBaseClassInfo(const CXCursor& Cursor, std::string name, std::string fileName, int line, int column)
+#if 0
+static inline void procCXXBaseClassInfo(const CXCursor& Cursor, const char* cUsr, std::string name, std::string fileName, int line, int column)
 {
     // USR of class
     CXString cxBaseUsr = clang_getCursorUSR(Cursor);
@@ -221,93 +277,12 @@ static inline void procCXXBaseClassInfo(const CXCursor& Cursor, std::string name
     check_rv(gDb->insert_base_class_value(gLastClassUsr, cBaseUsr, line, column, accessibility));
     clang_disposeString(cxBaseUsr);
 }
+#endif
 
 static inline void procCursor(const CXCursor& Cursor) {
     CXCursorKind kind = Cursor.kind;
-    if (!clang_isInvalid(kind)) {
-        if(isCursorTypeAvailable(kind) == 0) {
-            return;
-        }
-        unsigned int line = 0;
-        unsigned int column = 0;
-
-        // file_name
-        std::string fileName = getCursorSourceLocation(line, column, Cursor);
-        // decide if this Cursor info is to be registered to db.
-        if(isInExcludeList(fileName)) {
-            return;
-        }
-        // name
-        std::string name = getName(Cursor);
-        if(name == "") {
-            return;
-        }
-        name = formatName(name);
-        // usr
-        CXString cxUSR = clang_getCursorUSR(Cursor);
-        const char *cUsr = clang_getCString(cxUSR);
-        assert(cUsr);
-
-        //int val = 0;
-        switch(kind) {
-            case CXCursor_EnumConstantDecl:
-                // get enum constant value
-                //val = clang_getEnumConstantDeclValue(Cursor);
-                // fall through
-            case CXCursor_TypedefDecl:
-            case CXCursor_TemplateTypeParameter:
-            case CXCursor_FunctionTemplate:
-            case CXCursor_ClassTemplate:
-            case CXCursor_Namespace:
-            case CXCursor_NamespaceAlias:
-            case CXCursor_UnionDecl:
-            case CXCursor_FieldDecl:
-            case CXCursor_VarDecl:
-            case CXCursor_ParmDecl:
-            case CXCursor_MacroDefinition: {
-                procDecl(Cursor, cUsr, name, fileName, line, column);
-                break;
-            }
-            case CXCursor_StructDecl:
-            case CXCursor_ClassDecl:
-            case CXCursor_EnumDecl: {
-                gLastClassUsr = cUsr;
-                procDecl(Cursor, cUsr, name, fileName, line, column);
-                break;
-            }
-            case CXCursor_CXXMethod: {
-                procCXXMethodDecl(Cursor, cUsr, name, fileName, line, column);
-                break;
-            }
-            case CXCursor_FunctionDecl:
-            case CXCursor_Constructor:
-            case CXCursor_Destructor: {
-                procFuncDecl(Cursor, cUsr, name, fileName, line, column);
-                break;
-            }
-            case CXCursor_CXXBaseSpecifier: {
-                procCXXBaseClassInfo(Cursor, name, fileName, line, column);
-                break;
-            }
-            case CXCursor_DeclRefExpr:
-            case CXCursor_MemberRefExpr:
-            case CXCursor_TypeRef:
-            case CXCursor_MemberRef:
-            case CXCursor_NamespaceRef:
-            case CXCursor_TemplateRef:
-            case CXCursor_OverloadedDeclRef:
-            case CXCursor_MacroExpansion: {
-                procRef(Cursor, name, fileName, line, column);
-                break;
-            }
-            // TODO:
-            case CXCursor_InclusionDirective:
-                break;
-            default:
-                assert(0);
-                break;
-        }
-        clang_disposeString(cxUSR);
+    if(!clang_isInvalid(kind) && cursorFunctionTable[kind]) {
+        cursorFunctionTable[kind](Cursor);
     }
     return;
 }
@@ -394,38 +369,46 @@ static enum CXChildVisitResult visitorFunc(CXCursor Cursor,
 }
 #endif
 
+inline static void setFunctionForCursorKind(int kind, void (*func)(const CXCursor& Cursor))
+{
+    cursorFunctionTable[kind] = func;
+    assert(kind < FUNCTION_TABLE_NUM);
+}
+
 static int performIndexing(const char* cur_dir, const char* out_dir, const char* in_file_name, int argc, const char **argv) {
     int result;
 
+    memset(cursorFunctionTable, 0, sizeof(cursorFunctionTable));
+
     // Set which cursor types are to be tagged.
-    setCursorTypeAvailable(CXCursor_EnumConstantDecl);
-    setCursorTypeAvailable(CXCursor_TypedefDecl);
-    setCursorTypeAvailable(CXCursor_ClassDecl);
-    setCursorTypeAvailable(CXCursor_EnumDecl);
-    setCursorTypeAvailable(CXCursor_Namespace);
-    setCursorTypeAvailable(CXCursor_NamespaceAlias);
-    setCursorTypeAvailable(CXCursor_StructDecl);
-    setCursorTypeAvailable(CXCursor_UnionDecl);
-    setCursorTypeAvailable(CXCursor_VarDecl);
-    setCursorTypeAvailable(CXCursor_ParmDecl);
-    setCursorTypeAvailable(CXCursor_FieldDecl);
-    setCursorTypeAvailable(CXCursor_MacroDefinition);
-    setCursorTypeAvailable(CXCursor_CXXMethod);
-    setCursorTypeAvailable(CXCursor_FunctionDecl);
-    setCursorTypeAvailable(CXCursor_Constructor);
-    setCursorTypeAvailable(CXCursor_Destructor);
-    setCursorTypeAvailable(CXCursor_DeclRefExpr);
-    setCursorTypeAvailable(CXCursor_MemberRefExpr);
-    setCursorTypeAvailable(CXCursor_TypeRef);
-    setCursorTypeAvailable(CXCursor_MemberRef);
-    setCursorTypeAvailable(CXCursor_NamespaceRef);
-    setCursorTypeAvailable(CXCursor_MacroExpansion);
-    setCursorTypeAvailable(CXCursor_TemplateTypeParameter);
-    setCursorTypeAvailable(CXCursor_FunctionTemplate);
-    setCursorTypeAvailable(CXCursor_ClassTemplate);
-    setCursorTypeAvailable(CXCursor_TemplateRef);
-    setCursorTypeAvailable(CXCursor_OverloadedDeclRef);
-    setCursorTypeAvailable(CXCursor_CXXBaseSpecifier);
+    setFunctionForCursorKind(CXCursor_EnumConstantDecl,       procDecl);
+    setFunctionForCursorKind(CXCursor_TypedefDecl,            procDecl);
+    setFunctionForCursorKind(CXCursor_ClassDecl,              procDecl);
+    setFunctionForCursorKind(CXCursor_EnumDecl,               procDecl);
+    setFunctionForCursorKind(CXCursor_Namespace,              procDecl);
+    setFunctionForCursorKind(CXCursor_NamespaceAlias,         procDecl);
+    setFunctionForCursorKind(CXCursor_StructDecl,             procDecl);
+    setFunctionForCursorKind(CXCursor_UnionDecl,              procDecl);
+    setFunctionForCursorKind(CXCursor_VarDecl,                procDecl);
+    setFunctionForCursorKind(CXCursor_ParmDecl,               procDecl);
+    setFunctionForCursorKind(CXCursor_FieldDecl,              procDecl);
+    setFunctionForCursorKind(CXCursor_MacroDefinition,        procDecl);
+    setFunctionForCursorKind(CXCursor_ClassTemplate,          procDecl);
+    setFunctionForCursorKind(CXCursor_FunctionTemplate,       procDecl);
+    setFunctionForCursorKind(CXCursor_CXXMethod,              procCXXMethodDecl);
+    setFunctionForCursorKind(CXCursor_FunctionDecl,           procFuncDecl);
+    setFunctionForCursorKind(CXCursor_Constructor,            procFuncDecl);
+    setFunctionForCursorKind(CXCursor_Destructor,             procFuncDecl);
+    setFunctionForCursorKind(CXCursor_DeclRefExpr,            procRef);
+    setFunctionForCursorKind(CXCursor_MemberRefExpr,          procRef);
+    setFunctionForCursorKind(CXCursor_TypeRef,                procRef);
+    setFunctionForCursorKind(CXCursor_MemberRef,              procRef);
+    setFunctionForCursorKind(CXCursor_NamespaceRef,           procRef);
+    setFunctionForCursorKind(CXCursor_MacroExpansion,         procRef);
+    setFunctionForCursorKind(CXCursor_TemplateTypeParameter,  procRef);
+    setFunctionForCursorKind(CXCursor_TemplateRef,            procRef);
+    setFunctionForCursorKind(CXCursor_OverloadedDeclRef,      procRef);
+    //setFunctionForCursorKind(CXCursor_CXXBaseSpecifier] = 0;
 
     gDb = new cxxtags::IndexDbLevelDb();
     check_rv(gDb->initialize(out_dir, in_file_name, gExcludeListStr, gIsRebuild, cur_dir, argc, argv));

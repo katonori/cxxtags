@@ -30,6 +30,7 @@ TABLE_NAME_TOKEN_ID_TO_NAME = "C"
 TABLE_NAME_LOCAL_USR_ID_TO_USR = "F"
 TABLE_NAME_LOCAL_USR_ID_TO_DECL = "D"
 TABLE_NAME_LOCAL_USR_ID_TO_DEF = "E"
+TABLE_NAME_GLOBAL_FILE_ID_TO_CU_ID = "J"
 TABLE_NAME_LOCAL_USR_ID_TO_REF = "L"
 TABLE_NAME_LOCAL_USR_ID_TO_OVERRIDER = "M"
 TABLE_NAME_CU_NAME_TO_ID = "H"
@@ -80,6 +81,7 @@ def genCConfig(filename):
         f.write('#define TABLE_NAME_TOKEN_ID_TO_NAME "%s"\n'%(TABLE_NAME_TOKEN_ID_TO_NAME))
         f.write('#define TABLE_NAME_LOCAL_USR_ID_TO_DECL "%s"\n'%(TABLE_NAME_LOCAL_USR_ID_TO_DECL))
         f.write('#define TABLE_NAME_LOCAL_USR_ID_TO_DEF "%s"\n'%(TABLE_NAME_LOCAL_USR_ID_TO_DEF))
+        f.write('#define TABLE_NAME_GLOBAL_FILE_ID_TO_CU_ID "%s"\n'%(TABLE_NAME_GLOBAL_FILE_ID_TO_CU_ID))
         f.write('#define TABLE_NAME_LOCAL_USR_ID_TO_USR "%s"\n'%(TABLE_NAME_LOCAL_USR_ID_TO_USR))
         f.write('#define TABLE_NAME_CU_NAME_TO_ID "%s"\n'%(TABLE_NAME_CU_NAME_TO_ID))
         f.write('#define TABLE_NAME_CU_ID_TO_NAME "%s"\n'%(TABLE_NAME_CU_ID_TO_NAME))
@@ -223,6 +225,7 @@ class HandlerBase:
         self.m_dbList = [None]*DB_NUM
         self.m_fileListDb = None
         self.m_fileCount = None
+        self.m_cuId = None
 
     def initCommonDatabase(self):
         self.m_fileListDb = Db()
@@ -246,9 +249,10 @@ class HandlerBase:
             return None
         cuId, dbId = rv
         self.m_dbId = dbId
-        DEBUG_PRINT("initDbByFilename: " + dbId)
-        dbDirNo = self.getDbDirNo()
-        db = self.openDbById(dbId)
+        self.m_cuId = cuId
+        DEBUG_PRINT("dbId=" + dbId + ", " + "cuId=" + cuId)
+        dbDirNo = self.calcDbDirNo(cuId)
+        db = self.openDbByCuId(cuId)
         self.m_dbList[dbDirNo] = db
         return db
 
@@ -268,20 +272,33 @@ class HandlerBase:
         DEBUG_PRINT("usrDbList: " + str(self.m_usrDbList))
         return self.m_usrDbList
 
-    def getDbDirNo(self):
-        return self.calcDbDirNo(self.m_dbId)
-
     def calcDbDirNo(self, dbId):
         return int(dbId, 16)%DB_NUM
 
-    def getDb(self, dbId):
-        return self.m_dbList[int(dbId, 16)%DB_NUM]
-
     def getMainDb(self):
-        return self.m_dbList[int(self.m_dbId, 16)%DB_NUM]
+        #return self.m_dbList[int(self.m_dbId, 16)%DB_NUM]
+        return self.m_dbList[int(self.m_cuId, 16)%DB_NUM]
 
-    def openDbById(self, cuId):
+    def getCuIdFromDbId(self, dbId):
+        cuId = self.m_fileListDb.get(TABLE_NAME_GLOBAL_FILE_ID_TO_CU_ID + "|" + dbId)
+        return cuId
+
+    def openDbByCuId(self, cuId):
         DEBUG_PRINT("cuId: " + str(cuId))
+        db_dir = self.m_dbDir + format(int(cuId, 16)%DB_NUM, 'x')
+        DEBUG_PRINT("dir: " + db_dir)
+        timeS = time.time()
+        db = Db()
+        if db.tryOpen(db_dir) == False:
+            print("ERROR:1: db_dir: "  + cuId)
+            return None
+        timeE = time.time()
+        DEBUG_PRINT(str((timeE-timeS)*1000.0) + " ms")
+        return db
+
+    def openDbByDbId(self, dbId):
+        DEBUG_PRINT("dbId: " + str(dbId))
+        self.getCuIdFromDbId(dbId)
         db_dir = self.m_dbDir + format(int(cuId, 16)%DB_NUM, 'x')
         DEBUG_PRINT("dir: " + db_dir)
         timeS = time.time()
@@ -385,10 +402,15 @@ class HandlerBase:
         return list(set(dbIdList))
 
     def GetDbByDbId(self, dbId):
-        idx = int(dbId, 16)%DB_NUM
+        cuId = self.getCuIdFromDbId(dbId)
+        return self.GetDbByCuId(cuId)
+
+    def GetDbByCuId(self, cuId):
+        DEBUG_PRINT("cuId: " + str(cuId))
+        idx = int(cuId, 16)%DB_NUM
         db = self.m_dbList[idx]
         if db == None:
-            db = self.openDbById(dbId)
+            db = self.openDbByCuId(cuId)
             self.m_dbList[idx] = db
         return db
 
@@ -761,7 +783,7 @@ class QueryHandlerRebuild(HandlerBase):
         if self.initDbByFilename(self.m_srcFileName) == None:
             DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
             return RV_NOT_FOUND
-        rv = self.getDb(self.m_dbId).get(self.m_dbId + TABLE_NAME_BUILD_INFO)
+        rv = self.GetDbByCuId(self.m_cuId).get(self.m_dbId + TABLE_NAME_BUILD_INFO)
         if rv == None:
             print "ERROR: cannot obtain build options from the database."
             sys.exit(1)

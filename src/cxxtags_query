@@ -1,6 +1,7 @@
 #!/usr/bin/python
 def usage():
     print 'usage: cxxtags_query decl/def/ref/override database_dir file_name line_no column_no'
+    print 'usage: cxxtags_query               include database_dir file_name line_no'
     print '     : cxxtags_query                  dump database_dir table_name'
 
 OUTPUT_DELIMITER = '|'
@@ -921,7 +922,7 @@ def procOneDb(queryType, dbDir, argv):
     elif queryType == 'compaction': #
         procOneQuery(QueryHandlerComapction(dbDir), argv)
     else:
-        print "ERROR: query type must be ref, decl, def, override or dump"
+        print "ERROR: query type must be ref, decl, def, override, include or dump"
         funcResult = 1
     return funcResult
 

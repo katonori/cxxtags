@@ -493,6 +493,7 @@ FUNC_END:
         clang_disposeIndex(Idx);
     }
     check_rv(gDb->finalize());
+    delete gDb;
     return result;
 }
 

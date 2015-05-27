@@ -247,13 +247,19 @@ class HandlerBase:
         self.m_fileListDb = Db()
         self.m_threadCommonDb = MyThread(target=self.m_fileListDb.tryOpen, args=(self.m_dbDir + "/common",))
         self.m_threadCommonDb.start()
-        self.initUsrDb()
 
     def waitInitCommonDatabase(self):
         self.m_threadCommonDb.join()
         self.m_fileCount = self.m_threadCommonDb.getRv()
 
     def waitInitUsrDatabase(self):
+        for i in xrange(USR_DB_NUM):
+            if self.m_threadUsrDb[i]:
+                self.m_threadUsrDb[i].join()
+
+    def syncAllThreads(self):
+        if self.m_threadCommonDb != None:
+            self.m_threadCommonDb.join()
         for i in xrange(USR_DB_NUM):
             if self.m_threadUsrDb[i]:
                 self.m_threadUsrDb[i].join()
@@ -278,7 +284,7 @@ class HandlerBase:
         self.m_dbList[dbDirNo] = db
         return db
 
-    def initUsrDb(self):
+    def initUsrDatabase(self):
         timeS = time.time()
         for i in xrange(USR_DB_NUM):
             path = self.m_dbDir + "/usr_db/" + "%x"%(i)
@@ -440,6 +446,7 @@ class HandlerBase:
         return db
 
     def CloseDb(self):
+        self.syncAllThreads()
         timeS = time.time()
         if self.m_fileListDb:
             self.m_fileListDb.close()
@@ -564,6 +571,7 @@ class QueryHandlerDef(HandlerBase):
         self.m_mainDb = None
     def DoQuery(self):
         self.initCommonDatabase()
+        self.initUsrDatabase()
         self.waitInitCommonDatabase()
         if self.initDbByFilename(self.m_srcFileName) == None:
             DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
@@ -626,6 +634,7 @@ class QueryHandlerRef(HandlerBase):
     def DoQuery(self):
         self.m_startTime = time.time()
         self.initCommonDatabase()
+        self.initUsrDatabase()
         self.waitInitCommonDatabase()
         if self.initDbByFilename(self.m_srcFileName) == None:
             DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
@@ -698,7 +707,6 @@ class QueryHandlerOverride(QueryHandlerDecl):
         usrIds = self.GetUsrIdList(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         found = False
         if usrIds:
-            self.waitInitUsrDatabase()
             for id in usrIds:
                 if self.ProcOneUsr(id) == RV_SUCCESS:
                     found = True
@@ -708,9 +716,6 @@ class QueryHandlerOverride(QueryHandlerDecl):
             return RV_NOT_FOUND
 
     def ProcOneUsr(self, usrId):
-        self.GetAllOverrides(usrId)
-
-    def GetAllOverrides(self, usrId):
         resultList = []
         mainDb = self.getMainDb()
         q = self.m_dbId + TABLE_NAME_LOCAL_USR_ID_TO_OVERRIDEE + "|" + str(usrId)
@@ -734,6 +739,7 @@ class QueryHandlerOverrideN(HandlerBase):
     def DoQuery(self):
         startTime = time.time()
         self.initCommonDatabase()
+        self.initUsrDatabase()
         self.waitInitCommonDatabase()
         if self.initDbByFilename(self.m_srcFileName) == None:
             DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))

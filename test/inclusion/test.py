@@ -37,14 +37,14 @@ a_list = [
 "/usr/include/c++/4.8/iostream",
 ],
 [
-"/home/norito/devel/cxxtags/test/inclusion/a/a.h",
+cur_dir + "/a/a.h",
 ],
 # a.h
 [
 "/usr/include/c++/4.8/string",
 ],
 [
-"/home/norito/devel/cxxtags/test/inclusion/b.h",
+cur_dir + "/b.h",
 ],
 # b.h
 [

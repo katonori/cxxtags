@@ -23,6 +23,7 @@ import os
 import time
 import commands
 import inspect
+import threading
 
 TABLE_NAME_POSITION_TO_LOCAL_USR_ID = "A"
 TABLE_NAME_USR_TO_GLOBAL_FILE_ID_REF = "B"
@@ -31,6 +32,7 @@ TABLE_NAME_TOKEN_ID_TO_NAME = "C"
 TABLE_NAME_LOCAL_USR_ID_TO_USR = "F"
 TABLE_NAME_LOCAL_USR_ID_TO_DECL = "D"
 TABLE_NAME_LOCAL_USR_ID_TO_DEF = "E"
+TABLE_NAME_GLOBAL_FILE_ID_TO_CU_ID = "J"
 TABLE_NAME_LOCAL_USR_ID_TO_REF = "L"
 TABLE_NAME_LOCAL_USR_ID_TO_OVERRIDER = "M"
 TABLE_NAME_CU_NAME_TO_ID = "H"
@@ -81,6 +83,7 @@ def genCConfig(filename):
         f.write('#define TABLE_NAME_TOKEN_ID_TO_NAME "%s"\n'%(TABLE_NAME_TOKEN_ID_TO_NAME))
         f.write('#define TABLE_NAME_LOCAL_USR_ID_TO_DECL "%s"\n'%(TABLE_NAME_LOCAL_USR_ID_TO_DECL))
         f.write('#define TABLE_NAME_LOCAL_USR_ID_TO_DEF "%s"\n'%(TABLE_NAME_LOCAL_USR_ID_TO_DEF))
+        f.write('#define TABLE_NAME_GLOBAL_FILE_ID_TO_CU_ID "%s"\n'%(TABLE_NAME_GLOBAL_FILE_ID_TO_CU_ID))
         f.write('#define TABLE_NAME_LOCAL_USR_ID_TO_USR "%s"\n'%(TABLE_NAME_LOCAL_USR_ID_TO_USR))
         f.write('#define TABLE_NAME_CU_NAME_TO_ID "%s"\n'%(TABLE_NAME_CU_NAME_TO_ID))
         f.write('#define TABLE_NAME_LINE_TO_INCLUSION "%s"\n'%(TABLE_NAME_LINE_TO_INCLUSION))
@@ -155,6 +158,7 @@ class Db:
         while time.time() - start < DB_RETRY_OPEN_DURATION:
             try:
                 if self.m_instance:
+                    DEBUG_PRINT("time: " + str(time.time()-start))
                     return True
                 if USE_PLYVEL:
                     self.m_instance = plyvel.DB(dirname, bloom_filter_bits=10, lru_cache_size=(128<<20), create_if_missing=False)
@@ -209,6 +213,17 @@ class DbBatch:
     def flush(self):
         self.m_db.flushBatch(self.m_batch)
 
+class MyThread(threading.Thread):
+    def __init__(self, target = None, args = ()):
+        threading.Thread.__init__(self)
+        self.m_rv = None
+        self.m_target = target
+        self.m_args = args
+    def getRv(self):
+        return self.m_rv
+    def run(self):
+        self.m_rv = self.m_target(*self.m_args)
+
 class HandlerBase:
     #
     # Base class of *Handler classes
@@ -224,15 +239,30 @@ class HandlerBase:
         self.m_dbList = [None]*DB_NUM
         self.m_fileListDb = None
         self.m_fileCount = None
+        self.m_cuId = None
+        self.m_threadUsrDb = [None]*USR_DB_NUM
+        self.m_threadCommonDb = None
 
     def initCommonDatabase(self):
         self.m_fileListDb = Db()
-        if self.m_fileListDb.tryOpen(self.m_dbDir + "/common") == False:
-            assert False
-        count = self.m_fileListDb.get("file_count")
-        assert count != None
-        self.m_fileCount = count
-        self.initUsrDb()
+        self.m_threadCommonDb = MyThread(target=self.m_fileListDb.tryOpen, args=(self.m_dbDir + "/common",))
+        self.m_threadCommonDb.start()
+
+    def waitInitCommonDatabase(self):
+        self.m_threadCommonDb.join()
+        self.m_fileCount = self.m_threadCommonDb.getRv()
+
+    def waitInitUsrDatabase(self):
+        for i in xrange(USR_DB_NUM):
+            if self.m_threadUsrDb[i]:
+                self.m_threadUsrDb[i].join()
+
+    def syncAllThreads(self):
+        if self.m_threadCommonDb != None:
+            self.m_threadCommonDb.join()
+        for i in xrange(USR_DB_NUM):
+            if self.m_threadUsrDb[i]:
+                self.m_threadUsrDb[i].join()
 
     def getIdByFilename(self, filename):
         q = TABLE_NAME_FILE_LIST + "|" + filename
@@ -247,43 +277,46 @@ class HandlerBase:
             return None
         cuId, dbId = rv
         self.m_dbId = dbId
-        DEBUG_PRINT(dbId)
-        dbDirNo = self.getDbDirNo()
-        db = self.openDbById(dbId)
+        self.m_cuId = cuId
+        DEBUG_PRINT("dbId=" + dbId + ", " + "cuId=" + cuId)
+        dbDirNo = self.calcDbDirNo(cuId)
+        db = self.openDbByCuId(cuId)
         self.m_dbList[dbDirNo] = db
         return db
 
-    def initUsrDb(self):
-        dbList = os.listdir(self.m_dbDir + "/usr_db")
-        DEBUG_PRINT("usrDbList: " + str(dbList))
-        for dir in dbList:
-            if re.match("^[0-9a-f]+$", dir):
-                db = Db()
-                if db.tryOpen(self.m_dbDir + "/usr_db/" + dir) == False:
-                    assert False
-                if db == None:
-                    print("ERROR: db open: " + str(dir))
-                    return None
-                self.m_usrDbList.append(db)
+    def initUsrDatabase(self):
+        timeS = time.time()
+        for i in xrange(USR_DB_NUM):
+            path = self.m_dbDir + "/usr_db/" + "%x"%(i)
+            if not os.path.exists(path):
+                continue
+
+            db = Db()
+            if db == None:
+                print("ERROR: db open: " + str(dir))
+                return None
+            self.m_usrDbList.append(db)
+            self.m_threadUsrDb[i] = MyThread(target=db.tryOpen, args=(path,))
+            self.m_threadUsrDb[i].start()
         self.m_usrDbList = list(set(self.m_usrDbList))
         DEBUG_PRINT("usrDbList: " + str(self.m_usrDbList))
+        timeE = time.time()
+        DEBUG_PRINT("time: " + str(timeE-timeS))
         return self.m_usrDbList
 
-    def getDbDirNo(self):
-        return self.calcDbDirNo(self.m_dbId)
-
-    def calcDbDirNo(self, dbId):
-        return int(dbId, 16)%DB_NUM
-
-    def getDb(self, dbId):
-        return self.m_dbList[int(dbId, 16)%DB_NUM]
+    def calcDbDirNo(self, num):
+        return int(num, 16)%DB_NUM
 
     def getMainDb(self):
-        return self.m_dbList[int(self.m_dbId, 16)%DB_NUM]
+        return self.m_dbList[self.calcDbDirNo(self.m_cuId)]
 
-    def openDbById(self, cuId):
+    def getCuIdFromDbId(self, dbId):
+        cuId = self.m_fileListDb.get(TABLE_NAME_GLOBAL_FILE_ID_TO_CU_ID + "|" + dbId)
+        return cuId
+
+    def openDbByCuId(self, cuId):
         DEBUG_PRINT("cuId: " + str(cuId))
-        db_dir = self.m_dbDir + format(int(cuId, 16)%DB_NUM, 'x')
+        db_dir = self.m_dbDir + format(self.calcDbDirNo(cuId), 'x')
         DEBUG_PRINT("dir: " + db_dir)
         timeS = time.time()
         db = Db()
@@ -297,7 +330,7 @@ class HandlerBase:
     def openDbByDbId(self, dbId):
         DEBUG_PRINT("dbId: " + str(dbId))
         self.getCuIdFromDbId(dbId)
-        db_dir = self.m_dbDir + format(int(cuId, 16)%DB_NUM, 'x')
+        db_dir = self.m_dbDir + format(self.calcDbDirNo(cuId), 'x')
         DEBUG_PRINT("dir: " + db_dir)
         timeS = time.time()
         db = Db()
@@ -400,14 +433,20 @@ class HandlerBase:
         return list(set(dbIdList))
 
     def GetDbByDbId(self, dbId):
-        idx = int(dbId, 16)%DB_NUM
+        cuId = self.getCuIdFromDbId(dbId)
+        return self.GetDbByCuId(cuId)
+
+    def GetDbByCuId(self, cuId):
+        DEBUG_PRINT("cuId: " + str(cuId))
+        idx = self.calcDbDirNo(cuId)
         db = self.m_dbList[idx]
         if db == None:
-            db = self.openDbById(dbId)
+            db = self.openDbByCuId(cuId)
             self.m_dbList[idx] = db
         return db
 
     def CloseDb(self):
+        self.syncAllThreads()
         timeS = time.time()
         if self.m_fileListDb:
             self.m_fileListDb.close()
@@ -470,6 +509,7 @@ class QueryHandlerDecl(HandlerBase):
     #
     def DoQuery(self):
         self.initCommonDatabase()
+        self.waitInitCommonDatabase()
         if self.initDbByFilename(self.m_srcFileName) == None:
             DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
             return RV_NOT_FOUND
@@ -531,12 +571,15 @@ class QueryHandlerDef(HandlerBase):
         self.m_mainDb = None
     def DoQuery(self):
         self.initCommonDatabase()
+        self.initUsrDatabase()
+        self.waitInitCommonDatabase()
         if self.initDbByFilename(self.m_srcFileName) == None:
             DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
             return RV_NOT_FOUND
         usrIds = self.GetUsrIdList(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         found = False
         if usrIds:
+            self.waitInitUsrDatabase()
             for id in usrIds:
                 if self.ProcOneUsr(id) == RV_SUCCESS:
                     found = True
@@ -591,12 +634,15 @@ class QueryHandlerRef(HandlerBase):
     def DoQuery(self):
         self.m_startTime = time.time()
         self.initCommonDatabase()
+        self.initUsrDatabase()
+        self.waitInitCommonDatabase()
         if self.initDbByFilename(self.m_srcFileName) == None:
             DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
             return RV_NOT_FOUND
         usrIds = self.GetUsrIdList(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         found = False
         if usrIds:
+            self.waitInitUsrDatabase()
             for id in usrIds:
                 if self.ProcOneUsr(id) == RV_SUCCESS:
                     found = True
@@ -654,6 +700,7 @@ class QueryHandlerOverride(QueryHandlerDecl):
     def DoQuery(self):
         startTime = time.time()
         self.initCommonDatabase()
+        self.waitInitCommonDatabase()
         if self.initDbByFilename(self.m_srcFileName) == None:
             DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
             return RV_NOT_FOUND
@@ -669,9 +716,6 @@ class QueryHandlerOverride(QueryHandlerDecl):
             return RV_NOT_FOUND
 
     def ProcOneUsr(self, usrId):
-        self.GetAllOverrides(usrId)
-
-    def GetAllOverrides(self, usrId):
         resultList = []
         mainDb = self.getMainDb()
         q = self.m_dbId + TABLE_NAME_LOCAL_USR_ID_TO_OVERRIDEE + "|" + str(usrId)
@@ -695,12 +739,15 @@ class QueryHandlerOverrideN(HandlerBase):
     def DoQuery(self):
         startTime = time.time()
         self.initCommonDatabase()
+        self.initUsrDatabase()
+        self.waitInitCommonDatabase()
         if self.initDbByFilename(self.m_srcFileName) == None:
             DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
             return RV_NOT_FOUND
         usrIds = self.GetUsrIdList(self.m_srcFileName, self.m_lineNo, self.m_colNo)
         found = False
         if usrIds:
+            self.waitInitUsrDatabase()
             for id in usrIds:
                 if self.ProcOneUsr(id) == RV_SUCCESS:
                     found = True
@@ -773,10 +820,11 @@ class QueryHandlerDump(HandlerBase):
 class QueryHandlerRebuild(HandlerBase):
     def DoQuery(self):
         self.initCommonDatabase()
+        self.waitInitCommonDatabase()
         if self.initDbByFilename(self.m_srcFileName) == None:
             DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
             return RV_NOT_FOUND
-        rv = self.getDb(self.m_dbId).get(self.m_dbId + TABLE_NAME_BUILD_INFO)
+        rv = self.GetDbByCuId(self.m_cuId).get(self.m_dbId + TABLE_NAME_BUILD_INFO)
         if rv == None:
             print "ERROR: cannot obtain build options from the database."
             sys.exit(1)
@@ -821,6 +869,7 @@ class QueryHandlerRebuild(HandlerBase):
 class QueryHandlerInclusion(HandlerBase):
     def DoQuery(self):
         self.initCommonDatabase()
+        self.waitInitCommonDatabase()
         if self.initDbByFilename(self.m_srcFileName) == None:
             DEBUG_PRINT("cannot open database of '%s'"%(self.m_srcFileName))
             return RV_NOT_FOUND

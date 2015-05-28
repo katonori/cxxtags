@@ -493,6 +493,7 @@ int IndexDbLevelDb::addFilesToFileList(leveldb::DB* db)
             fid = string(buf);
             dbWrite(db, key, m_compileUnitId + "," + fid);
             id++;
+            dbWrite(db, TABLE_NAME_GLOBAL_FILE_ID_TO_CU_ID "|" + fid, m_compileUnitId);
         }
         else {
             // get fid
@@ -661,8 +662,7 @@ int IndexDbLevelDb::finalize(void)
 #endif
     {
         string valFiles;
-        leveldb::WriteBatch wbList[DB_NUM];
-        char dbDirtyFlags[DB_NUM] = {0};
+        leveldb::WriteBatch wb;
 
         for(const auto &itr : m_fileContextMap) {
             //const string& filename = itr->first;
@@ -674,18 +674,10 @@ int IndexDbLevelDb::finalize(void)
             const FileContext& fctx = fctxItr.second;
             const string& dbId = fctx.m_dbId;
 
-            // decide db directory
-            char* errp = NULL;
-            int id = strtol(dbId.c_str(), &errp, 16);
-            int idRem = id % DB_NUM;
-
             // check if already exists
             if(m_finishedFiles.find(filename) != m_finishedFiles.end()) {
                 continue;
             }
-
-            leveldb::WriteBatch& wb = wbList[idRem];
-            dbDirtyFlags[idRem] = 1;
 
             // position to usr
             for(const auto& itr : fctx.m_positition2usrList) {
@@ -790,20 +782,22 @@ int IndexDbLevelDb::finalize(void)
             wb.Put(dbId + TABLE_NAME_BUILD_INFO, m_compileUnit + "|" + filename + "|" + m_buildOpt);
         }
 
-        for(int i = 0; i < DB_NUM; i++) {
-            if(dbDirtyFlags[i]) {
-                leveldb::DB* db;
-                snprintf(m_CharBuff0, sizeof(m_CharBuff0), "%x", i);
-                string dbDir = string(m_CharBuff0);
-                int rv = dbTryOpen(db, m_dbDir + "/" + dbDir);
-                if(rv < 0) {
-                    printf("ERROR: finalize: open: %s\n", m_commonDbDir.c_str());
-                    return -1;
-                }
-                dbFlush(db, &wbList[i]);
-                dbClose(db);
-            }
+        // decide db directory
+        char* errp = NULL;
+        //int id = strtol(dbId.c_str(), &errp, 16);
+        int id = strtol(m_compileUnitId.c_str(), &errp, 16);
+        int idRem = id % DB_NUM;
+
+        leveldb::DB* db;
+        snprintf(m_CharBuff0, sizeof(m_CharBuff0), "%x", idRem);
+        string dbDir = string(m_CharBuff0);
+        int rv = dbTryOpen(db, m_dbDir + "/" + dbDir);
+        if(rv < 0) {
+            printf("ERROR: finalize: open: %s\n", m_commonDbDir.c_str());
+            return -1;
         }
+        dbFlush(db, &wb);
+        dbClose(db);
     }
 #ifdef TIMER
     timerStop(TIMER_DB_WRITE);

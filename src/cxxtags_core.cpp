@@ -40,23 +40,22 @@ static std::vector<std::string > gExcludeList;
 static std::string gExcludeListStr;
 // Table to keep which cursor types are to be tagged.
 
-static inline void check_rv(int a) {
+static inline void check_rv(int a)
+{
     assert(a == 0);
 }
 
 /** \brief Return the default parsing options. */
-static inline unsigned getDefaultParsingOptions() {
+static inline unsigned getDefaultParsingOptions()
+{
   unsigned options = CXTranslationUnit_DetailedPreprocessingRecord;
   return options;
 }
 
 static inline int isInExcludeList(const std::string& fileName)
 {
-    std::vector<std::string >::iterator itrEnd = gExcludeList.end();
-    for(std::vector<std::string >::iterator itr = gExcludeList.begin();
-        itr != itrEnd;
-        itr++) {
-        if(fileName.find(*itr) == 0) {
+    for(const auto& itr : gExcludeList) {
+        if(fileName.find(itr) == 0) {
             return 1;
         }
     }
@@ -93,7 +92,8 @@ static inline std::string formatName(const std::string& name)
 }
 
 // get source file name
-static std::string getCursorSourceLocation(unsigned int& line, unsigned int& column, const CXCursor& Cursor) {
+static std::string getCursorSourceLocation(unsigned int& line, unsigned int& column, const CXCursor& Cursor)
+{
     std::string filename = "";
     CXSourceLocation Loc = clang_getCursorLocation(Cursor);
     CXFile file;
@@ -272,7 +272,10 @@ static inline void procIncludsion(const CXCursor& Cursor)
     }
     CXFile File = clang_getIncludedFile(Cursor);
     CXString Included = clang_getFileName(File);
-    check_rv(gDb->insert_inclusion(fileName, clang_getCString(Included), line));
+    const char* includedFilename = clang_getCString(Included);
+    if(includedFilename != nullptr) {
+        check_rv(gDb->insert_inclusion(fileName, includedFilename, line));
+    }
     clang_disposeString(Included);
 
     return ;
@@ -296,7 +299,8 @@ static inline void procCXXBaseClassInfo(const CXCursor& Cursor, const char* cUsr
 }
 #endif
 
-static inline void procCursor(const CXCursor& Cursor) {
+static inline void procCursor(const CXCursor& Cursor)
+{
     CXCursorKind kind = Cursor.kind;
     if(!clang_isInvalid(kind) && cursorFunctionTable[kind]) {
         cursorFunctionTable[kind](Cursor);
@@ -329,7 +333,8 @@ static void indexEntityReference(CXClientData client_data, const CXIdxEntityRefI
 /* Callbacks.                                                                 */
 /******************************************************************************/
 
-static int printDiagnostic(const CXDiagnostic& Diagnostic) {
+static int printDiagnostic(const CXDiagnostic& Diagnostic)
+{
     int rv = 0;
     CXString Msg;
     unsigned display_opts = CXDiagnostic_DisplaySourceLocation
@@ -351,7 +356,8 @@ static int printDiagnostic(const CXDiagnostic& Diagnostic) {
     return rv;
 }
 
-static int printDiagnosticSet(const CXDiagnosticSet& Set) {
+static int printDiagnosticSet(const CXDiagnosticSet& Set)
+{
     int rv = 0;
     int n = clang_getNumDiagnosticsInSet(Set);
     for (int i = 0; i < n ; ++i) {
@@ -367,7 +373,8 @@ static int printDiagnosticSet(const CXDiagnosticSet& Set) {
     return rv;
 }
 
-static int printDiagnostics(CXTranslationUnit TU) {
+static int printDiagnostics(CXTranslationUnit TU)
+{
     CXDiagnosticSet TUSet = clang_getDiagnosticSetFromTU(TU);
     int rv = printDiagnosticSet(TUSet);
     clang_disposeDiagnosticSet(TUSet);
@@ -392,7 +399,8 @@ inline static void setFunctionForCursorKind(int kind, void (*func)(const CXCurso
     assert(kind < FUNCTION_TABLE_NUM);
 }
 
-static int performIndexing(const char* cur_dir, const char* out_dir, const char* in_file_name, int argc, const char **argv) {
+static int performIndexing(const char* cur_dir, const char* out_dir, const char* in_file_name, int argc, const char **argv)
+{
     int result;
 
     memset(cursorFunctionTable, 0, sizeof(cursorFunctionTable));
@@ -500,17 +508,17 @@ FUNC_END:
 /******************************************************************************/
 /* Command line processing.                                                   */
 /******************************************************************************/
-static void print_usage(void) {
+static void print_usage(void)
+{
     fprintf(stderr, "usage: cxxtags_core [-psE] [-e excludeList] cur_dir out_dir in_file -- {<clang_args>}*\n");
 }
 
-static std::vector<std::string > splitString(std::string str)
+static void splitString(std::vector<std::string >& out, std::string str)
 {
-    std::vector<std::string > list;
     std::string::size_type pos = 0;
     while((pos = str.find(":")) != std::string::npos) {
         std::string s = str.substr(0, pos);
-        list.push_back(s);
+        out.push_back(s);
         if(pos == str.size()-1) {
             str = "";
             break;
@@ -518,12 +526,12 @@ static std::vector<std::string > splitString(std::string str)
         str = str.substr(pos+1, str.size()-(pos+1));
     }
     if(str != "") {
-        list.push_back(str);
+        out.push_back(str);
     }
-    return list;
 }
 
-static int indexSource(int argc, const char **argv) {
+static int indexSource(int argc, const char **argv)
+{
     //clang_enableStackTraces();
     argv++; // increment for command name
     argc--; // decrement for command name
@@ -535,7 +543,7 @@ static int indexSource(int argc, const char **argv) {
     while(argc) {
         if(strncmp(*argv, "-e", 2) == 0) { 
             gExcludeListStr = argv[1];
-            gExcludeList = splitString(gExcludeListStr);
+            splitString(gExcludeList, gExcludeListStr);
             argv+=2;
             argc-=2;
         }

@@ -102,6 +102,9 @@ public:
         : m_isRebuild(false)
         , m_cuDbId()
     {}
+    ~IndexDbLevelDb() override
+    {}
+
     // IIndexDb
     int initialize(const std::string& out_dir, const std::string& src_file_name, const std::string& excludeList, bool isRebuild, const char* curDir, int argc, const char** argv) override;
     int finalize(void) override;

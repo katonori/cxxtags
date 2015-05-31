@@ -35,6 +35,7 @@ class MKParser(ProjParserBase):
                     srcFile = ""
                     if m:
                         srcFile = m.group(1)
+                    l = re.sub("\S*%s"%(srcFile), "", l)
                     resultList.append((dirname, "", l, srcFile))
         return resultList
 

@@ -29,21 +29,24 @@ class CxxTagsCoreWrapper:
         if os.environ.has_key(key):
             self.mHomeDir = os.environ[key]
 
-        self.parseConfig()
-
     def parseConfig(self):
         if self.mHomeDir == "":
-            return 
+            print('WARN: Could not know home directory. Configuration file is not loaded.')
+            return 0
         self.mConfigFile = self.mHomeDir + "/" + self.mConfigFile
-        try:
-            f = open(self.mConfigFile)
-        except Exception as e:
-            return
-        jd = json.load(f)
-        if jd.has_key("build_opt"):
-            self.mBuildOpt = jd["build_opt"]
-        if jd.has_key("command_opt"):
-            self.mOptCore = jd["command_opt"]
+        
+        if os.path.exists(self.mConfigFile):
+            try:
+                f = open(self.mConfigFile)
+                jd = json.load(f)
+                if jd.has_key("build_opt"):
+                    self.mBuildOpt = jd["build_opt"]
+                if jd.has_key("command_opt"):
+                    self.mOptCore = jd["command_opt"]
+            except Exception as e:
+                print('ERROR: An error occured while processing configuration file "' + self.mConfigFile + '."')
+                return 1
+        return 0
 
     def printUsage(self):
         print "usage: cxxtags [-e,-p,--exclude exclude_list] out_dir input_file -- [compiler_arguments]"
@@ -85,6 +88,10 @@ class CxxTagsCoreWrapper:
         exe_dir = os.path.dirname(sys.argv[0])
         cur_dir = os.getcwd()
 
+        # parse configuration file
+        if self.parseConfig() != 0:
+            sys.exit(1)
+
         # process args
         argv = self.parseArgs(sys.argv[1:])
         if argv == None:
@@ -114,6 +121,7 @@ class CxxTagsCoreWrapper:
             self.mExcludeList = "-e " + self.mExcludeList
         self.mBuildOpt += " " + " ".join(argv)
         cmd = "%s/cxxtags_core %s %s %s %s %s "%(os.path.abspath(exe_dir), self.mOptCore, self.mExcludeList, cur_dir, out_dir, in_file)+self.mBuildOpt
+        #print cmd
         cmdList = re.split("\s+", cmd)
         p = subprocess.Popen(cmdList, shell=False)
         return p.wait()
